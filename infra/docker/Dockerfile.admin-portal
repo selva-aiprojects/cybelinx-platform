@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+
+FROM node:24-alpine AS base
+WORKDIR /app
+ENV NODE_ENV=development
+RUN apk add --no-cache libc6-compat openssl
+
+FROM base AS deps
+COPY package.json package-lock.json ./
+COPY apps/central-api/package.json   apps/central-api/
+COPY apps/event-worker/package.json  apps/event-worker/
+COPY apps/admin-portal/package.json  apps/admin-portal/
+COPY packages/shared/package.json    packages/shared/
+COPY packages/types/package.json     packages/types/
+COPY packages/config/package.json    packages/config/
+COPY packages/auth/package.json      packages/auth/
+COPY packages/tenant-context/package.json packages/tenant-context/
+COPY packages/event-contracts/package.json packages/event-contracts/
+COPY packages/product-sdk/package.json packages/product-sdk/
+RUN npm ci
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build --workspace @cybelinx/shared \
+    --workspace @cybelinx/types \
+    --workspace @cybelinx/config \
+    --workspace @cybelinx/auth \
+    --workspace @cybelinx/tenant-context \
+    --workspace @cybelinx/event-contracts \
+    --workspace @cybelinx/product-sdk \
+    --if-present
+RUN npm run build --workspace @cybelinx/admin-portal
+
+FROM node:24-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+RUN apk add --no-cache libc6-compat openssl
+RUN addgroup -S cybelinx && adduser -S cybelinx -G cybelinx
+
+COPY --from=builder /app/apps/admin-portal ./
+COPY --from=builder /app/node_modules ./node_modules
+
+USER cybelinx
+EXPOSE 3000
+CMD ["npm", "run", "start", "--workspace", "@cybelinx/admin-portal"]

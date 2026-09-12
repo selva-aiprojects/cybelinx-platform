@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+# ──────────────────────────────────────────────────────────────────────
+# Multi-stage build for the Event Worker (Java 21 / Spring Boot)
+# Uses the Maven wrapper so no local Maven install is required.
+# ──────────────────────────────────────────────────────────────────────
+
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /build
+RUN apk add --no-cache libc6-compat
+
+COPY backend/mvnw backend/.mvn ./
+RUN chmod +x mvnw
+
+COPY backend/pom.xml .
+COPY backend/cybelinx-shared/pom.xml backend/cybelinx-shared/
+COPY backend/event-worker/pom.xml backend/event-worker/
+RUN ./mvnw -f pom.xml -pl event-worker -am -DskipTests dependency:go-offline
+
+COPY backend/cybelinx-shared backend/cybelinx-shared
+COPY backend/event-worker backend/event-worker
+RUN ./mvnw -f pom.xml -pl event-worker -am -DskipTests package
+
+FROM eclipse-temurin:21-jre-alpine AS runner
+WORKDIR /app
+RUN addgroup -S cybelinx && adduser -S cybelinx -G cybelinx
+
+COPY --from=builder /build/event-worker/target/*.jar app.jar
+
+USER cybelinx
+EXPOSE 3002
+ENTRYPOINT ["java", "-jar", "app.jar"]

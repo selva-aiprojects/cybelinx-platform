@@ -1,0 +1,14 @@
+server:
+  port: ${WORKER_PORT:3002}
+  servlet:
+    context-path: /api/v1
+  shutdown: graceful
+
+spring:
+  application:
+    name: event-worker
+
+cybelinx:
+  worker:
+    poll-interval-ms: ${WORKER_POLL_INTERVAL_MS:5000}
+    batch-size: ${WORKER_BATCH_SIZE:50}

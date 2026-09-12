@@ -1,0 +1,66 @@
+name: cybelinx-platform
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: cybelinx-platform-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cybelinx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cybelinx_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-cybelinx_platform}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - cybelinx_platform_pgdata:/var/lib/postgresql/data
+      - ../postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cybelinx} -d ${POSTGRES_DB:-cybelinx_platform}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  central-api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.central-api
+    container_name: cybelinx-platform-central-api
+    profiles: ["apps"]
+    env_file: [../../.env]
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  event-worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.event-worker
+    container_name: cybelinx-platform-event-worker
+    profiles: ["apps"]
+    env_file: [../../.env]
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  admin-portal:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.admin-portal
+    container_name: cybelinx-platform-admin-portal
+    profiles: ["apps"]
+    env_file: [../../.env]
+    ports:
+      - "3000:3000"
+    depends_on:
+      - central-api
+    restart: unless-stopped
+
+volumes:
+  cybelinx_platform_pgdata:

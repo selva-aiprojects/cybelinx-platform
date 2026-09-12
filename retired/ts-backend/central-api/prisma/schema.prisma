@@ -1,0 +1,852 @@
+// =====================================================================
+// Cybelinx Central SaaS Platform — Control Plane database schema
+// =====================================================================
+// The platform database contains METADATA ONLY.
+//
+// PRODUCT/BUSINESS DATA (patients, doctors, appointments, lab samples,
+// invoices, employees, ...) lives in =product= databases and is NEVER
+// stored in, or queried by, the central control plane.
+//
+// GUIDING RULES
+//   * Every platform identifier is a UUID.
+//   * Every tenant has ONE canonical tenant_id (Tenant.id).
+//   * Product-specific tenant identifiers are stored ONLY as external
+//     references in TenantExternalIdentifier; they are never the primary
+//     identity.
+//   * No credential secrets are stored in the database. Only references
+//     (e.g. vault://paths or managed-secret references) are persisted
+//     via credentialReference / credential_reference columns.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// Enumerations
+// ---------------------------------------------------------------------
+
+enum TenantStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  DELETION_PENDING
+  DELETED
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum IsolationMode {
+  SHARED_POOL
+  SCHEMA_PER_TENANT
+  DEDICATED_DATABASE
+  DEDICATED_INFRASTRUCTURE
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+  DISABLED
+}
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum EntitlementStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum TenantProductStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  LAPSED
+  DISABLED
+}
+
+enum RoleScope {
+  PLATFORM
+  TENANT
+}
+
+enum DatabaseStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+enum ResourceStatus {
+  ACTIVE
+  PROVISIONING
+  DEGRADED
+  DISABLED
+  RETIRED
+}
+
+enum TenantResourceStatus {
+  PENDING
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  DEGRADED
+  FAILED
+  RETIRED
+}
+
+enum Environment {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+}
+
+enum ProvisioningOperation {
+  PROVISION
+  REPROVISION
+  UPGRADE
+  SUSPEND
+  RESUME
+  DEPROVISION
+}
+
+enum ProvisioningState {
+  PENDING
+  IN_PROGRESS
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  ROLLED_BACK
+}
+
+enum ProvisioningStepStatus {
+  PENDING
+  IN_PROGRESS
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum EventStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  DEAD_LETTERED
+}
+
+// ---------------------------------------------------------------------
+// Identity: Users
+// ---------------------------------------------------------------------
+
+// A platform user. Identity is federation-based: the platform stores the
+// federated identity link, never a password or token.
+model User {
+  id          String     @id @default(uuid()) @db.Uuid
+  email       String     @unique @db.VarChar(320)
+  displayName String     @db.VarChar(200)
+  status      UserStatus @default(ACTIVE)
+  locale      String?    @db.VarChar(10)
+  timezone    String?    @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  identities  UserIdentity[]
+  memberships TenantMembership[] @relation("TenantMembershipUser")
+  requestedProvisioningJobs ProvisioningJob[] @relation("ProvisioningJobRequester")
+  invitedMemberships        TenantMembership[] @relation("TenantMembershipInviter")
+  auditEvents               AuditEvent[]
+  usageEvents               UsageEvent[]
+
+  @@map("users")
+}
+
+// Link between a platform user and an external identity provider subject.
+// (provider, external_subject) is unique — one human, one identity.
+model UserIdentity {
+  id               String  @id @default(uuid()) @db.Uuid
+  userId           String  @map("user_id") @db.Uuid
+  identityProvider String  @map("identity_provider") @db.VarChar(64)
+  externalSubject  String  @map("external_subject") @db.VarChar(512)
+  email            String? @db.VarChar(320)
+  isPrimary        Boolean @default(false) @map("is_primary")
+  linkedAt         DateTime @default(now()) @map("linked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([identityProvider, externalSubject], name: "user_identities_provider_subject_unique")
+  @@index([userId], map: "user_identities_user_id_idx")
+  @@map("user_identities")
+}
+
+// ---------------------------------------------------------------------
+// Geography: Regions
+// ---------------------------------------------------------------------
+
+// Known hosting regions used to place tenant resources and apps.
+model Region {
+  id         String   @id @default(uuid()) @db.Uuid
+  regionCode String   @unique @map("region_code") @db.VarChar(32)
+  name       String   @db.VarChar(120)
+  provider   String?  @db.VarChar(32)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenants        Tenant[]
+  databases      Database[]
+  tenantResources TenantResource[]
+  schemas        DatabaseSchema[]
+
+  @@map("regions")
+}
+
+// ---------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------
+
+// The canonical Tenant Registry. Tenant.id is the SINGLE canonical
+// tenant_id for the whole platform. No business data here.
+model Tenant {
+  id         String       @id @default(uuid()) @db.Uuid
+  tenantCode String       @unique @map("tenant_code") @db.VarChar(64)
+  name       String       @db.VarChar(200)
+  status     TenantStatus @default(PROVISIONING)
+  regionId   String?      @map("region_id") @db.Uuid
+  country    String?      @db.VarChar(2)
+  timezone   String?      @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  region       Region?            @relation(fields: [regionId], references: [id])
+  memberships  TenantMembership[]
+  tenantProducts TenantProduct[]
+  tenantResources TenantResource[]
+  externalIdentifiers TenantExternalIdentifier[]
+  provisioningJobs    ProvisioningJob[]
+  auditEvents         AuditEvent[]
+  platformEvents      PlatformEvent[]
+  usageEvents         UsageEvent[]
+
+  @@index([status], map: "tenants_status_idx")
+  @@index([regionId], map: "tenants_region_id_idx")
+  @@map("tenants")
+}
+
+// A user that belongs to a tenant (join table).
+model TenantMembership {
+  id         String           @id @default(uuid()) @db.Uuid
+  tenantId   String           @map("tenant_id") @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  status     MembershipStatus @default(INVITED)
+  invitedById String?         @map("invited_by_id") @db.Uuid
+  invitedAt  DateTime?        @map("invited_at")
+  joinedAt   DateTime?        @map("joined_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation("TenantMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User? @relation("TenantMembershipInviter", fields: [invitedById], references: [id])
+
+  memberRoles MembershipRole[]
+
+  @@unique([tenantId, userId], name: "tenant_memberships_tenant_user_unique")
+  @@index([tenantId, status], map: "tenant_memberships_tenant_status_idx")
+  @@index([userId], map: "tenant_memberships_user_id_idx")
+  @@map("tenant_memberships")
+}
+
+// Product-specific tenant identifiers (external references/mappings).
+// These exist so a platform tenant can be correlated with a tenant as
+// known internally by a product system (e.g. the Jioplix Nexus). They
+// are references ONLY — Tenant.id stays the canonical identity.
+model TenantExternalIdentifier {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @map("tenant_id") @db.Uuid
+  productId  String? @map("product_id") @db.Uuid
+  provider   String  @db.VarChar(64)
+  externalId String  @map("external_id") @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, productId, provider], name: "tenant_external_ids_tenant_product_provider_unique")
+  @@unique([provider, productId, externalId], name: "tenant_external_ids_provider_product_external_unique")
+  @@index([tenantId], map: "tenant_external_ids_tenant_id_idx")
+  @@map("tenant_external_identifiers")
+}
+
+// ---------------------------------------------------------------------
+// RBAC: Roles, Permissions, membership/role grants
+// ---------------------------------------------------------------------
+
+// A role is a named bundle of permissions. Platform roles (is_system=true)
+// are created by seed/fixtures; tenant roles may be added by provisioning.
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  code        String    @unique @db.VarChar(64)
+  name        String    @db.VarChar(120)
+  description String?
+  scope       RoleScope @default(TENANT)
+  isSystem    Boolean   @default(false) @map("is_system")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+  memberRoles     MembershipRole[]
+
+  @@map("roles")
+}
+
+// A single grantable capability (e.g. "tenant:read", "product:provision").
+model Permission {
+  id          String  @id @default(uuid()) @db.Uuid
+  code        String  @unique @db.VarChar(128)
+  name        String  @db.VarChar(120)
+  description String?
+  module      String? @db.VarChar(64)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+
+  @@index([module], map: "permissions_module_idx")
+  @@map("permissions")
+}
+
+// Role — Permission grant (many-to-many).
+model RolePermission {
+  id           String  @id @default(uuid()) @db.Uuid
+  roleId       String  @map("role_id") @db.Uuid
+  permissionId String  @map("permission_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId], name: "role_permissions_role_permission_unique")
+  @@index([permissionId], map: "role_permissions_permission_id_idx")
+  @@map("role_permissions")
+}
+
+// Membership — Role grant (a user, within a tenant, has roles).
+model MembershipRole {
+  id           String   @id @default(uuid()) @db.Uuid
+  membershipId String   @map("membership_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at")
+
+  membership TenantMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role       Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, roleId], name: "membership_roles_membership_role_unique")
+  @@index([roleId], map: "membership_roles_role_id_idx")
+  @@map("membership_roles")
+}
+
+// ---------------------------------------------------------------------
+// Product Registry
+// ---------------------------------------------------------------------
+
+// Platform-registered product (Jioplix, Jioplix Smart, LIMS, StoreAI,
+// SynthalystHRM). A product is deployed once; business tables live in the
+// product's OWN databases.
+model Product {
+  id         String        @id @default(uuid()) @db.Uuid
+  productCode String       @unique @map("product_code") @db.VarChar(64)
+  name       String        @db.VarChar(200)
+  description String?
+  status     ProductStatus @default(DRAFT)
+  currentVersionId String? @unique @map("current_version_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  currentVersion ProductVersion?  @relation("ProductCurrentVersion", fields: [currentVersionId], references: [id])
+  versions       ProductVersion[] @relation("ProductVersions")
+  plans          Plan[]
+  tenantProducts TenantProduct[]
+  tenantResources TenantResource[]
+  externalIdentifiers TenantExternalIdentifier[]
+  auditEvents         AuditEvent[]
+  platformEvents      PlatformEvent[]
+  usageEvents         UsageEvent[]
+
+  @@map("products")
+}
+
+// A published product version (semver). Product.current_version_id points
+// at the version currently enabled platform-wide.
+model ProductVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  version     String   @db.VarChar(32)
+  releaseNotes String? @map("release_notes")
+  isCurrent   Boolean  @default(false) @map("is_current")
+  publishedAt DateTime? @map("published_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product             Product   @relation("ProductVersions", fields: [productId], references: [id], onDelete: Cascade)
+  currentVersionFor   Product[] @relation("ProductCurrentVersion")
+
+  @@unique([productId, version], name: "product_versions_product_version_unique")
+  @@index([productId, isCurrent], map: "product_versions_product_iscurrent_idx")
+  @@map("product_versions")
+}
+
+// A purchasable plan / SKU for a product (e.g. Jioplix Enterprise).
+model Plan {
+  id          String     @id @default(uuid()) @db.Uuid
+  productId   String     @map("product_id") @db.Uuid
+  planCode    String     @map("plan_code") @db.VarChar(64)
+  name        String     @db.VarChar(120)
+  description String?
+  status      PlanStatus @default(DRAFT)
+  trialDays   Int?       @map("trial_days")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  entitlements Entitlement[]
+  tenantProducts TenantProduct[]
+
+  @@unique([productId, planCode], name: "plans_product_code_unique")
+  @@index([productId, status], map: "plans_product_status_idx")
+  @@map("plans")
+}
+
+// A feature grant defined by a plan (metadata only, never credentials).
+model Entitlement {
+  id        String             @id @default(uuid()) @db.Uuid
+  planId    String             @map("plan_id") @db.Uuid
+  key       String             @db.VarChar(128)
+  name      String?            @db.VarChar(120)
+  value     Json?              // typed/config value granted by the plan
+  status    EntitlementStatus  @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, key], name: "entitlements_plan_key_unique")
+  @@index([planId, status], map: "entitlements_plan_status_idx")
+  @@map("entitlements")
+}
+
+// A tenant's subscription to a product (which plan, since when, state).
+model TenantProduct {
+  id          String               @id @default(uuid()) @db.Uuid
+  tenantId    String               @map("tenant_id") @db.Uuid
+  productId   String               @map("product_id") @db.Uuid
+  planId      String               @map("plan_id") @db.Uuid
+  status      TenantProductStatus  @default(PROVISIONING)
+  activatedAt DateTime?            @map("activated_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  plan    Plan    @relation(fields: [planId], references: [id])
+
+  tenantResources TenantResource[]
+  provisioningJobs ProvisioningJob[]
+
+  @@unique([tenantId, productId], name: "tenant_products_tenant_product_unique")
+  @@index([tenantId, status], map: "tenant_products_tenant_status_idx")
+  @@index([productId], map: "tenant_products_product_id_idx")
+  @@index([planId], map: "tenant_products_plan_id_idx")
+  @@map("tenant_products")
+}
+
+// ---------------------------------------------------------------------
+// Tenant Resources (isolated, product-specific workspace metadata)
+// ---------------------------------------------------------------------
+
+// The platform-side "resource type" catalog (e.g. POSTGRES_SCHEMA,
+// POSTGRES_DATABASE, OBJECT_STORAGE). Describes the kinds of consumer
+// resources the platform can provision for a tenant+product.
+model Resource {
+  id          String         @id @default(uuid()) @db.Uuid
+  resourceTypeCode String     @unique @map("resource_type_code") @db.VarChar(64)
+  name        String         @db.VarChar(120)
+  description String?
+  status      ResourceStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenantResources TenantResource[]
+
+  @@map("resource_catalog")
+}
+
+// Managed database instances the platform can draw resources from.
+// endpoint/host is infrastructure metadata (not a secret); the actual
+// credentials are referenced via a secret-reference column.
+model Database {
+  id         String         @id @default(uuid()) @db.Uuid
+  name       String         @db.VarChar(128)
+  provider   String         @db.VarChar(32)
+  endpoint   String         @db.VarChar(255)
+  port       Int?
+  regionId   String?        @map("region_id") @db.Uuid
+  status     DatabaseStatus @default(PROVISIONING)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  region         Region?          @relation(fields: [regionId], references: [id])
+  schemas        DatabaseSchema[]
+  tenantResources TenantResource[]
+
+  @@unique([regionId, name], name: "databases_region_name_unique")
+  @@index([status], map: "databases_status_idx")
+  @@map("databases")
+}
+
+// A schema hosted by a managed Database. Represents a schema-per-tenant
+// workspace (or a named schema inside a shared pool).
+model DatabaseSchema {
+  id          String      @id @default(uuid()) @db.Uuid
+  databaseId  String      @map("database_id") @db.Uuid
+  regionId    String?     @map("region_id") @db.Uuid
+  schemaName  String      @map("schema_name") @db.VarChar(128)
+  environment Environment? 
+  status      DatabaseStatus @default(PROVISIONING)
+  migrationVersion String? @map("migration_version") @db.VarChar(32)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  database       Database        @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  region         Region?         @relation(fields: [regionId], references: [id])
+  tenantResources TenantResource[]
+
+  @@unique([databaseId, schemaName], name: "database_schemas_database_name_unique")
+  @@index([regionId], map: "database_schemas_region_id_idx")
+  @@index([status], map: "database_schemas_status_idx")
+  @@map("database_schemas")
+}
+
+// The Tenant Resource Registry — records what isolated workspace a tenant
+// has been granted for a product and how it is physically realised.
+//
+// isolation_mode determines the physical layout:
+//   SHARED_POOL           → database_id + schema_name on a shared pool
+//   SCHEMA_PER_TENANT     → schema_name within database_id
+//   DEDICATED_DATABASE    → database_id (+ schema_name optional)
+//   DEDICATED_INFRASTRUCTURE → completely separate infrastructure
+//
+// credentialReference stores a REFERENCE to a secret (vault path / managed
+// secret reference) — never the credential itself.
+model TenantResource {
+  id                 String                @id @default(uuid()) @db.Uuid
+  tenantId           String                @map("tenant_id") @db.Uuid
+  productId          String                @map("product_id") @db.Uuid
+  resourceId         String                @map("resource_id") @db.Uuid
+  isolationMode      IsolationMode         @map("isolation_mode")
+  databaseId         String?               @map("database_id") @db.Uuid
+  schemaId           String?               @map("schema_id") @db.Uuid
+  schemaName         String?               @map("schema_name") @db.VarChar(128)
+  regionId           String?               @map("region_id") @db.Uuid
+  environment        Environment           @default(DEVELOPMENT)
+  status             TenantResourceStatus  @default(PENDING)
+  provisioningState  ProvisioningState     @default(PENDING) @map("provisioning_state")
+  migrationVersion   String?               @map("migration_version") @db.VarChar(32)
+  credentialReference String?              @map("credential_reference") @db.VarChar(512)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product        Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenantProduct  TenantProduct? @relation(fields: [tenantProductId], references: [id])
+  tenantProductId String?       @map("tenant_product_id") @db.Uuid
+  resource       Resource       @relation(fields: [resourceId], references: [id])
+  database       Database?      @relation(fields: [databaseId], references: [id])
+  schema         DatabaseSchema? @relation(fields: [schemaId], references: [id])
+  region         Region?        @relation(fields: [regionId], references: [id])
+
+  provisioningJobs ProvisioningJob[]
+  usageEvents      UsageEvent[]
+
+  @@unique([tenantId, productId, environment, resourceId], name: "tenant_resources_tenant_product_env_resource_unique")
+  @@index([tenantId, productId], map: "tenant_resources_tenant_product_idx")
+  @@index([tenantId, status], map: "tenant_resources_tenant_status_idx")
+  @@index([productId], map: "tenant_resources_product_id_idx")
+  @@index([databaseId], map: "tenant_resources_database_id_idx")
+  @@index([regionId], map: "tenant_resources_region_id_idx")
+  @@index([status], map: "tenant_resources_status_idx")
+  @@index([provisioningState], map: "tenant_resources_provisioning_state_idx")
+  @@map("tenant_resources")
+}
+
+// ---------------------------------------------------------------------
+// Provisioning
+// ---------------------------------------------------------------------
+
+// A provisioning job drives the lifecycle of a tenant resource (or a
+// tenant product) through a series of steps.
+model ProvisioningJob {
+  id          String                @id @default(uuid()) @db.Uuid
+  tenantId    String                @map("tenant_id") @db.Uuid
+  tenantProductId String?           @map("tenant_product_id") @db.Uuid
+  tenantResourceId String?          @map("tenant_resource_id") @db.Uuid
+  operation         ProvisioningOperation @map("operation")
+  state             ProvisioningState    @default(PENDING)
+  progress          Int                  @default(0)
+  requestedById     String?              @map("requested_by_id") @db.Uuid
+  errorCode         String?              @map("error_code") @db.VarChar(128)
+  errorMessage      String?              @map("error_message")
+  queuedAt          DateTime?            @map("queued_at")
+  startedAt         DateTime?            @map("started_at")
+  finishedAt        DateTime?            @map("finished_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  tenantProduct TenantProduct? @relation(fields: [tenantProductId], references: [id])
+  tenantResource TenantResource? @relation(fields: [tenantResourceId], references: [id])
+  requestedBy   User?          @relation("ProvisioningJobRequester", fields: [requestedById], references: [id])
+
+  steps ProvisioningStep[]
+
+  @@index([tenantId], map: "provisioning_jobs_tenant_id_idx")
+  @@index([tenantProductId], map: "provisioning_jobs_tenant_product_id_idx")
+  @@index([tenantResourceId], map: "provisioning_jobs_tenant_resource_id_idx")
+  @@index([state], map: "provisioning_jobs_state_idx")
+  @@index([createdAt], map: "provisioning_jobs_created_at_idx")
+  @@map("provisioning_jobs")
+}
+
+// A single step inside a provisioning job (ordered, idempotent).
+model ProvisioningStep {
+  id         String                  @id @default(uuid()) @db.Uuid
+  jobId      String                  @map("job_id") @db.Uuid
+  sequence   Int
+  name       String                  @db.VarChar(160)
+  status     ProvisioningStepStatus  @default(PENDING)
+  input      Json?
+  output     Json?
+  errorMessage String?               @map("error_message")
+  startedAt  DateTime?               @map("started_at")
+  finishedAt DateTime?               @map("finished_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  job ProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, sequence], name: "provisioning_steps_job_sequence_unique")
+  @@index([jobId, status], map: "provisioning_steps_job_status_idx")
+  @@index([status], map: "provisioning_steps_status_idx")
+  @@map("provisioning_steps")
+}
+
+// ---------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------
+
+// Platform audit log. Metadata about who did what, on which tenant/
+// entity, when. Sensitive values are never logged; metadata carries
+// references only.
+model AuditEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String?  @map("tenant_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  productId  String?  @map("product_id") @db.Uuid
+  actorType  String   @map("actor_type") @db.VarChar(16)
+  action     String   @db.VarChar(128)
+  entityType String   @map("entity_type") @db.VarChar(64)
+  entityId   String?  @map("entity_id") @db.Uuid
+  metadata   Json?
+  ipAddress  String?  @map("ip_address") @db.VarChar(64)
+  requestId  String?  @map("request_id") @db.VarChar(64)
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([tenantId], map: "audit_events_tenant_id_idx")
+  @@index([userId], map: "audit_events_user_id_idx")
+  @@index([action], map: "audit_events_action_idx")
+  @@index([entityType, entityId], map: "audit_events_entity_idx")
+  @@index([occurredAt], map: "audit_events_occurred_at_idx")
+  @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------
+// Messaging / Outbox
+// ---------------------------------------------------------------------
+
+// Canonical platform event (outbox). Written transactionally by the API,
+// picked up by the event worker. payload NEVER contains secrets/PII.
+model PlatformEvent {
+  id             String      @id @default(uuid()) @db.Uuid
+  eventType      String      @map("event_type") @db.VarChar(128)
+  schemaVersion  String      @default("1.0") @map("schema_version") @db.VarChar(16)
+  tenantId       String?     @map("tenant_id") @db.Uuid
+  productId      String?     @map("product_id") @db.Uuid
+  entityType     String?     @map("entity_type") @db.VarChar(64)
+  entityId       String?     @map("entity_id") @db.Uuid
+  correlationId  String?     @map("correlation_id") @db.VarChar(64)
+  aggregateId    String?     @map("aggregate_id") @db.Uuid
+  payload        Json?
+  status         EventStatus @default(PENDING)
+  attempts       Int         @default(0)
+  availableAt    DateTime?   @map("available_at")
+  processedAt    DateTime?   @map("processed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  processing EventProcessing?
+
+  @@index([status, availableAt], map: "platform_events_status_available_idx")
+  @@index([eventType, createdAt], map: "platform_events_type_created_idx")
+  @@index([tenantId], map: "platform_events_tenant_id_idx")
+  @@index([correlationId], map: "platform_events_correlation_id_idx")
+  @@index([createdAt], map: "platform_events_created_at_idx")
+  @@map("platform_events")
+}
+
+// Tracks the processing of one event (claim/lease, attempts, errors).
+model EventProcessing {
+  id             String    @id @default(uuid()) @db.Uuid
+  eventId        String    @unique @map("event_id") @db.Uuid
+  workerId       String    @map("worker_id") @db.VarChar(64)
+  claimedAt      DateTime? @map("claimed_at")
+  leaseExpiresAt DateTime? @map("lease_expires_at")
+  attemptCount   Int       @default(0) @map("attempt_count")
+  lastError      String?   @map("last_error")
+  completedAt    DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  event PlatformEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, leaseExpiresAt], map: "event_processing_worker_lease_idx")
+  @@map("event_processing")
+}
+
+// ---------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------
+
+// Declarative notification definitions/config referenced by event types.
+// `channels` is a JSON array of channel codes (prisma enums cannot be
+// used as scalar lists). Sensitive templates/defaults never include
+// secrets or PII.
+model NotificationDefinition {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(64)
+  eventType   String   @map("event_type") @db.VarChar(128)
+  name        String   @db.VarChar(120)
+  description String?
+  channels    Json     // e.g. ["email", "sms", "webhook"]
+  config      Json?
+  isActive    Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventType], map: "notification_definitions_event_type_idx")
+  @@index([isActive], map: "notification_definitions_active_idx")
+  @@map("notification_definitions")
+}
+
+// ---------------------------------------------------------------------
+// Usage / Metering
+// ---------------------------------------------------------------------
+
+// Non-billable metadata recording product usage at the platform
+// granularity needed for metering/entitlement enforcement. No PHI/business
+// content — counts, quantities and event type references only.
+model UsageEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  resourceId  String?   @map("resource_id") @db.Uuid
+  eventType   String    @map("event_type") @db.VarChar(128)
+  quantity    Decimal   @db.Decimal(20, 6)
+  unit        String?   @db.VarChar(32)
+  metadata    Json?
+  dedupeKey   String?   @unique @map("dedupe_key") @db.VarChar(255)
+
+  occurredAt  DateTime  @map("occurred_at")
+  ingestedAt  DateTime  @default(now()) @map("ingested_at")
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id])
+  product  Product        @relation(fields: [productId], references: [id])
+  user     User?          @relation(fields: [userId], references: [id])
+  resource TenantResource? @relation(fields: [resourceId], references: [id])
+
+  @@index([tenantId, productId], map: "usage_events_tenant_product_idx")
+  @@index([tenantId, eventType], map: "usage_events_tenant_type_idx")
+  @@index([eventType, occurredAt], map: "usage_events_type_occurred_idx")
+  @@map("usage_events")
+}
+
+// ---------------------------------------------------------------------
+// Platform configuration
+// ---------------------------------------------------------------------
+
+// Small key/value configuration store for platform plumbing settings.
+// Never stores credentials — only references to them.
+model PlatformSetting {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       Json?
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+}

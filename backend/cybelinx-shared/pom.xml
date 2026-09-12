@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.cybelinx</groupId>
+    <artifactId>cybelinx-backend</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
+  <artifactId>cybelinx-shared</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Cybelinx Shared</name>
+  <description>Language-level port of @cybelinx/shared: error codes, ApiError contract and platform constants</description>
+
+  <properties>
+    <spring-boot.repackage.skip>true</spring-boot.repackage.skip>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot</artifactId>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,0 +1,29 @@
+{
+  "name": "@cybelinx/admin-portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cybelinx Central SaaS Platform — Admin Portal",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "echo \"(no tests yet)\" && exit 0"
+  },
+  "dependencies": {
+    "@cybelinx/shared": "*",
+    "next": "^16.3.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@types/node": "^22.20.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
+    "typescript": "~5.9.3"
+  }
+}

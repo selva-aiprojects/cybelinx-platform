@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+# ──────────────────────────────────────────────────────────────────────
+# Multi-stage build for the Control Plane API (Java 21 / Spring Boot)
+# Uses the Maven wrapper so no local Maven install is required.
+# ──────────────────────────────────────────────────────────────────────
+
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /build
+RUN apk add --no-cache libc6-compat
+
+COPY backend/mvnw backend/.mvn ./
+RUN chmod +x mvnw
+
+COPY backend/pom.xml .
+COPY backend/cybelinx-shared/pom.xml backend/cybelinx-shared/
+COPY backend/central-api/pom.xml backend/central-api/
+RUN ./mvnw -f pom.xml -pl central-api -am -DskipTests dependency:go-offline
+
+COPY backend/cybelinx-shared backend/cybelinx-shared
+COPY backend/central-api backend/central-api
+RUN ./mvnw -f pom.xml -pl central-api -am -DskipTests package
+
+FROM eclipse-temurin:21-jre-alpine AS runner
+WORKDIR /app
+RUN addgroup -S cybelinx && adduser -S cybelinx -G cybelinx
+
+COPY --from=builder /build/central-api/target/*.jar app.jar
+
+USER cybelinx
+EXPOSE 3001
+ENTRYPOINT ["java", "-jar", "app.jar"]
