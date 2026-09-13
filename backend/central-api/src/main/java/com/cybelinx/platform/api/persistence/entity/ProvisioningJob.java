@@ -73,6 +73,22 @@ public class ProvisioningJob extends BaseTimestampedEntity {
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
 
+    @Column(name = "lease_owner", length = 128)
+    private String leaseOwner;
+
+    @Column(name = "lease_expires_at")
+    private LocalDateTime leaseExpiresAt;
+
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount = 0;
+
+    @Column(name = "max_attempts", nullable = false)
+    private int maxAttempts = 5;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
+
     @OneToMany(mappedBy = "job", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("sequence ASC")
     private List<ProvisioningStep> steps = new ArrayList<>();
@@ -183,6 +199,47 @@ public class ProvisioningJob extends BaseTimestampedEntity {
 
     public List<ProvisioningStep> getSteps() {
         return steps;
+    }
+
+    
+    public String getLeaseOwner() {
+        return leaseOwner;
+    }
+
+    public void setLeaseOwner(String leaseOwner) {
+        this.leaseOwner = leaseOwner;
+    }
+
+    public LocalDateTime getLeaseExpiresAt() {
+        return leaseExpiresAt;
+    }
+
+    public void setLeaseExpiresAt(LocalDateTime leaseExpiresAt) {
+        this.leaseExpiresAt = leaseExpiresAt;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount;
+    }
+
+    public void setAttemptCount(int attemptCount) {
+        this.attemptCount = attemptCount;
+    }
+
+    public int getMaxAttempts() {
+        return maxAttempts;
+    }
+
+    public void setMaxAttempts(int maxAttempts) {
+        this.maxAttempts = maxAttempts;
+    }
+
+    public LocalDateTime getNextRetryAt() {
+        return nextRetryAt;
+    }
+
+    public void setNextRetryAt(LocalDateTime nextRetryAt) {
+        this.nextRetryAt = nextRetryAt;
     }
 
     public void setSteps(List<ProvisioningStep> steps) {

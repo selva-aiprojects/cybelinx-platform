@@ -6,6 +6,7 @@ import com.cybelinx.platform.api.resourceresolver.ResolvedTenantResource;
 import com.cybelinx.platform.api.security.AuthPrincipal;
 import com.cybelinx.platform.api.tenantresources.TenantResourcesService;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 
 /**
  * Default {@link StorageIsolationEnforcer}. Authorization and physical
@@ -17,6 +18,7 @@ import java.util.UUID;
  * before the pooled connection is returned, so Tenant A's schema is never
  * retained when the connection later serves Tenant B (TRD §13.1).
  */
+@Service
 public final class DefaultStorageIsolationEnforcer implements StorageIsolationEnforcer {
 
     private final TenantResourcesService tenantResources;

@@ -256,3 +256,38 @@ repositories — the docs alone were not trusted.
 - [x] `TenantResourcesService.resolveResource` facade: `requireTenant` (DELETED → 404) + `assertCanManageTenant` (`tenant:read`, platform-admin override) + product exists check (`404 PRODUCT_NOT_FOUND`) then delegates to the resolver
 - [x] No new tables — reuses V1 `tenant_resources` + `databases` + `regions` + `schemas`; `resolveFor` query added to the repository
 - [x] Tests: `TenantResourceResolverIT` (9 IT: active metadata incl. database+schema+region+credential, environment default, no resource 404, provisioning → RESOURCE_NOT_READY, retired-only 404, environment mismatch 404, unknown product 404, missing permission 403, picks ACTIVE over PROVISIONING) — central-api 159/159 + event-worker 9 = **168/168 backend green**
+
+### Capability 10 — Storage Isolation Enforcement [IMPLEMENTED]
+- [x] `StorageIsolationEnforcer` interface + `DefaultStorageIsolationEnforcer` (`@Service`): tenant-scoped pool connections via `RuntimeConnectionContext` — resolves the tenant's active schema and sets `search_path` for the pooled connection, `SET`/`RESET` semantics so a returned pooled connection never leaks Tenant A's schema to Tenant B (TRD §13.1)
+- [x] `RuntimeConnectionContext` bundles resolved schema name, isolation mode, runtime role and tenant id for the enforcement boundary
+- [x] Least-privilege runtime role model (enums `IsolationMode`/`RuntimeRole`/`Environment`), no hard-coded product database/schema construction in products
+- [x] `TenantStorageIsolationIT` authored (5 IT: least-privilege schema-owner with scoped `search_path` SET/RESET, shared-pool without schema-scoping, missing resource → 404 `RESOURCE_NOT_FOUND`, missing permission → 403 `TENANT_ACCESS_DENIED`, withdrawn-role guard) — **pending local Maven gate run**
+- [x] Enforcement layer complete; actual pool/schema/dedicated-DB runtime wiring lands with the provisioning step handlers (Capability 12)
+
+### Capability 11 — Provisioning Engine [IMPLEMENTED]
+- [x] `ProvisioningEngine` interface + `DefaultProvisioningEngine` (`@Service`): `claimNextEligible()` (pessimistic `SELECT ... FOR UPDATE`), `advance(UUID)` (dispatch step handlers in `sequence` order, per-step status/start/finish/error, progress recompute, `SUCCEEDED` only when all steps done), `findByTenantId`, `isTerminal` (TRD §14 workflow / §15 job model)
+- [x] `ProvisioningStepHandler` SPI (`supportedStepName()` / `execute`) — engine invokes the handler matching the step name and records outcomes atomically
+- [x] REST surface under `/tenants/{tenantId}/provisioning`: `GET /jobs`, `GET /jobs/{jobId}`, `POST /jobs/{jobId}/advance?claim=true` — guarded `tenant:read`/`tenant:write` + platform-admin override (`ProvisioningJobsService` facade)
+- [x] `ProvisioningJobPayload` / `ProvisioningStepPayload` HTTP projections; repos `ProvisioningJobRepository` (`findByTenantIdOrderByCreatedAtDesc`, `findFirstByStateOrderByQueuedAtAsc` with `@Lock(PESSIMISTIC_WRITE)`) + `ProvisioningStepRepository`
+- [x] Shared ErrorCodes: `PROVISIONING_JOB_NOT_FOUND` (404), `PROVISIONING_JOB_NOT_CLAIMABLE` (409)
+- [x] `ProvisioningEngineIT` authored (3 IT: claim→advance→SUCCEEDED with progress 50/100, unknown step → FAILED + error recorded, claim skips IN_PROGRESS jobs) — **pending local Maven gate run**
+- [x] Each capability's docs + this file keep authoritative Java/Spring wording
+
+## Phase 1B — Resource Provisioning & Event Infrastructure
+
+### Capability 12 — Provisioning Lease + Retry / Recovery [IMPLEMENTED]
+- [x] Migration `V3__provisioning_lease_and_retry.sql`: `lease_owner`, `lease_expires_at`, `attempt_count` (default 0), `max_attempts` (default 5), `next_retry_at` on `provisioning_jobs` + worker index
+- [x] `ProvisioningJob` entity mapped to the new columns (accessors for lease/attempt/retry state)
+- [x] `DefaultProvisioningEngine` lease + retry: claim picks `PENDING` due (next retry due or none) or `IN_PROGRESS` with expired lease — pessimistic lock, worker-id lease with expiry; `advance` records attempt, exponential backoff (`2^attempt * 2` s) on retryable failure → `PENDING` + `next_retry_at` + `PROVISIONING_STEP_RETRYABLE`; terminal failure → `FAILED` + `PROVISIONING_STEP_FAILED`; success clears lease (TRD §15 / milestone-1)
+- [x] `ProvisioningJobRepository.findEligibleForClaim(now)` — JPQL over both claim paths under `FOR UPDATE`
+- [x] Concrete step handlers under `provisioning/handlers/`: `CreateSchemaStepHandler` (`CREATE_SCHEMA` → tenant schema DDL, idempotent), `ApplyMigrationsStepHandler` (`APPLY_MIGRATIONS` → `tenant_metadata` baseline in the tenant schema), `ActivateResourceStepHandler` (`ACTIVATE_RESOURCE` → tenant resource `PROVISIONING`→`ACTIVE` + `SUCCEEDED` so the resolver can serve it)
+- [x] `DatabaseRepository` (`findByName`), `DatabaseSchemaRepository` (`findByDatabaseIdAndSchemaName`) for pool/schema bookkeeping
+
+### Capability 13/14 — Event Outbox + Consumer Idempotency [SCAFFOLD → IMPLEMENTED]
+- [x] Migration `V4__event_outbox_consumer_idempotency.sql`: `consumer_name` (default `default`), `error_stack`, `dead_letter_at` on `event_processing`; unique `(event_id, consumer_name)` per-consumer idempotency + `platform_events(status, available_at)` claim index
+- [x] `EventProcessing` entity mapped with `consumerName`/`workerId`/`claimedAt`/`leaseExpiresAt`/`attemptCount`/`lastError`/`errorStack`/`completedAt`/`deadLetterAt` — supports one-claim-per-consumer and DLQ tracking
+- [x] `EventProcessingRepository.findByEventIdAndConsumerName` — per-consumer idempotency lookup
+- [x] `PlatformEventRepository`: `findEligibleEvents(status, now)` (+ `WITH_LOCK`) over `platform_events`, `findByTenantId`
+- [x] `event-worker/pom.xml` gains `spring-boot-starter-data-jpa`, Flyway core + postgresql driver → outbox-reader capable; **worker processing loop (claim/process/retry/DLQ/replay) is the remaining Capability 15/16/17/18 delta**
+- [ ] Worker processor: claim→process→retry/DLQ/replay loop (Phase 1B Capability 15-18)
+- [ ] `progress.md` + `docs/api/API.md` reflect the worker once its loop lands
