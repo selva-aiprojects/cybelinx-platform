@@ -289,5 +289,15 @@ repositories — the docs alone were not trusted.
 - [x] `EventProcessingRepository.findByEventIdAndConsumerName` — per-consumer idempotency lookup
 - [x] `PlatformEventRepository`: `findEligibleEvents(status, now)` (+ `WITH_LOCK`) over `platform_events`, `findByTenantId`
 - [x] `event-worker/pom.xml` gains `spring-boot-starter-data-jpa`, Flyway core + postgresql driver → outbox-reader capable; **worker processing loop (claim/process/retry/DLQ/replay) is the remaining Capability 15/16/17/18 delta**
-- [ ] Worker processor: claim→process→retry/DLQ/replay loop (Phase 1B Capability 15-18)
-- [ ] `progress.md` + `docs/api/API.md` reflect the worker once its loop lands
+- [x] Worker processor: claim→process→retry/DLQ/replay loop (Phase 1B Capability 15-18)
+  - [x] `OutboxPollingService` (@Service, @Transactional): `pollOnce()` — lease reclaim → due event selection (PENDING + retry-due FAILED under pessimistic write lock + batch limit) → per-event claim→process→complete with processor SPI
+  - [x] `OutboxWorker` (@Component, @ConditionalOnSingleCandidate(DataSource.class)) — daemon scheduler on `ApplicationReadyEvent` driving `OutboxPollingService.pollOnce()` at configured `poll-interval-ms` with runtime exception isolation per tick
+  - [x] Worker-local outbox read models mapping the shared PG schema (`ddl-auto: validate`): `OutboxEvent` (platform_events — tenantId/productId as plain UUIDs, no central-api entity graph), `OutboxEventClaim` (event_processing — V1+V4 columns), `EventStatus` (PG `eventstatus` enum mirror), `BaseTimestampedEntity`
+  - [x] `OutboxEventRepository.findDueEvents(now, Pageable)` — PENDING (available_at null/due) + FAILED-due under `@Lock(PESSIMISTIC_WRITE)`; `OutboxEventClaimRepository.findExpiredLeases(now)` + `findByEventIdAndConsumerName` (idempotency + lease reclaim)
+  - [x] `EventProcessor` SPI (consumerName + supports + process); `DefaultEventProcessor` scaffold handler — proves end-to-end PENDING→SUCCEEDED
+  - [x] Lease reclaim: PROCESSING events with lapsed claim → release to PENDING (available_at = now); exponential backoff on retryable failure (`5 * 2^(attempt-1)`, cap 300 s); dead-letter terminal after `maxAttempts`
+  - [x] `WorkerProperties` (`cybelinx.worker.*`): `poll-interval-ms`, `batch-size`, `max-attempts`, `lease-seconds`, `consumer-name`
+  - [x] event-worker `application.yml`: JPA (validate), Flyway disabled (central owns migrations), driver + naming strategy + JSON mapper; datasource inherited from `CommonEnvironmentPostProcessor`
+  - [x] `EventWorkerOutboxIT` (5 tests): claim+complete, skip already-completed claim, release expired lease+redeliver, reprocess due FAILED, skip future-available events
+  - [x] `DefaultEventProcessorTest` (2 tests): consumerName binding, no-throw processing
+  - [ ] `docs/api/API.md` reflect the worker once its loop lands

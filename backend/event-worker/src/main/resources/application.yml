@@ -7,8 +7,27 @@ server:
 spring:
   application:
     name: event-worker
+  # Datasource is derived from DATABASE_URL by CommonEnvironmentPostProcessor (cybelinx-shared),
+  # falling back to the local dev default. The worker shares the single control-plane Postgres
+  # with central-api; migrations are owned by central-api, so Flyway is disabled here.
+  datasource:
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        physical_naming_strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        type:
+          json_format_mapper: org.hibernate.type.format.jackson.JacksonJsonFormatMapper
+  flyway:
+    enabled: false
 
 cybelinx:
   worker:
     poll-interval-ms: ${WORKER_POLL_INTERVAL_MS:5000}
     batch-size: ${WORKER_BATCH_SIZE:50}
+    max-attempts: ${WORKER_MAX_ATTEMPTS:5}
+    lease-seconds: ${WORKER_LEASE_SECONDS:300}
+    consumer-name: ${WORKER_CONSUMER_NAME:outbox-worker}

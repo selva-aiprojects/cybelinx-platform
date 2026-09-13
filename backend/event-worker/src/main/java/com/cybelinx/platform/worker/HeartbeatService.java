@@ -39,7 +39,7 @@ public class HeartbeatService {
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
         state.start();
-        LOG.info("Event outbox polling is not implemented yet — heartbeat service running (scaffold)");
+        LOG.info("Event worker started — heartbeat + outbox polling active");
 
         this.timer = scheduler.scheduleWithFixedDelay(
                 () -> {
