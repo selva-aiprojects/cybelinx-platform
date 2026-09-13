@@ -139,6 +139,77 @@ RESOURCE_NOT_FOUND`; registered but not yet usable (e.g. `PROVISIONING` /
 details; unknown product → `404 PRODUCT_NOT_FOUND`; missing `tenant:read` →
 `403 TENANT_ACCESS_DENIED`.
 
+## Event worker
+
+`backend/event-worker` is a separate deployable sharing the control-plane PostgreSQL
+database. It consumes the transaction-outbox rows written by the API into
+`platform_events` and gives the platform the delivery semantics required by TRD §21
+(at-least-once delivery, retry + exponential backoff, dead-letter handling, consumer
+processing status, manual replay via `platform_events.status`).
+
+Its only HTTP surface is the health endpoints (§ Health endpoints above), served on
+`WORKER_PORT` (default `3002`) under `/api/v1`; readiness reports worker state
+(`STARTING` → `RUNNING` → `STOPPED`), not the database.
+
+### Outbox consumption loop
+
+Every `cybelinx.worker.poll-interval-ms` (default 5000) tick, one transaction:
+
+1. **Lease reclaim** — `event_processing` claims whose `lease_expires_at` lapsed
+   before a finish was recorded are released; the owning `platform_events` row returns
+   to `PENDING` (`available_at = now`) so a crashed worker's work is redelivered
+   (at-least-once).
+2. **Claim** — due rows are claimed under a pessimistic write lock, oldest-first, up to
+   `cybelinx.worker.batch-size` (default 50) rows:
+   - `PENDING` with `available_at` null or in the past
+   - `FAILED` whose retry `available_at` is due
+   Each claim upserts an `event_processing` row keyed by `(event_id, consumer_name)`
+   (`consumer_name` default `outbox-worker`) recording `worker_id`, `claimed_at`,
+   `lease_expires_at`, `attempt_count`.
+3. **Process** — the row is set to `PROCESSING` and dispatched to the registered
+   `EventProcessor` whose `consumerName()` matches `cybelinx.worker.consumer-name`
+   and whose `supports(event_type)` accepts the event. Handlers are Spring beans;
+   product-specific consumers narrow `supports(...)` rather than touching bare SQL.
+4. **Complete / retry / dead-letter** — a successful handler advances the row to
+   `SUCCEEDED` (`processed_at` set, claim `completed_at` set). A `RuntimeException`
+   either reschedules the row as `FAILED` with exponential backoff
+   (`5 × 2^(attempt-1)` s, capped at 300 s, next run visible via `available_at`) or,
+   once `attempt_count` reaches `cybelinx.worker.max-attempts` (default 5), moves it to
+   the terminal `DEAD_LETTERED` state (`dead_letter_at` set).
+
+Consumer idempotency is enforced by the `(event_id, consumer_name)` unique index — an
+already-`completed_at` claim is skipped, so the same row can be processed by many
+consumers without double effects.
+
+### Standard event contract
+
+`platform_events` carries the TRD §20 envelope. Mandatory: `id`, `event_type`,
+`status`. Recommended fields surfaced to consumers: `schema_version`, `tenant_id`,
+`product_id`, `entity_type`, `entity_id`, `correlation_id`, `aggregate_id`, `payload`
+(JSONB). `status` uses the PostgreSQL `eventstatus` enum:
+
+```
+PENDING → PROCESSING → SUCCEEDED
+                    ↘ FAILED (retry due via available_at)
+                           ↘ DEAD_LETTERED (terminal)
+```
+
+### Configuration
+
+| Env | Default | Purpose |
+| --- | --- | --- |
+| `WORKER_PORT` | `3002` | HTTP port |
+| `WORKER_POLL_INTERVAL_MS` | `5000` | Poll interval |
+| `WORKER_BATCH_SIZE` | `50` | Max claims per tick |
+| `WORKER_MAX_ATTEMPTS` | `5` | Retries before dead-letter |
+| `WORKER_LEASE_SECONDS` | `300` | Claim lease duration |
+| `WORKER_CONSUMER_NAME` | `outbox-worker` | Consumer idempotency key |
+
+Datasource and migrations are shared with the API: `spring.datasource.*` is derived
+from `DATABASE_URL` by `CommonEnvironmentPostProcessor`; Flyway stays disabled on the
+worker (the API owns migrations), and Hibernate runs `ddl-auto: validate` against the
+existing schema.
+
 ## Products
 
 Base `/api/v1/products` — platform-scoped registry of Cybelinx products (metadata

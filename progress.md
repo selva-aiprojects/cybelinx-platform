@@ -300,4 +300,4 @@ repositories — the docs alone were not trusted.
   - [x] event-worker `application.yml`: JPA (validate), Flyway disabled (central owns migrations), driver + naming strategy + JSON mapper; datasource inherited from `CommonEnvironmentPostProcessor`
   - [x] `EventWorkerOutboxIT` (5 tests): claim+complete, skip already-completed claim, release expired lease+redeliver, reprocess due FAILED, skip future-available events
   - [x] `DefaultEventProcessorTest` (2 tests): consumerName binding, no-throw processing
-  - [ ] `docs/api/API.md` reflect the worker once its loop lands
+  - [x] `docs/api/API.md` reflect the worker once its loop lands
