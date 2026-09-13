@@ -2,6 +2,8 @@ package com.cybelinx.platform.api.config;
 
 import com.cybelinx.platform.api.security.IdentityService;
 import com.cybelinx.platform.api.security.UserMappingService;
+import com.cybelinx.platform.api.security.identity.IdentityProvider;
+import com.cybelinx.platform.api.security.identity.JwtIdentityProvider;
 import com.cybelinx.platform.api.security.jwt.HmacSignatureVerifier;
 import com.cybelinx.platform.api.security.jwt.JwtVerifier;
 import com.cybelinx.platform.api.security.jwt.JwksSignatureVerifier;
@@ -36,9 +38,14 @@ public class IdentitySecurityConfig {
     }
 
     @Bean
-    public IdentityService identityService(CybelinxProperties properties, JwtVerifier jwtVerifier, UserMappingService userMapping) {
+    public IdentityProvider identityProvider(CybelinxProperties properties, JwtVerifier jwtVerifier) {
         String provider = hasText(properties.getIdp().getProvider()) ? properties.getIdp().getProvider() : "generic";
-        return new IdentityService(provider, jwtVerifier, userMapping);
+        return new JwtIdentityProvider(provider, jwtVerifier);
+    }
+
+    @Bean
+    public IdentityService identityService(IdentityProvider identityProvider, UserMappingService userMapping) {
+        return new IdentityService(identityProvider, userMapping);
     }
 
     private static boolean hasText(String value) {

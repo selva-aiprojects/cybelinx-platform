@@ -8,8 +8,12 @@ import com.cybelinx.platform.api.persistence.entity.UserIdentity;
 import com.cybelinx.platform.api.security.AuthPrincipal.AuthIdentity;
 import com.cybelinx.platform.api.security.AuthPrincipal.AuthUser;
 import com.cybelinx.platform.api.security.AuthPrincipal.PlatformUserIdentity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Port of {@code UserMappingService}: looks up the platform user for an external identity and
@@ -20,10 +24,16 @@ public class UserMappingService {
 
     private final UserRepository users;
     private final UserIdentityRepository userIdentities;
+    private final TransactionTemplate requiresNew;
 
-    public UserMappingService(UserRepository users, UserIdentityRepository userIdentities) {
+    public UserMappingService(
+            UserRepository users,
+            UserIdentityRepository userIdentities,
+            PlatformTransactionManager transactionManager) {
         this.users = users;
         this.userIdentities = userIdentities;
+        this.requiresNew = new TransactionTemplate(transactionManager);
+        this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional(readOnly = true)
@@ -35,9 +45,26 @@ public class UserMappingService {
                 .orElse(null);
     }
 
-    /** Port of {@code UserMappingService.createMapping()} (upsert on the provider+subject unique key). */
+    /**
+     * First-sign-in auto-provisioning: returns the mapped platform user, creating the mapping
+     * (and backing user) on first sight of the identity. The insert runs in {@code REQUIRES_NEW}
+     * so a lost unique-key race rolls back only the losing insert; the caller then re-reads the
+     * row committed by the winner.
+     */
     @Transactional
-    public Mapping createMapping(AuthIdentity identity) {
+    public AuthUser resolveUser(AuthIdentity identity) {
+        AuthUser existing = lookupUser(identity);
+        if (existing != null) {
+            return existing;
+        }
+        try {
+            return requiresNew.execute(status -> createMapping(identity).user());
+        } catch (DataIntegrityViolationException race) {
+            return lookupUser(identity);
+        }
+    }
+
+    private Mapping createMapping(AuthIdentity identity) {
         String email = identity.email();
 
         var existing = userIdentities.findByIdentityProviderAndExternalSubject(identity.provider(), identity.subject());

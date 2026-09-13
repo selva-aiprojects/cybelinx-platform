@@ -2,8 +2,14 @@
 
 > The canonical architecture lives in the
 > [PRD](../Cybelinx%20Central%20SaaS%20Platform%20%E2%80%94%20Phase%201%20PRD.md) and
-> [TRD](../Cybelinx_Phase1_TRD_v1.1_Updated.md). This document captures the
-> *implemented scaffold* and the boundaries it enforces.
+> [TRD](../Cybelinx_Phase1_TRD_v1.2_Java_Spring_Updated.md). This document captures the
+> *implemented* architecture and the boundaries it enforces.
+
+## Authoritative backend statement
+
+> **Java 21 + Spring Boot is the current and authoritative backend implementation.**
+> The previous NestJS/Prisma implementation under `retired/` is reference-only and is
+> not built, tested, deployed or extended.
 
 ## Core principle
 
@@ -31,7 +37,7 @@ database and are **not** queried by the control plane.
 ```
 User
   |  (who is the user?)
-Identity Provider
+Existing Identity Provider (OAuth2 / OIDC / JWT)
   |
 Cybelinx Control Plane          <- this repository
   |  (which tenant/product can the user access, and what can they do?)
@@ -45,60 +51,63 @@ Cybelinx Control Plane          <- this repository
   +-- Provisioning
   +-- Audit / Events / Usage
   |
-  +-----------------------------+
-  |                             |
-Jioplix                     Jioplix Smart
-Product Nexus               Product Nexus          (NOT in this repo)
-  |                             |
-Tenant Data                 Tenant Data
-  |                             |
-Outbox                       Outbox
-  +-------------+---------------+
-                |
-          Event / Messaging
+  +---+-------------------+-------------------+
+      |                   |                   |
+  Jioplix           Jioplix Smart            LIMS
+  Product Nexus     Product Nexus          Product Nexus   (NOT in this repo)
+      |                   |                   |
+  Tenant Data       Tenant Data          Tenant Data
+      |                   |                   |
+      +--------- Transactional Outbox -------+
+                      |
+                      v
+              Event Worker (control plane)
+                      |
+                      v
+              Central Event Foundation
 ```
 
 ## Monorepo layout
 
 | Path | Role |
 | --- | --- |
-| `apps/central-api` | Control Plane API — NestJS **modular monolith** (single deployable) |
-| `apps/event-worker` | Event Worker — separate deployable process |
+| `backend/cybelinx-shared` | Shared Java library (error model, constants, env ports) |
+| `backend/central-api` | Control Plane API — Spring Boot **modular monolith** (port 3001) |
+| `backend/event-worker` | Event Worker — separate Spring Boot process (port 3002) |
 | `apps/admin-portal` | Admin console — Next.js App Router |
 | `packages/shared` | Constants, error model, small utilities (`@cybelinx/shared`) |
-| `packages/types` | Canonical platform domain types (`@cybelinx/types`) |
-| `packages/config` | Environment schema, validation, defaults (`@cybelinx/config`) |
-| `packages/auth` | Identity / JWT claim model (`@cybelinx/auth`) |
-| `packages/tenant-context` | Tenant context model & guards (`@cybelinx/tenant-context`) |
-| `packages/event-contracts` | Standard event contract & validation (`@cybelinx/event-contracts`) |
-| `packages/product-sdk` | Future product integration SDK (`@cybelinx/product-sdk`) |
 | `infra/` | Docker Compose, Dockerfiles, Postgres init, scripts |
 | `docs/` | PRD / TRD / architecture / API / ADRs |
+| `retired/` | Pre-cutover TypeScript backend — **reference only, not built** |
 
-Modules inside `central-api` are Nest modules (health, prisma), not microservices.
-The event worker is a separate *process*, not a separate business domain.
+Modules inside `central-api` are Spring packages (tenants, security, persistence,
+health, common), not microservices. The event worker is a separate *process*,
+not a separate business domain. Phase 1 remains a **modular monolith + event worker**.
 
 ## Isolation model
 
-Tenant identity is independent of physical storage. Supported isolation modes
-(arriving with the resource registry work):
+Tenant identity is independent of physical storage. Supported isolation modes:
 
-- `POOL` — shared database / shared pool
-- `SCHEMA` — schema-per-tenant
-- `DEDICATED_DB` — dedicated database
-- `DEDICATED_INFRA` — future dedicated infrastructure
+- `SHARED_POOL` — shared database / shared pool
+- `SCHEMA_PER_TENANT` — schema-per-tenant
+- `DEDICATED_DATABASE` — dedicated database
+- `DEDICATED_INFRASTRUCTURE` — future dedicated infrastructure
 
-A product must never be coupled to the physical storage model.
+A product must never be coupled to the physical storage model. Tenant resources
+are resolved through the Tenant Resource Registry, never through hard-coded
+schema/database names.
 
 ## Technology
 
 - **Frontend:** Next.js 16 · React 19 · TypeScript (strict)
-- **Backend:** NestJS 11 · Node.js 24 · TypeScript (strict)
-- **API:** REST + JSON under `/api/v1`, OpenAPI/Swagger
-- **ORM:** Prisma 6 · **Database:** PostgreSQL 17
-- **Events:** PostgreSQL transactional outbox + lightweight worker (future phases)
-- **Tests:** Jest 29 · Supertest · (Playwright later)
-- **Quality:** TypeScript strict · ESLint 9 flat config · Prettier · `typescript-eslint`
+- **Backend:** Java 21 · Spring Boot 3.5.x · Spring Web · Spring Security
+- **Persistence:** Spring Data JPA · Hibernate · PostgreSQL 17 · Flyway · pgJDBC · HikariCP
+- **API:** REST + JSON under `/api/v1`, OpenAPI/Swagger (`springdoc`, `/api/v1/docs`)
+- **Validation:** Jakarta Bean Validation · custom `@OneOf`
+- **JWT:** Nimbus (HMAC + JWKS strategies) · clock-skew aware
+- **Events:** PostgreSQL transactional outbox + Spring Boot Event Worker
+- **Tests:** JUnit 5 · Mockito · Spring Boot Test (MockMvc + real Postgres)
+- **Build:** Maven (wrapper) · npm workspaces (frontend only)
 - **Infra:** Docker Compose · GitHub Actions
 
 No Kafka, RabbitMQ, Redis, Databricks or Snowflake in Phase 1.
@@ -108,9 +117,9 @@ No Kafka, RabbitMQ, Redis, Databricks or Snowflake in Phase 1.
 - Applications never use the PostgreSQL superuser (dev compose superuser is dev-only).
 - Least-privilege runtime / provisioner / read-only roles (see `infra/postgres/init`).
 - Tenant context must be derived from authenticated identity and authorization — never
-  from a client-supplied tenant id.
+  from a client-supplied tenant id (request bodies do not accept `tenantId`).
 - Connection/transaction-scoped tenant context to prevent schema leakage across pooled
-  connections (implemented with the resource resolver work).
+  connections (resource resolver work).
 - Secrets never committed; only *credential references* are stored by the platform.
 - No passwords, tokens or PHI in logs or event payloads.
 
@@ -120,9 +129,18 @@ No Kafka, RabbitMQ, Redis, Databricks or Snowflake in Phase 1.
 # start local postgres
 npm run db:up
 
-# install, build, lint, typecheck, test
+# frontend (admin-portal + shared): install, build, lint, typecheck, test
 npm install
 npm run build
 npm run lint
 npm run typecheck
 npm test
+
+# backend: full Maven reactor test suite (central-api + event-worker)
+npm run test:backend
+
+# run services locally
+npm run dev:api      # central-api  → http://localhost:3001/api/v1
+npm run dev:worker   # event-worker → http://localhost:3002/api/v1
+npm run dev:portal   # admin-portal → http://localhost:3000
+```

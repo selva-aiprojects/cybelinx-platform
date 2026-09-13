@@ -1,51 +1,54 @@
 package com.cybelinx.platform.api.security;
 
 import com.cybelinx.platform.api.common.error.ApiHttpException;
-import com.cybelinx.platform.api.security.jwt.JwtVerificationError;
-import com.cybelinx.platform.api.security.jwt.JwtVerifier;
-import com.cybelinx.platform.api.security.jwt.JwtVerifier.VerifiedJwt;
-import java.util.List;
+import com.cybelinx.platform.api.security.identity.IdentityClaims;
+import com.cybelinx.platform.api.security.identity.IdentityProvider;
+import com.cybelinx.platform.api.security.identity.IdentityToken;
+import com.cybelinx.platform.api.security.identity.IdentityVerificationException;
 import java.util.Map;
 
 /**
- * Port of {@code IdentityService}: validates bearer tokens and resolves the authenticated
- * principal through the configured identity provider.
+ * Resolves bearer tokens to platform principals via the configured {@link IdentityProvider}.
+ * Authentication is delegated; the platform handles user mapping and downstream authorization.
  */
 public final class IdentityService {
 
-    private final String providerName;
-    private final JwtVerifier verifier;
+    private final IdentityProvider provider;
     private final UserMappingService userMapping;
 
-    public IdentityService(String providerName, JwtVerifier verifier, UserMappingService userMapping) {
-        this.providerName = providerName;
-        this.verifier = verifier;
+    public IdentityService(IdentityProvider provider, UserMappingService userMapping) {
+        this.provider = provider;
         this.userMapping = userMapping;
     }
 
-    /** Port of {@code IdentityProvider.getProviderMetadata()}. */
     public ProviderMetadata getProviderMetadata() {
+        IdentityProvider.Metadata metadata = provider.metadata();
         return new ProviderMetadata(
-                providerName,
-                null,
-                null,
-                List.of(verifier.algorithm()),
-                "jwks".equals(verifier.kind()));
+                metadata.provider(),
+                metadata.issuer(),
+                metadata.audience(),
+                metadata.supportedAlgorithms(),
+                metadata.supportsJwks());
     }
 
     public ValidatedToken validateToken(String accessToken) {
         try {
-            VerifiedJwt verified = verifier.verify(accessToken);
-            return new ValidatedToken(accessToken, providerName, verified.alg(), verified.kid(), verified.claims());
-        } catch (JwtVerificationError error) {
+            IdentityToken token = provider.verify(accessToken);
+            return new ValidatedToken(
+                    token.rawToken(),
+                    provider.metadata().provider(),
+                    token.algorithm(),
+                    token.keyId(),
+                    token.claims().raw());
+        } catch (IdentityVerificationException error) {
             throw ApiHttpException.unauthorized("Invalid access token: " + error.reason().name());
         }
     }
 
     public AuthPrincipal resolvePrincipal(String accessToken) {
         ValidatedToken validated = validateToken(accessToken);
-        AuthPrincipal.AuthIdentity identity = getUserIdentity(validated);
-        AuthPrincipal.AuthUser user = userMapping.lookupUser(identity);
+        AuthPrincipal.AuthIdentity identity = toAuthIdentity(validated);
+        AuthPrincipal.AuthUser user = userMapping.resolveUser(identity);
 
         if (user == null) {
             throw ApiHttpException.unauthorized("Access token is valid but the user is not mapped to the platform");
@@ -54,18 +57,19 @@ public final class IdentityService {
         return new AuthPrincipal(user, identity);
     }
 
-    /** Port of {@code ExternalIdentityProvider.getUserIdentity()}. */
-    private AuthPrincipal.AuthIdentity getUserIdentity(ValidatedToken validated) {
+    private AuthPrincipal.AuthIdentity toAuthIdentity(ValidatedToken validated) {
         Map<String, Object> claims = validated.claims();
-        String email = claims.get("email") instanceof String value ? value : null;
-        String name = claims.get("name") instanceof String value ? value : null;
-        return new AuthPrincipal.AuthIdentity(providerName, String.valueOf(claims.get("sub")), email, name);
+        IdentityClaims parsed = IdentityClaims.from(claims);
+        return new AuthPrincipal.AuthIdentity(
+                provider.metadata().provider(),
+                parsed.subject(),
+                parsed.email(),
+                parsed.name());
     }
 
-    /** Port of {@code ProviderMetadata}. */
     public record ProviderMetadata(
-            String provider, String issuer, List<String> audience, List<String> supportedAlgorithms, boolean supportsJwks) {}
+            String provider, String issuer, java.util.List<String> audience,
+            java.util.List<String> supportedAlgorithms, boolean supportsJwks) {}
 
-    /** Port of {@code ValidatedToken}. */
     public record ValidatedToken(String token, String provider, String alg, String kid, Map<String, Object> claims) {}
 }

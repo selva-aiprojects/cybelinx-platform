@@ -49,9 +49,14 @@ public class UserIdentity extends BaseTimestampedEntity {
 
     @PrePersist
     void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
         if (linkedAt == null) {
-            linkedAt = LocalDateTime.now();
+            linkedAt = now;
         }
+        if (getCreatedAt() == null) {
+            setCreatedAt(now);
+        }
+        setUpdatedAt(now);
     }
 
     public UUID getId() {

@@ -2,6 +2,10 @@
 
 **Centralize SaaS plumbing — not business functionality.**
 
+> **Java 21 + Spring Boot is the current and authoritative backend implementation.**
+> The previous NestJS/Prisma implementation under `retired/` is reference-only —
+> it is not built, tested, deployed or extended.
+
 The Cybelinx platform is the single control plane for all Cyclinx products
 (Jioplix, Jioplix Smart). It owns tenant, identity, RBAC, entitlement, tenant
 resource, provisioning and event plumbing. Product business data (`patients`,

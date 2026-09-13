@@ -118,3 +118,85 @@ preserved in `retired/` (not part of the monorepo).
 ### Notes
 - Java-backend env vars differ from the TS era: datasource is `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` (DB credentials unchanged).
 - `retired/` keeps the full TS backend + packages for reference; it is excluded from workspaces, lint, CI and Docker builds.
+
+## Phase: Phase 1 Gap Audit (Read-Only)
+
+Live audit of actual source, migrations, tests, controllers, services and
+repositories — the docs alone were not trusted.
+
+### Capability status (evidence-based)
+
+| # | Capability | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | Documentation | COMPLETE | README/progress.java era; ARCHITECTURE.md + API.md still stale NestJS/Prisma — FIXED in capability 1 |
+| 2 | Identity integration | COMPLETE | JWT verify (HMAC/JWKS) + claims + user mapping read path work; `UserMappingService.createMapping` unwired (first-sign-in auto-provision), no memberships API — hardened in capability 2 |
+| 3 | Product Registry | COMPLETE | ProductsService/Controller/Repository endpoints; guarded lifecycle; audit; no business data |
+| 4 | Product Versioning | SCAFFOLD_ONLY | `product_versions` table + entity; no service/API |
+| 5 | Plans | SCAFFOLD_ONLY | `plans`,`entitlements` tables + entities; no service/API |
+| 6 | Entitlements | SCAFFOLD_ONLY | plan-template entitlements table exists; no per-tenant entitlement/limits logic, no API |
+| 7 | Tenant Products | PARTIALLY_IMPLEMENTED | managed inside TenantsService create/resolve, rendered in detail; no management API |
+| 8 | Tenant Resource Registry | PARTIALLY_IMPLEMENTED | `tenant_resources` table + entity + creation in tenant flow; `productCode` view field hard-coded `""`; no repo query surface |
+| 9 | Resource Resolver | NOT_IMPLEMENTED | no `TenantResourceResolver` |
+| 10 | Storage Isolation Models | PARTIALLY_IMPLEMENTED | `IsolationMode` enum (4 modes) stored on resource; no enforcement/search_path handling |
+| 11 | Provisioning Engine | SCAFFOLD_ONLY | jobs/steps created inertly at tenant create (progress 10, 3 static steps); nothing executes |
+| 12 | Provisioning Jobs | PARTIALLY_IMPLEMENTED | `provisioning_jobs`+`provisioning_steps` tables/entities + creation; no claim/execute/retry; no `attempt_count`/`next_retry_at`/lease cols |
+| 13 | Provisioning Retry / Recovery | NOT_IMPLEMENTED | no attempt counter, no lease, no `FOR UPDATE SKIP LOCKED` |
+| 14 | Transactional Outbox | SCAFFOLD_ONLY | `platform_events` table + entity; nothing writes/reads; missing `occurred_at`/`source`/`last_error`; TRD still says `outbox_events` |
+| 15 | Event Worker | SCAFFOLD_ONLY | heartbeat/health only; `poll-interval-ms`/`batch-size` config dormant; no DB deps |
+| 16 | Event Contract | PARTIALLY_IMPLEMENTED | envelope cols on `platform_events`; `occurred_at`/`source` missing |
+| 17 | Event Idempotency | SCAFFOLD_ONLY | `event_processing` unique on `event_id` only; no `consumer_name` → per-consumer idempotency impossible |
+| 18 | Retry / Backoff | NOT_IMPLEMENTED | `available_at` exists; no policy code |
+| 19 | Dead Letter Handling | NOT_IMPLEMENTED | `DEAD_LETTERED` enum only; no DLQ/replay |
+| 20 | Event Replay | NOT_IMPLEMENTED | nothing |
+| 21 | Platform Audit | PARTIALLY_IMPLEMENTED | `audit_events` written on tenant lifecycle; write-only (no query API), no membership/product/entitlement/event-replay audits |
+| 22 | Usage / Metering Foundation | SCAFFOLD_ONLY | `usage_events` table + entity (dedupe_key); nothing writes/reads |
+| 23 | Product SDK | NOT_IMPLEMENTED | retired; needs new TS `@cybelinx/product-sdk` |
+| 24 | Product Adapter | NOT_IMPLEMENTED | nothing |
+| 25 | Tenant ID Migration Mapping | SCAFFOLD_ONLY | `tenant_external_identifiers` table + entity; no service/API |
+| 26 | Admin Portal | SCAFFOLD_ONLY | single static homepage + self health route; no API client, screens, or `NEXT_PUBLIC_API_BASE_URL` use |
+| 27 | Security Hardening | PARTIALLY_IMPLEMENTED | JWT validation, per-tenant service checks, DTO whitelist, CORS prop-driven, headers default; no actuator, no rate limiting, mechanism for headers; auth non-functional without IDP config |
+| 28 | Integration Tests | PARTIALLY_IMPLEMENTED | 61 backend tests (tenant ITs, health, error shape, JWT, worker health); no product/plan/entitlement/outbox/provisioning ITs |
+| 29 | Tenant Isolation Tests | PARTIALLY_IMPLEMENTED | `TENANT_ACCESS_DENIED` path tested in service ITs; no dedicated isolation suite / schema search_path test |
+| 30 | Concurrency Tests | NOT_IMPLEMENTED | no parallel creation/provisioning/outbox tests |
+| 31 | Load / Stress Tests | NOT_IMPLEMENTED | none |
+| 32 | CI/CD Security and Test Improvements | PARTIALLY_IMPLEMENTED | two jobs (Maven + portal); no dependency/security scans, no Docker build, no coverage |
+| 33 | Observability | NOT_IMPLEMENTED | no actuator, no request correlation_id plumbing in logs, no structured logging config |
+| 34 | Migration discipline | PARTIALLY_IMPLEMENTED | Flyway V1/V2 present; no `@Version`; V3+ needed for all new columns |
+
+### Key findings
+- Only 4 controllers exist (2 health + tenants + exception handler). No product/plan/entitlement/resource/provisioning/audit/usage/event endpoints.
+- 27 JPA entities + 28 tables exist; 15 repositories; no repositories for `Entitlement`, `UsageEvent`, `PlatformEvent`, `EventProcessing`, `ProductVersion`, `TenantExternalIdentifier`, `Database`, `DatabaseSchema`.
+- Provisioning created inertly in `TenantsService.queueProvisioningJobs`; event-worker is a heartbeat scaffold.
+- `event_processing` cannot support per-consumer idempotency (unique `event_id` only, no `consumer_name`).
+- No `@Version`/optimistic locking anywhere; no `FOR UPDATE SKIP LOCKED` usage.
+- Admin portal has no API client and never uses `NEXT_PUBLIC_API_BASE_URL`; `Dockerfile.admin-portal` references retired paths (broken `npm ci`).
+- `TenantsService.toResourceView` hard-codes `productCode` as `""` (fidelity bug).
+- No actuator anywhere; `spring-boot-starter-actuator`/testcontainers absent.
+
+## Phase: Phase 1 Gap Fixing
+
+### Capability 1 — Documentation correction [COMPLETE]
+- [x] `docs/architecture/ARCHITECTURE.md` rewritten for Java 21 / Spring Boot (layout, modules, technology, isolation, run/verify); authoritative backend statement added
+- [x] `docs/api/API.md` corrected (Spring Boot ownership, actual tenant endpoints, error envelopes, authn/JWT validation, conventions)
+- [x] `docs/README.md` indexes TRD v1.2 Java/Spring and marks v1.1 as the NestJS baseline
+- [x] Root `README.md` carries the authoritative statement (Java/Spring current; `retired/` reference-only)
+- [x] Full test suite still green after doc changes (central-api 61/61 pre-capability-2)
+
+### Capability 2 — Identity integration hardening [COMPLETE]
+- [x] Provider-agnostic abstraction introduced in `security/identity/`: `IdentityProvider`, `IdentityClaims`, `IdentityToken`, `IdentityVerificationException`, `JwtIdentityProvider`
+- [x] `IdentityService` now delegates verification to `IdentityProvider` (JWT HMAC/JWKS adapter), keeps exact 401 `Invalid access token: <REASON>` wire shape
+- [x] First-sign-in auto-provisioning wired: `UserMappingService.resolveUser` looks up then upserts (user + user_identity) on miss
+- [x] Lost-update race safety: create runs in `REQUIRES_NEW` with `DataIntegrityViolationException` fallback to re-read the winner's mapping (unique `identity_provider`+`external_subject`)
+- [x] Fixed shadowed-timestamp bug: `UserIdentity#prePersist` suppressed the `BaseTimestampedEntity` callback → `created_at`/`updated_at` NOT NULL violations on insert; now self-sufficient
+- [x] `IdentitySecurityConfig` exposes the JWT `IdentityProvider` bean; `identityProvider`/`identityService` beans decoupled
+- [x] Tests: `IdentityServiceTest` (6 unit: delegation, 401s, provisioning, metadata) + `UserMappingServiceIT` (5 IT: provision, synthetic email, reuse, distinct subjects, not-found) — 63/63 central-api + 9 event-worker = 72/72
+
+### Capability 3 — Product Registry [COMPLETE]
+- [x] Registry API under `/api/v1/products` (context-path `/api/v1`): `POST` create (default `DRAFT`) · `GET` list (page/limit, `status` filter, `search`, `sort` on `createdAt|name|productCode`) · `GET :productId` · `PUT :productId` · `PATCH :productId/status`
+- [x] Unique `product_code` enforced as 409 `PRODUCT_CODE_TAKEN` (pre-check + DB unique constraint); unknown product → 404 `PRODUCT_NOT_FOUND`
+- [x] Guarded lifecycle (`ProductTransitions`): `DRAFT → ACTIVE → DEPRECATED → DISABLED` (+ `ACTIVE → DISABLED`); `DISABLED` terminal; invalid transitions → 409 `PRODUCT_STATUS_TRANSITION_INVALID`
+- [x] `ProductRepository` now `JpaSpecificationExecutor` for filtered/paginated list; no new DB tables — reuses V1 `products`/`audit_events`
+- [x] Permissions `product:read`/`product:write` (`ProductConstants`); `@RequirePermissions` on routes + `assertPlatformPermission` in service (platform-admin override path kept); interceptor registered on `/products/**` alongside `/tenants/**`
+- [x] Shared ErrorCodes added: `PRODUCT_CODE_TAKEN`, `PRODUCT_STATUS_TRANSITION_INVALID` (both 409 in `defaultHttpStatus`)
+- [x] Audit trail: `product.created` / `product.updated` (changed fields) / `product.status_changed` (from→to metadata) — `entityType="product"`, product FK, no tenant
+- [x] Tests: `ProductTransitionsTest` (6 unit) + `ProductsServiceIT` (11 IT: create+audit, permission grant, duplicate 409, forbidden, list paginate/filter, get + detail, 404, update+audit, full lifecycle falls, invalid transition, terminal) — central-api 80/80 + event-worker 9 = **89/89 backend green**
