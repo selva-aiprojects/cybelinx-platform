@@ -23,6 +23,10 @@ public final class TenantViews {
             String status,
             String activatedAt) {}
 
+    public record TenantProductListResponse(List<TenantProductView> data) {}
+
+    public record TenantProductActionResponse(String tenantId, String productCode, String status) {}
+
     public record TenantResourceView(
             String tenantResourceId,
             String tenantId,
@@ -32,6 +36,10 @@ public final class TenantViews {
             String environment,
             String status,
             String provisioningState) {}
+
+    public record TenantResourceListResponse(List<TenantResourceView> data) {}
+
+    public record TenantResourceActionResponse(String tenantId, String productCode, String resourceTypeCode, String status) {}
 
     public record ProvisioningJobView(String jobId, String tenantId, String operation, String state, int progress) {}
 

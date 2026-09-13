@@ -637,7 +637,7 @@ public class TenantsService {
         return new TenantResourceView(
                 resource.getId().toString(),
                 resource.getTenant().getId().toString(),
-                "",
+                resource.getProduct() != null ? resource.getProduct().getProductCode() : "",
                 resource.getResource() != null ? resource.getResource().getResourceTypeCode() : "",
                 resource.getIsolationMode().name(),
                 resource.getEnvironment().name(),

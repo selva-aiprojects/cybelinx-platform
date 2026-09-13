@@ -4,6 +4,7 @@ import com.cybelinx.platform.api.domain.TenantProductStatus;
 import com.cybelinx.platform.api.persistence.entity.TenantProduct;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -17,6 +18,8 @@ public interface TenantProductRepository extends JpaRepository<TenantProduct, UU
             "select tp from TenantProduct tp join fetch tp.product join fetch tp.plan "
                     + "where tp.tenant.id = :tenantId order by tp.createdAt asc")
     List<TenantProduct> listByTenantId(@Param("tenantId") UUID tenantId);
+
+    Optional<TenantProduct> findByTenantIdAndProductId(UUID tenantId, UUID productId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update TenantProduct tp set tp.status = :status where tp.tenant.id = :tenantId")

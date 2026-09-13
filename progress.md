@@ -131,12 +131,12 @@ repositories — the docs alone were not trusted.
 | 1 | Documentation | COMPLETE | README/progress.java era; ARCHITECTURE.md + API.md still stale NestJS/Prisma — FIXED in capability 1 |
 | 2 | Identity integration | COMPLETE | JWT verify (HMAC/JWKS) + claims + user mapping read path work; `UserMappingService.createMapping` unwired (first-sign-in auto-provision), no memberships API — hardened in capability 2 |
 | 3 | Product Registry | COMPLETE | ProductsService/Controller/Repository endpoints; guarded lifecycle; audit; no business data |
-| 4 | Product Versioning | SCAFFOLD_ONLY | `product_versions` table + entity; no service/API |
-| 5 | Plans | SCAFFOLD_ONLY | `plans`,`entitlements` tables + entities; no service/API |
-| 6 | Entitlements | SCAFFOLD_ONLY | plan-template entitlements table exists; no per-tenant entitlement/limits logic, no API |
-| 7 | Tenant Products | PARTIALLY_IMPLEMENTED | managed inside TenantsService create/resolve, rendered in detail; no management API |
-| 8 | Tenant Resource Registry | PARTIALLY_IMPLEMENTED | `tenant_resources` table + entity + creation in tenant flow; `productCode` view field hard-coded `""`; no repo query surface |
-| 9 | Resource Resolver | NOT_IMPLEMENTED | no `TenantResourceResolver` |
+| 4 | Product Versioning | COMPLETE | version catalog API + publish-current wiring `products.current_version_id` |
+| 5 | Plans | COMPLETE | plan catalog API + guarded DRAFT→ACTIVE→RETIRED lifecycle + audit |
+| 6 | Entitlements | COMPLETE | plan-template feature/limit catalog API + guarded state machine + audit |
+| 7 | Tenant Products | COMPLETE | subscription registry API: attach/detach/products listing, plan selection, guarded status transitions (PROVISIONING→ACTIVE, ACTIVE⇄SUSPENDED, ACTIVE⇄LAPSED), audit (`tenant_product.created/status_changed/removed`) |
+| 8 | Tenant Resource Registry | COMPLETE | registry API under `/tenants/{tenantId}/resources`; registration requires subscribed product (404 `TENANT_PRODUCT_NOT_FOUND` otherwise); per-env uniqueness; `productCode` view field now populated (fidelity bug fixed) |
+| 9 | Resource Resolver | COMPLETE | resolver API under `/tenants/{tenantId}/products/{productId}/resolve`; ACTIVE selection, per-environment lookup, product-agnostic physical mapping (products never construct database/schema info) |
 | 10 | Storage Isolation Models | PARTIALLY_IMPLEMENTED | `IsolationMode` enum (4 modes) stored on resource; no enforcement/search_path handling |
 | 11 | Provisioning Engine | SCAFFOLD_ONLY | jobs/steps created inertly at tenant create (progress 10, 3 static steps); nothing executes |
 | 12 | Provisioning Jobs | PARTIALLY_IMPLEMENTED | `provisioning_jobs`+`provisioning_steps` tables/entities + creation; no claim/execute/retry; no `attempt_count`/`next_retry_at`/lease cols |
@@ -170,7 +170,7 @@ repositories — the docs alone were not trusted.
 - `event_processing` cannot support per-consumer idempotency (unique `event_id` only, no `consumer_name`).
 - No `@Version`/optimistic locking anywhere; no `FOR UPDATE SKIP LOCKED` usage.
 - Admin portal has no API client and never uses `NEXT_PUBLIC_API_BASE_URL`; `Dockerfile.admin-portal` references retired paths (broken `npm ci`).
-- `TenantsService.toResourceView` hard-codes `productCode` as `""` (fidelity bug).
+- `TenantsService.toResourceView` hard-codes `productCode` as `""` — FIXED in capability 8 (product code from `tenant_resources.product_id`).
 - No actuator anywhere; `spring-boot-starter-actuator`/testcontainers absent.
 
 ## Phase: Phase 1 Gap Fixing
@@ -200,3 +200,59 @@ repositories — the docs alone were not trusted.
 - [x] Shared ErrorCodes added: `PRODUCT_CODE_TAKEN`, `PRODUCT_STATUS_TRANSITION_INVALID` (both 409 in `defaultHttpStatus`)
 - [x] Audit trail: `product.created` / `product.updated` (changed fields) / `product.status_changed` (from→to metadata) — `entityType="product"`, product FK, no tenant
 - [x] Tests: `ProductTransitionsTest` (6 unit) + `ProductsServiceIT` (11 IT: create+audit, permission grant, duplicate 409, forbidden, list paginate/filter, get + detail, 404, update+audit, full lifecycle falls, invalid transition, terminal) — central-api 80/80 + event-worker 9 = **89/89 backend green**
+
+### Capability 4 — Product Versioning [COMPLETE]
+- [x] Version catalog API nested under a product: `POST /products/{productId}/versions` (semver-like `version` `^\d{1,3}(\.\d{1,3}){1,2}$`, optional `releaseNotes`) · `GET /products/{productId}/versions` (oldest-first) · `GET .../versions/{versionId}` · `PUT .../versions/{versionId}/publish`
+- [x] Publish swaps `current`: previous current version(s) cleared (`is_current=false`), target set `is_current=true` + `published_at`, and `products.current_version_id` wired to the new version — one transaction
+- [x] New `ProductVersionRepository` (findByProductIdAndVersion, findByIdAndProductId, current-per-product, order-by-created); no DB migration — reuses V1 `product_versions`
+- [x] Shared ErrorCodes: `PRODUCT_VERSION_NOT_FOUND` (404), `PRODUCT_VERSION_TAKEN` (409)
+- [x] Audit: `product_version.created` / `product_version.published` (`entityType="product_version"`, product FK, metadata = version string)
+- [x] `@RequirePermissions` (`product:read`/`product:write`) + service `assertPlatformPermission` (platform-admin override)
+- [x] Tests: `ProductVersionsServiceIT` (9 IT: create+audit, duplicate 409, unknown product/version 404, forbidden, oldest-first list, get, publish swap + product wiring + current flip + audit) — central-api 89/89 + event-worker 9 = **98/98 backend green**
+
+### Capability 5 — Plans [COMPLETE]
+- [x] Plan catalog API nested under a product: `POST /products/{productId}/plans` (`planCode` `^[A-Z][A-Z0-9_]{1,63}$`, optional `description`/`trialDays` ≤730) · `GET /products/{productId}/plans?status` · `GET .../plans/{planId}` · `PUT .../plans/{planId}` (name/description/trialDays) · `PATCH .../plans/{planId}/status`
+- [x] Guarded plan lifecycle (`PlanTransitions`): `DRAFT → ACTIVE → RETIRED`; `RETIRED` terminal; invalid → 409 `PLAN_STATUS_TRANSITION_INVALID`
+- [x] Duplicate `plan_code` under a product pre-checked → 409 `PLAN_CODE_TAKEN` (DB unique `plans_product_code_unique` as backstop); `requirePlan` scoped to product → 404 `PLAN_NOT_FOUND`
+- [x] New `PlanRepository` (`findByProductIdAndPlanCode`, `findByIdAndProductId`, list by status/created-at, and `findFirstByProductIdAndStatusOrderByCreatedAtAsc` the TenantsService active-plan lookup depends on — retained); no DB migration — reuses V1 `plans`
+- [x] Audit: `plan.created` / `plan.updated` (fields) / `plan.status_changed` (from→to), `entityType="plan"`, product FK
+- [x] `@RequirePermissions` (`product:read`/`product:write`) + service `assertPlatformPermission`
+- [x] Tests: `PlanTransitionsTest` (5 unit) + `PlansServiceIT` (11 IT: create+audit, duplicate 409, unknown product/plan 404, forbidden, status-filtered list, get, update+audit, lifecycle, invalid transition, terminal) — central-api 105/105 + event-worker 9 = **114/114 backend green**
+
+### Capability 6 — Entitlements [COMPLETE]
+- [x] Entitlement catalog API nested under a plan: `POST /products/{productId}/plans/{planId}/entitlements` (`key` `^[a-z][a-z0-9_.:-]{1,127}$`, structured JSON `value` object) · `GET .../entitlements` · `GET .../entitlements/{entitlementId}` · `PUT .../entitlements/{entitlementId}` (name/value) · `PATCH .../entitlements/{entitlementId}/status`
+- [x] Guarded state machine (`EntitlementTransitions`): `PENDING → ACTIVE`; `ACTIVE ⇄ SUSPENDED`; `ACTIVE ⇄ INACTIVE`; invalid → 409 `ENTITLEMENT_STATUS_TRANSITION_INVALID`
+- [x] Duplicate `key` per plan pre-checked → 409 `ENTITLEMENT_KEY_TAKEN` (DB unique `entitlements_plan_key_unique`); scoped lookup → 404 `ENTITLEMENT_NOT_FOUND`/`PLAN_NOT_FOUND`
+- [x] `Entitlement.value` (jsonb `Map<String,Object>`) round-trips through Jackson at the JPA layer; `@JdbcTypeCode(SqlTypes.JSON)` already on entity — no DB migration, reuses V1 `entitlements`
+- [x] New `EntitlementRepository` (`findByPlanIdAndKey`, `findByIdAndPlanId`, list by created-at)
+- [x] Audit: `entitlement.created` / `entitlement.updated` (fields) / `entitlement.status_changed` (from→to, planId in metadata), `entityType="entitlement"`, product FK
+- [x] Tests: `EntitlementTransitionsTest` (6 unit) + `EntitlementsServiceIT` (10 IT: create+audit with JSON value, duplicate key 409, unknown plan/entitlement 404, forbidden, list, get, update+audit, full state machine, invalid transition) — central-api 121/121 + event-worker 9 = **130/130 backend green**
+
+### Capability 7 — Tenant Products [COMPLETE]
+- [x] Subscription registry API nested under a tenant: `GET /tenants/{tenantId}/products` (list) · `POST /tenants/{tenantId}/products` (attach; `productCode` required, `planCode` optional → default active plan) · `PATCH .../products/{productId}/status` · `DELETE .../products/{productId}` (soft detach → `DISABLED`)
+- [x] Attach requires product `ACTIVE` (else 409 `PRODUCT_NOT_ACTIVE`) and plan `ACTIVE` (else 409 `PLAN_NOT_ACTIVE`); duplicate attach pre-checked → 409 `TENANT_PRODUCT_ALREADY_ASSIGNED` (DB unique `tenant_products_tenant_product_unique` as backstop); unattached → 404 `TENANT_PRODUCT_NOT_FOUND`
+- [x] Guarded subscription state machine (`TenantProductTransitions`): `PROVISIONING → ACTIVE`; `ACTIVE ⇄ SUSPENDED`; `ACTIVE ⇄ LAPSED`; `DISABLED` terminal; invalid → 409 `TENANT_PRODUCT_STATUS_TRANSITION_INVALID`
+- [x] Attach sets `ACTIVE` + `activated_at=now`; re-activation refreshes `activated_at`; detach is soft (status `DISABLED`)
+- [x] `TenantProductRepository.findByTenantIdAndProductId` added; service reuses `listByTenantId` (join-fetched product+plan) and the `findFirstByProductIdAndStatusOrderByCreatedAtAsc` default-plan lookup
+- [x] Tenant-scope guard (`assertCanManageTenant`): platform-admin override, else `tenant:read`/`tenant:write` membership permission, else 403 `TENANT_ACCESS_DENIED`; `requireTenant` treats `DELETED` as 404 `TENANT_NOT_FOUND` (never trusts the client `tenant_id`)
+- [x] Audit: `tenant_product.created` / `tenant_product.status_changed` (from→to) / `tenant_product.removed` — `entityType="tenant_product"`, tenant + product FKs
+- [x] Shared ErrorCodes: `TENANT_PRODUCT_NOT_FOUND` (404); `TENANT_PRODUCT_ALREADY_ASSIGNED`, `TENANT_PRODUCT_STATUS_TRANSITION_INVALID`, `PRODUCT_NOT_ACTIVE`, `PLAN_NOT_ACTIVE` (409)
+- [x] Tests: `TenantProductsServiceIT` (14 IT: attach+audit, default plan selection, duplicate 409, unknown product 404, inactive product 409, retired plan 409, unknown plan 404, missing permission 403, operator with tenant:write succeeds, list, status transitions+audit, invalid transition 409, detach→DISABLED→terminal, unattached 404) — central-api 135/135 + event-worker 9 = **144/144 backend green**
+
+### Capability 8 — Tenant Resource Registry [COMPLETE]
+- [x] Registry API nested under a tenant: `GET /tenants/{tenantId}/resources` · `GET .../resources/{resourceId}` · `POST .../resources` (register; `productCode` + `resourceTypeCode`, optional `isolationMode`/`environment` with defaults `SHARED_POOL`/`DEVELOPMENT`) · `PATCH .../resources/{resourceId}` (schemaName/migrationVersion/credentialReference) · `DELETE .../resources/{resourceId}` (soft detach → status `RETIRED`, provisioning `ROLLED_BACK`)
+- [x] Register requires the tenant is subscribed to the product (else 404 `TENANT_PRODUCT_NOT_FOUND` / `PRODUCT_NOT_FOUND`) and the resource type exists in the catalog (404 `RESOURCE_NOT_FOUND`); new resources start `PROVISIONING` / `IN_PROGRESS` (execution owned by provisioning capability, 11–13)
+- [x] Per-environment uniqueness `(tenant, product, environment, resource)` pre-checked → 409 `TENANT_RESOURCE_ALREADY_REGISTERED` (DB unique `tenant_resources_tenant_product_env_resource_unique` as backstop); scoped lookup → 404 `TENANT_RESOURCE_NOT_FOUND`
+- [x] `TenantResourceRepository` gained `findByIdAndTenantId` (join-fetch product+resource) + `existsByTenantIdAndProductIdAndEnvironmentAndResourceId`; list query now join-fetches product too
+- [x] Fidelity fix: `TenantsService.toResourceView` populates `productCode` from `tenant_resources.product_id` instead of hard-coded `""`
+- [x] Tenant-scope guard (`assertCanManageTenant`): platform-admin override, else `tenant:read`/`tenant:write`, else 403 `TENANT_ACCESS_DENIED`; `requireTenant` treats `DELETED` as 404
+- [x] Audit: `tenant_resource.created` / `tenant_resource.updated` (changed fields only) / `tenant_resource.removed` — `entityType="tenant_resource"`, tenant + product FKs
+- [x] Shared ErrorCodes: `TENANT_RESOURCE_NOT_FOUND` (404), `TENANT_RESOURCE_ALREADY_REGISTERED` (409)
+- [x] Tests: `TenantResourcesServiceIT` (15 IT: register+audit+defaults, custom isolation/environment, duplicate 409, per-environment distinct ok, unknown product 404, not-subscribed 404, unknown resource type 404, missing permission 403, operator with tenant:write succeeds, list with productCode, get detail, unknown resource 404, update+audit, no-change skip audit, remove→RETIRED+ROLLED_BACK+audit) — central-api 150/150 + event-worker 9 = **159/159 backend green**
+
+### Capability 9 — Resource Resolver [COMPLETE]
+- [x] Resolver API: `GET /tenants/{tenantId}/products/{productId}/resolve?environment=DEVELOPMENT` — input `(tenant, product, environment)`, output physical mapping `(resourceId, resourceTypeCode, isolationMode, databaseName, schemaName, regionCode, credentialReference, status)`; products never construct database/schema info themselves (platform-owned resolution per TRD §30 / PRD §16)
+- [x] `TenantResourceResolver` interface + `DefaultTenantResourceResolver`: picks the `ACTIVE` resource for the environment (latest-first via `TenantResourceRepository.resolveFor`, join-fetching database/schema/region); no resource or only `RETIRED` → 404 `RESOURCE_NOT_FOUND`; exists but not ready (e.g. `PROVISIONING`/`FAILED`) → 503 `RESOURCE_NOT_READY` with `status` + `provisioningState` details
+- [x] `TenantResourcesService.resolveResource` facade: `requireTenant` (DELETED → 404) + `assertCanManageTenant` (`tenant:read`, platform-admin override) + product exists check (`404 PRODUCT_NOT_FOUND`) then delegates to the resolver
+- [x] No new tables — reuses V1 `tenant_resources` + `databases` + `regions` + `schemas`; `resolveFor` query added to the repository
+- [x] Tests: `TenantResourceResolverIT` (9 IT: active metadata incl. database+schema+region+credential, environment default, no resource 404, provisioning → RESOURCE_NOT_READY, retired-only 404, environment mismatch 404, unknown product 404, missing permission 403, picks ACTIVE over PROVISIONING) — central-api 159/159 + event-worker 9 = **168/168 backend green**
