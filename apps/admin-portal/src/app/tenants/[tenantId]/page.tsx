@@ -31,6 +31,13 @@ export default function TenantDetailPage() {
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   const detail = useAsyncData(() => api.tenants.get(tenantId), [tenantId]);
+  const allProducts = useAsyncData(() => api.products.list({ limit: 200 }), []);
+
+  const productMap = useCallback((productCode: string) => {
+    if (!allProducts.data) return null;
+    const match = allProducts.data.data.find((p) => p.productCode === productCode);
+    return match ? match.productId : null;
+  }, [allProducts.data]);
 
   const [attachOpen, setAttachOpen] = useState(false);
   const [resourceOpen, setResourceOpen] = useState(false);
@@ -164,30 +171,41 @@ export default function TenantDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {products.map((product) => (
-                  <tr key={product.tenantProductId}>
-                    <td className="mono">{product.productCode}</td>
-                    <td className="mono muted">{product.planCode ?? '—'}</td>
-                    <td>
-                      <StatusBadge value={product.status} />
-                    </td>
-                    <td className="muted small">{formatDate(product.activatedAt)}</td>
-                    <td className="cell-actions">
-                      {product.status !== 'ACTIVE' && (
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={() => setProductStatus(product, 'ACTIVE')}
-                        >
-                          Activate
+                {products.map((product) => {
+                  const targetProductId = productMap(product.productCode);
+                  return (
+                    <tr key={product.tenantProductId}>
+                      <td className="mono">
+                        {targetProductId ? (
+                          <Link href={`/products/${targetProductId}`} className="row-link" style={{ color: '#0284c7', fontWeight: 600 }}>
+                            {product.productCode}
+                          </Link>
+                        ) : (
+                          product.productCode
+                        )}
+                      </td>
+                      <td className="mono muted">{product.planCode ?? '—'}</td>
+                      <td>
+                        <StatusBadge value={product.status} />
+                      </td>
+                      <td className="muted small">{formatDate(product.activatedAt)}</td>
+                      <td className="cell-actions">
+                        {product.status !== 'ACTIVE' && (
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => setProductStatus(product, 'ACTIVE')}
+                          >
+                            Activate
+                          </button>
+                        )}
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => detach(product)}>
+                          Detach
                         </button>
-                      )}
-                      <button type="button" className="btn btn-danger btn-sm" onClick={() => detach(product)}>
-                        Detach
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -219,10 +237,20 @@ export default function TenantDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {resources.map((resource) => (
-                  <tr key={resource.tenantResourceId}>
-                    <td className="mono">{resource.resourceTypeCode}</td>
-                    <td className="mono muted">{resource.productCode}</td>
+                {resources.map((resource) => {
+                  const targetProductId = productMap(resource.productCode);
+                  return (
+                    <tr key={resource.tenantResourceId}>
+                      <td className="mono">{resource.resourceTypeCode}</td>
+                      <td className="mono muted">
+                        {targetProductId ? (
+                          <Link href={`/products/${targetProductId}`} className="row-link" style={{ color: '#0284c7', fontWeight: 600 }}>
+                            {resource.productCode}
+                          </Link>
+                        ) : (
+                          resource.productCode
+                        )}
+                      </td>
                     <td>
                       <IsolationBadge value={resource.isolationMode} />
                     </td>
@@ -243,7 +271,8 @@ export default function TenantDetailPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

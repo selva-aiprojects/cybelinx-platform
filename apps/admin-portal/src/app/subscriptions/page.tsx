@@ -13,9 +13,18 @@ interface SubscriptionRow extends TenantProductView {
 
 export default function SubscriptionsPage() {
   const tenants = useAsyncData(() => api.tenants.list({ limit: 200 }), []);
+  const products = useAsyncData(() => api.products.list({ limit: 200 }), []);
   const [rows, setRows] = useState<SubscriptionRow[]>([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [rowError, setRowError] = useState<string | null>(null);
+
+  const productMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (products.data) {
+      products.data.data.forEach((p) => map.set(p.productCode, p.productId));
+    }
+    return map;
+  }, [products.data]);
 
   useEffect(() => {
     const list = tenants.data;
@@ -96,30 +105,41 @@ export default function SubscriptionsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={`${row.tenantProductId}`}>
-                      <td>
-                        <Link href={`/tenants/${row.tenant.tenantId}`} className="row-link">
-                          <strong className="mono">{row.tenant.tenantCode}</strong>
-                          <div className="faint small">{row.tenant.name}</div>
-                        </Link>
-                      </td>
-                      <td className="mono">{row.productCode}</td>
-                      <td className="mono muted">{row.planCode ?? '—'}</td>
-                      <td>
-                        <StatusBadge value={row.status} />
-                      </td>
-                      <td className="muted small">{formatDate(row.activatedAt)}</td>
-                      <td className="cell-actions">
-                        <Link
-                          href={`/tenants/${row.tenant.tenantId}`}
-                          className="btn btn-ghost btn-sm"
-                        >
-                          Open
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {rows.map((row) => {
+                    const productId = productMap.get(row.productCode);
+                    return (
+                      <tr key={`${row.tenantProductId}`}>
+                        <td>
+                          <Link href={`/tenants/${row.tenant.tenantId}`} className="row-link">
+                            <strong className="mono">{row.tenant.tenantCode}</strong>
+                            <div className="faint small">{row.tenant.name}</div>
+                          </Link>
+                        </td>
+                        <td className="mono">
+                          {productId ? (
+                            <Link href={`/products/${productId}`} className="row-link" style={{ color: '#0284c7', fontWeight: 600 }}>
+                              {row.productCode}
+                            </Link>
+                          ) : (
+                            row.productCode
+                          )}
+                        </td>
+                        <td className="mono muted">{row.planCode ?? '—'}</td>
+                        <td>
+                          <StatusBadge value={row.status} />
+                        </td>
+                        <td className="muted small">{formatDate(row.activatedAt)}</td>
+                        <td className="cell-actions">
+                          <Link
+                            href={`/tenants/${row.tenant.tenantId}`}
+                            className="btn btn-ghost btn-sm"
+                          >
+                            Open
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
