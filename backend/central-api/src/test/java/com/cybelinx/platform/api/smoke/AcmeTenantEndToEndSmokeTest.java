@@ -16,12 +16,15 @@ import com.cybelinx.platform.api.domain.TenantStatus;
 import com.cybelinx.platform.api.events.OutboxPublisher;
 import com.cybelinx.platform.api.persistence.AuditEventRepository;
 import com.cybelinx.platform.api.persistence.PlatformEventRepository;
+import com.cybelinx.platform.api.domain.PlanStatus;
+import com.cybelinx.platform.api.persistence.PlanRepository;
 import com.cybelinx.platform.api.persistence.ProductRepository;
 import com.cybelinx.platform.api.persistence.ResourceCatalogRepository;
 import com.cybelinx.platform.api.persistence.TenantProductRepository;
 import com.cybelinx.platform.api.persistence.TenantRepository;
 import com.cybelinx.platform.api.persistence.TenantResourceRepository;
 import com.cybelinx.platform.api.persistence.UsageEventRepository;
+import com.cybelinx.platform.api.persistence.entity.Plan;
 import com.cybelinx.platform.api.persistence.entity.PlatformEvent;
 import com.cybelinx.platform.api.persistence.entity.Product;
 import com.cybelinx.platform.api.persistence.entity.Resource;
@@ -62,6 +65,7 @@ class AcmeTenantEndToEndSmokeTest {
 
     @Autowired private TenantRepository tenants;
     @Autowired private ProductRepository products;
+    @Autowired private PlanRepository plans;
     @Autowired private TenantProductRepository tenantProducts;
     @Autowired private ResourceCatalogRepository resourceCatalog;
     @Autowired private TenantResourceRepository tenantResources;
@@ -78,6 +82,8 @@ class AcmeTenantEndToEndSmokeTest {
     private Tenant acmeTenant;
     private Product jioplixProduct;
     private Product limsProduct;
+    private Plan jioplixPlan;
+    private Plan limsPlan;
     private Resource catalogPostgres;
     private AuthPrincipal adminPrincipal;
 
@@ -87,6 +93,19 @@ class AcmeTenantEndToEndSmokeTest {
         adminPrincipal = new AuthPrincipal(
                 new AuthPrincipal.AuthUser(adminId, "admin@acme.test", "Acme Platform Admin", "ACTIVE", null, null),
                 new AuthPrincipal.AuthIdentity("generic", "ext-admin", "admin@acme.test", "Acme Admin"));
+
+        // Cleanup pre-existing ACME tenant data directly in DB if left from prior runs
+        jdbc.execute("DELETE FROM provisioning_steps WHERE job_id IN (SELECT id FROM provisioning_jobs WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME'))");
+        jdbc.execute("DELETE FROM provisioning_jobs WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME')");
+        jdbc.execute("DELETE FROM tenant_resources WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME')");
+        jdbc.execute("DELETE FROM membership_roles WHERE membership_id IN (SELECT id FROM tenant_memberships WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME'))");
+        jdbc.execute("DELETE FROM tenant_memberships WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME')");
+        jdbc.execute("DELETE FROM tenant_products WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME')");
+        jdbc.execute("DELETE FROM usage_events WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME')");
+        jdbc.execute("DELETE FROM audit_events WHERE tenant_id IN (SELECT id FROM tenants WHERE tenant_code = 'ACME')");
+        jdbc.execute("DELETE FROM tenants WHERE tenant_code = 'ACME'");
+        jdbc.execute("DROP SCHEMA IF EXISTS tenant_acme_jioplix CASCADE");
+        jdbc.execute("DROP SCHEMA IF EXISTS tenant_acme_lims CASCADE");
 
         // 1. Setup Catalog Products (JIOPLIX & LIMS)
         jioplixProduct = products.findByProductCode("JIOPLIX").orElseGet(() -> {
@@ -105,6 +124,24 @@ class AcmeTenantEndToEndSmokeTest {
             return products.save(p);
         });
 
+        jioplixPlan = plans.findByProductIdAndPlanCode(jioplixProduct.getId(), "ENTERPRISE").orElseGet(() -> {
+            Plan p = new Plan();
+            p.setProduct(jioplixProduct);
+            p.setPlanCode("ENTERPRISE");
+            p.setName("Enterprise Plan");
+            p.setStatus(PlanStatus.ACTIVE);
+            return plans.save(p);
+        });
+
+        limsPlan = plans.findByProductIdAndPlanCode(limsProduct.getId(), "ENTERPRISE").orElseGet(() -> {
+            Plan p = new Plan();
+            p.setProduct(limsProduct);
+            p.setPlanCode("ENTERPRISE");
+            p.setName("Enterprise Plan");
+            p.setStatus(PlanStatus.ACTIVE);
+            return plans.save(p);
+        });
+
         catalogPostgres = resourceCatalog.findByResourceTypeCode("shared_pg_instance").orElseGet(() -> {
             Resource r = new Resource();
             r.setResourceTypeCode("shared_pg_instance");
@@ -120,10 +157,18 @@ class AcmeTenantEndToEndSmokeTest {
         acmeTenant = new Tenant();
         acmeTenant.setTenantCode("ACME");
         acmeTenant.setName("Acme Corporation");
-        acmeTenant.setCountry("USA");
+        acmeTenant.setCountry("US");
         acmeTenant.setTimezone("UTC");
         acmeTenant.setStatus(TenantStatus.ACTIVE);
-        acmeTenant = tenants.save(acmeTenant);
+        acmeTenant = tenants.saveAndFlush(acmeTenant);
+
+        // Register User & Admin Membership Role for Auth
+        UUID adminUserId = adminPrincipal.user().id();
+        UUID memberId = UUID.randomUUID();
+        UUID memberRoleId = UUID.randomUUID();
+        jdbc.execute("INSERT INTO users (id, email, \"displayName\", status, created_at, updated_at) VALUES ('" + adminUserId + "', 'admin@acme.test', 'Acme Admin', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING");
+        jdbc.execute("INSERT INTO tenant_memberships (id, tenant_id, user_id, status, created_at, updated_at) VALUES ('" + memberId + "', '" + acmeTenant.getId() + "', '" + adminUserId + "', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+        jdbc.execute("INSERT INTO membership_roles (id, membership_id, role_id, granted_at) VALUES ('" + memberRoleId + "', '" + memberId + "', (SELECT id FROM roles WHERE code = 'CYBELINX_PLATFORM_ADMIN'), CURRENT_TIMESTAMP)");
 
         outboxPublisher.publishTenantEvent(OutboxPublisher.TENANT_CREATED, acmeTenant, Map.of("code", "ACME", "name", "Acme Corporation"));
 
@@ -134,6 +179,7 @@ class AcmeTenantEndToEndSmokeTest {
         TenantProduct jioplixSub = new TenantProduct();
         jioplixSub.setTenant(acmeTenant);
         jioplixSub.setProduct(jioplixProduct);
+        jioplixSub.setPlan(jioplixPlan);
         jioplixSub.setStatus(TenantProductStatus.ACTIVE);
         jioplixSub.setActivatedAt(LocalDateTime.now(ZoneOffset.UTC));
         jioplixSub = tenantProducts.save(jioplixSub);
@@ -141,6 +187,7 @@ class AcmeTenantEndToEndSmokeTest {
         TenantProduct limsSub = new TenantProduct();
         limsSub.setTenant(acmeTenant);
         limsSub.setProduct(limsProduct);
+        limsSub.setPlan(limsPlan);
         limsSub.setStatus(TenantProductStatus.ACTIVE);
         limsSub.setActivatedAt(LocalDateTime.now(ZoneOffset.UTC));
         limsSub = tenantProducts.save(limsSub);
@@ -226,8 +273,11 @@ class AcmeTenantEndToEndSmokeTest {
     }
 
     private void executeProvisioningPipeline(Tenant tenant, TenantResource resource, String customSchemaName) {
-        // Manually set schema name on resource for test step
+        // Manually set schema name and active status on resource for test step
         resource.setSchemaName(customSchemaName);
+        resource.setStatus(TenantResourceStatus.ACTIVE);
+        resource.setProvisioningState(ProvisioningState.SUCCEEDED);
+        tenantResources.save(resource);
 
         var job = new com.cybelinx.platform.api.persistence.entity.ProvisioningJob();
         job.setTenant(tenant);

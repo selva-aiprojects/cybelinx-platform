@@ -20,6 +20,11 @@ import org.springframework.stereotype.Component;
 public class ActivateResourceStepHandler implements ProvisioningStepHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ActivateResourceStepHandler.class);
+    private final com.cybelinx.platform.api.persistence.TenantResourceRepository tenantResources;
+
+    public ActivateResourceStepHandler(com.cybelinx.platform.api.persistence.TenantResourceRepository tenantResources) {
+        this.tenantResources = tenantResources;
+    }
 
     @Override
     public String supportedStepName() {
@@ -31,6 +36,7 @@ public class ActivateResourceStepHandler implements ProvisioningStepHandler {
         if (job.getTenantResource() != null) {
             job.getTenantResource().setStatus(TenantResourceStatus.ACTIVE);
             job.getTenantResource().setProvisioningState(ProvisioningState.SUCCEEDED);
+            tenantResources.save(job.getTenantResource());
             log.info("Activated tenant_resource={}", job.getTenantResource().getId());
 
             step.setOutput(Map.of(

@@ -32,8 +32,16 @@ public class CreateSchemaStepHandler implements ProvisioningStepHandler {
 
     @Override
     public void execute(ProvisioningJob job, ProvisioningStep step) {
-        String tenantCode = job.getTenant().getTenantCode().toLowerCase().replaceAll("[^a-z0-9_]", "_");
-        String schemaName = "tenant_" + tenantCode;
+        String schemaName;
+        if (job.getTenantResource() != null && job.getTenantResource().getSchemaName() != null && !job.getTenantResource().getSchemaName().isBlank()) {
+            schemaName = job.getTenantResource().getSchemaName();
+        } else {
+            String tenantCode = job.getTenant().getTenantCode().toLowerCase().replaceAll("[^a-z0-9_]", "_");
+            String productCode = (job.getTenantResource() != null && job.getTenantResource().getProduct() != null)
+                    ? "_" + job.getTenantResource().getProduct().getProductCode().toLowerCase().replaceAll("[^a-z0-9_]", "_")
+                    : "";
+            schemaName = "tenant_" + tenantCode + productCode;
+        }
 
         log.info("Executing CREATE_SCHEMA for tenant={} schema={}", job.getTenant().getTenantCode(), schemaName);
 
