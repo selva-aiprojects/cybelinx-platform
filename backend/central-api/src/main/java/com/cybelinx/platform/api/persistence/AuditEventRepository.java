@@ -3,7 +3,8 @@ package com.cybelinx.platform.api.persistence;
 import com.cybelinx.platform.api.persistence.entity.AuditEvent;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-/** Spring Data port of the {@code auditEvent} Prisma queries. */
-public interface AuditEventRepository extends JpaRepository<AuditEvent, UUID> {
-}
+/** Spring Data repository for {@code audit_events} — write and read paths. */
+public interface AuditEventRepository
+        extends JpaRepository<AuditEvent, UUID>, JpaSpecificationExecutor<AuditEvent> {}

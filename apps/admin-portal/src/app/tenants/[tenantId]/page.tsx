@@ -321,6 +321,9 @@ export default function TenantDetailPage() {
         )}
       </section>
 
+      <ExternalIdsSection tenantId={tenantId} />
+      <UsageEventsSection tenantId={tenantId} />
+
       {attachOpen && (
         <AttachProductModal
           tenantId={tenantId}
@@ -545,5 +548,152 @@ function RegisterResourceModal({
         </button>
       </div>
     </Modal>
+  );
+}
+
+function ExternalIdsSection({ tenantId }: { tenantId: string }) {
+  const externalData = useAsyncData(() => api.externalIds.list(tenantId), [tenantId]);
+  const [provider, setProvider] = useState('');
+  const [productId, setProductId] = useState('');
+  const [externalId, setExternalId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
+    if (!provider || !productId || !externalId) return;
+    setAdding(true);
+    setError(null);
+    try {
+      await api.externalIds.register(tenantId, { provider, productId, externalId });
+      setProvider('');
+      setProductId('');
+      setExternalId('');
+      externalData.reload();
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleRemove(id: string) {
+    if (!window.confirm('Remove external mapping?')) return;
+    try {
+      await api.externalIds.remove(tenantId, id);
+      externalData.reload();
+    } catch (err) {
+      alert(describeError(err));
+    }
+  }
+
+  const items = externalData.data?.data ?? [];
+
+  return (
+    <section className="card">
+      <div className="card-header">
+        <h2 className="card-title">
+          External Mappings <span className="muted">({items.length})</span>
+        </h2>
+      </div>
+      {error && <ErrorBanner error={error} />}
+      <form onSubmit={handleRegister} className="flex gap-3 mb-4 items-end">
+        <div>
+          <label className="label">Provider</label>
+          <input className="input" placeholder="e.g. auth0" value={provider} onChange={(e) => setProvider(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">Product ID</label>
+          <input className="input" placeholder="UUID or code" value={productId} onChange={(e) => setProductId(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">External ID</label>
+          <input className="input" placeholder="Ext tenant ID" value={externalId} onChange={(e) => setExternalId(e.target.value)} />
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={adding || !provider || !productId || !externalId}>
+          {adding ? 'Mapping...' : '+ Map External ID'}
+        </button>
+      </form>
+
+      {externalData.loading ? (
+        <LoadingBlock />
+      ) : items.length === 0 ? (
+        <Empty>No external identifier mappings.</Empty>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Product ID</th>
+                <th>External Tenant ID</th>
+                <th>Mapped At</th>
+                <th className="cell-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.mappingId}>
+                  <td className="mono">{item.provider}</td>
+                  <td className="mono muted">{item.productId}</td>
+                  <td className="mono">{item.externalId}</td>
+                  <td className="muted small">{formatDate(item.createdAt)}</td>
+                  <td className="cell-actions">
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRemove(item.mappingId)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function UsageEventsSection({ tenantId }: { tenantId: string }) {
+  const usageData = useAsyncData(() => api.usage.list(tenantId, { limit: 10 }), [tenantId]);
+  const events = usageData.data?.data ?? [];
+
+  return (
+    <section className="card">
+      <div className="card-header">
+        <h2 className="card-title">
+          Recent Usage Events <span className="muted">({usageData.data?.meta?.total ?? events.length})</span>
+        </h2>
+      </div>
+      {usageData.loading ? (
+        <LoadingBlock />
+      ) : events.length === 0 ? (
+        <Empty>No usage recorded for this tenant.</Empty>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Recorded At</th>
+                <th>Product ID</th>
+                <th>Event Type</th>
+                <th>Quantity</th>
+                <th>Idempotency Key</th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((item) => (
+                <tr key={item.usageEventId}>
+                  <td className="muted small">{formatDate(item.recordedAt)}</td>
+                  <td className="mono muted">{item.productId}</td>
+                  <td className="mono">{item.eventType}</td>
+                  <td className="mono font-bold">{item.quantity}</td>
+                  <td className="mono small muted">{item.idempotencyKey ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

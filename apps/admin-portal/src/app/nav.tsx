@@ -18,6 +18,8 @@ const NAV_SECTIONS = [
     links: [
       { href: '/subscriptions', label: 'Subscriptions', icon: '⇄' },
       { href: '/users', label: 'Users & Roles', icon: '◉' },
+      { href: '/audit', label: 'Audit Log', icon: '▤' },
+      { href: '/events', label: 'Platform Events', icon: '⚡' },
     ],
   },
   {

@@ -116,7 +116,7 @@ class TenantResourcesServiceIT {
         plan.setPlanCode("BASIC");
         plan.setName("Basic");
         plan.setStatus(PlanStatus.ACTIVE);
-        plans.save(plan);
+        plan = plans.save(plan);
 
         subscription = new TenantProduct();
         subscription.setTenant(host);

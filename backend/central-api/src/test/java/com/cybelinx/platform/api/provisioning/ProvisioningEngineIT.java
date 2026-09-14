@@ -118,7 +118,7 @@ class ProvisioningEngineIT {
             step.setInput(Map.of("tenantId", tenant.getId().toString()));
             job.getSteps().add(step);
         }
-        jobs.save(job);
+        job = jobs.save(job);
         entityManager.flush();
         return job;
     }

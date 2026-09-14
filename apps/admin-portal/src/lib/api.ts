@@ -1,5 +1,7 @@
 import type {
   AccessView,
+  AuditEventView,
+  AuditListResponse,
   AttachTenantProductRequest,
   CreateEntitlementRequest,
   CreatePlanRequest,
@@ -11,11 +13,13 @@ import type {
   EntitlementListResponse,
   EntitlementView,
   ErrorEnvelope,
+  IngestUsageRequest,
   IsolationMode,
   PlanActionResponse,
   PlanListResponse,
   PlanStatus,
   PlanView,
+  PlatformEventListResponse,
   ProductActionResponse,
   ProductListResponse,
   ProductStatus,
@@ -24,9 +28,11 @@ import type {
   ProductView,
   ProvisioningJobView,
   PublishVersionResponse,
+  RegisterExternalIdRequest,
   RegisterTenantResourceRequest,
   TenantActionResponse,
   TenantDetailResponse,
+  TenantExternalIdListResponse,
   TenantListResponse,
   TenantProductActionResponse,
   TenantProductListResponse,
@@ -42,6 +48,7 @@ import type {
   UpdateProductRequest,
   UpdateTenantResourceRequest,
   UpdateTenantRequest,
+  UsageListResponse,
 } from './types';
 
 const STORAGE_TOKEN_KEY = 'cybelinx_api_token';
@@ -295,6 +302,32 @@ export const api = {
 
   regions: {
     list: () => request<unknown[]>('/regions'),
+  },
+
+  audit: {
+    list: (params?: ListParams & { entityType?: string; entityId?: string; tenantId?: string }) =>
+      request<AuditListResponse>(`/audit${buildQuery(params)}`),
+  },
+
+  events: {
+    list: (params?: ListParams & { aggregateType?: string; aggregateId?: string; eventType?: string; tenantId?: string }) =>
+      request<PlatformEventListResponse>(`/events${buildQuery(params)}`),
+  },
+
+  usage: {
+    list: (tenantId: string, params?: ListParams & { eventType?: string; from?: string; to?: string }) =>
+      request<UsageListResponse>(`/tenants/${tenantId}/usage${buildQuery(params)}`),
+    ingest: (tenantId: string, body: IngestUsageRequest) =>
+      request<unknown>(`/tenants/${tenantId}/usage`, { method: 'POST', body }),
+  },
+
+  externalIds: {
+    list: (tenantId: string) =>
+      request<TenantExternalIdListResponse>(`/tenants/${tenantId}/external-ids`),
+    register: (tenantId: string, body: RegisterExternalIdRequest) =>
+      request<unknown>(`/tenants/${tenantId}/external-ids`, { method: 'POST', body }),
+    remove: (tenantId: string, id: string) =>
+      request<unknown>(`/tenants/${tenantId}/external-ids/${id}`, { method: 'DELETE' }),
   },
 };
 

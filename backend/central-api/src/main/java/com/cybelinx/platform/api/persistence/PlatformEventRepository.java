@@ -7,12 +7,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Spring Data repository for platform event outbox. */
-public interface PlatformEventRepository extends JpaRepository<PlatformEvent, UUID> {
+public interface PlatformEventRepository
+        extends JpaRepository<PlatformEvent, UUID>, JpaSpecificationExecutor<PlatformEvent> {
 
     @Query("""
         SELECT e FROM PlatformEvent e

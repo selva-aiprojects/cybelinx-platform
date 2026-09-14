@@ -302,3 +302,82 @@ export interface UpdateTenantResourceRequest {
   migrationVersion?: string;
   credentialReference?: string;
 }
+
+// --- Audit & Events ------------------------------------------------------
+
+export interface AuditEventView {
+  eventId: string;
+  tenantId?: string;
+  actorUserId?: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  createdAt: string;
+}
+
+export interface AuditListResponse {
+  data: AuditEventView[];
+  meta: PageMeta;
+}
+
+export interface PlatformEventView {
+  eventId: string;
+  aggregateType: string;
+  aggregateId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  tenantId?: string;
+  createdAt: string;
+}
+
+export interface PlatformEventListResponse {
+  data: PlatformEventView[];
+  meta: PageMeta;
+}
+
+// --- Usage & Metering ---------------------------------------------------
+
+export interface UsageEventView {
+  usageEventId: string;
+  tenantId: string;
+  productId: string;
+  eventType: string;
+  quantity: number;
+  idempotencyKey?: string;
+  recordedAt: string;
+}
+
+export interface UsageListResponse {
+  data: UsageEventView[];
+  meta: PageMeta;
+}
+
+export interface IngestUsageRequest {
+  productId: string;
+  eventType: string;
+  quantity: number;
+  idempotencyKey?: string;
+}
+
+// --- External IDs -------------------------------------------------------
+
+export interface TenantExternalIdView {
+  mappingId: string;
+  tenantId: string;
+  productId: string;
+  provider: string;
+  externalId: string;
+  createdAt: string;
+}
+
+export interface TenantExternalIdListResponse {
+  data: TenantExternalIdView[];
+}
+
+export interface RegisterExternalIdRequest {
+  productId: string;
+  provider: string;
+  externalId: string;
+}

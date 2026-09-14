@@ -10,8 +10,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+
   java-backend:
-    name: Backend · Java 21 · Maven test
+    name: Backend · Java 21 · Maven Test & JaCoCo Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -46,8 +57,39 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Backend tests (Maven)
-        run: ./backend/mvnw -f backend/pom.xml test
+      - name: Backend tests with JaCoCo coverage
+        run: ./backend/mvnw -f backend/pom.xml test jacoco:report
+
+      - name: Upload Coverage Summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-coverage-report
+          path: backend/central-api/target/site/jacoco/
+
+  docker-build:
+    name: Docker Build Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Central API Container
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/central-api/Dockerfile
+          push: false
+
+      - name: Build Event Worker Container
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/event-worker/Dockerfile
+          push: false
 
   admin-portal:
     name: Admin Portal · Lint · Typecheck · Build · Test
