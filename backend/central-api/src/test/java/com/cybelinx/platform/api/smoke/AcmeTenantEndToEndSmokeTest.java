@@ -136,14 +136,14 @@ class AcmeTenantEndToEndSmokeTest {
         jioplixSub.setProduct(jioplixProduct);
         jioplixSub.setStatus(TenantProductStatus.ACTIVE);
         jioplixSub.setActivatedAt(LocalDateTime.now(ZoneOffset.UTC));
-        tenantProducts.save(jioplixSub);
+        jioplixSub = tenantProducts.save(jioplixSub);
 
         TenantProduct limsSub = new TenantProduct();
         limsSub.setTenant(acmeTenant);
         limsSub.setProduct(limsProduct);
         limsSub.setStatus(TenantProductStatus.ACTIVE);
         limsSub.setActivatedAt(LocalDateTime.now(ZoneOffset.UTC));
-        tenantProducts.save(limsSub);
+        limsSub = tenantProducts.save(limsSub);
 
         // Step 3: Provision Tenant Resources with Schema-per-Tenant isolation
         // JIOPLIX Schema for ACME -> tenant_acme_jioplix
