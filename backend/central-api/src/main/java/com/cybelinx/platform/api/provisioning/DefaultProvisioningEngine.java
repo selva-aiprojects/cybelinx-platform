@@ -170,6 +170,11 @@ public class DefaultProvisioningEngine implements ProvisioningEngine {
     }
 
     @Override
+    public List<ProvisioningJob> findByTenantId(UUID tenantId) {
+        return jobs.findByTenantIdOrderByCreatedAtDesc(tenantId);
+    }
+
+    @Override
     public boolean isTerminal(ProvisioningJob job) {
         if (job == null) {
             return false;

@@ -78,7 +78,7 @@ public class PlatformEvent extends BaseTimestampedEntity {
     private LocalDateTime processedAt;
 
     @PrePersist
-    void prePersist() {
+    void ensureOccurredAt() {
         if (occurredAt == null) {
             occurredAt = LocalDateTime.now();
         }

@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -23,38 +25,69 @@ class EventWorkerOutboxIT {
     @Autowired private OutboxEventRepository events;
     @Autowired private OutboxEventClaimRepository claims;
     @Autowired private OutboxPollingService worker;
+    @Autowired private JdbcTemplate jdbc;
 
     @Autowired private WorkerProperties properties;
 
-    private OutboxEvent seed(EventStatus status, LocalDateTime availableAt, int attempts) {
-        OutboxEvent event = new OutboxEvent();
-        event.setEventType("tenant.created");
-        event.setSchemaVersion("1.0");
-        event.setTenantId(UUID.randomUUID());
-        event.setEntityType("tenant");
-        event.setEntityId(UUID.randomUUID());
-        event.setCorrelationId(UUID.randomUUID().toString());
-        event.setStatus(status);
-        event.setOccurredAt(now());
-        event.setSource("control-plane");
-        event.setAvailableAt(availableAt);
-        event.setAttempts(attempts);
-        return events.save(event);
+    private String tenantCode;
+
+    @BeforeEach
+    void seedTenant() {
+        tenantCode = "worker-" + UUID.randomUUID().toString().substring(0, 8).toLowerCase();
+        jdbc.update(
+                "insert into tenants (id, tenant_code, name, status, created_at, updated_at) "
+                        + "values (?, ?, ?, ?::public.tenantstatus, now(), now())",
+                UUID.randomUUID(),
+                tenantCode,
+                "Worker Outbox Test",
+                "PROVISIONING");
+    }
+
+    private UUID seed(EventStatus status, LocalDateTime availableAt, int attempts) {
+        UUID id = UUID.randomUUID();
+        jdbc.update(
+                """
+                insert into platform_events
+                    (id, event_type, schema_version, tenant_id, entity_type, entity_id,
+                     correlation_id, occurred_at, source, status, attempts, available_at,
+                     created_at, updated_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::public.eventstatus, ?, ?, ?, ?)
+                """,
+                id,
+                "tenant.created",
+                "1.0",
+                seededTenantId(),
+                "tenant",
+                UUID.randomUUID(),
+                UUID.randomUUID().toString(),
+                now().minusYears(1),
+                "control-plane",
+                status.name(),
+                attempts,
+                availableAt,
+                now().minusYears(1),
+                now().minusYears(1));
+        return id;
+    }
+
+    private UUID seededTenantId() {
+        return jdbc.queryForObject(
+                "select id from tenants where tenant_code = ?", UUID.class, tenantCode);
     }
 
     @Test
     void poll_claimsAndCompletesPendingEvent() {
-        OutboxEvent seeded = seed(EventStatus.PENDING, null, 0);
+        UUID seededId = seed(EventStatus.PENDING, null, 0);
 
         worker.pollOnce();
 
-        OutboxEvent refreshed = events.findById(seeded.getId()).orElseThrow();
+        OutboxEvent refreshed = events.findById(seededId).orElseThrow();
         assertThat(refreshed.getStatus()).isEqualTo(EventStatus.SUCCEEDED);
         assertThat(refreshed.getProcessedAt()).isNotNull();
         assertThat(refreshed.getAttempts()).isEqualTo(1);
 
         OutboxEventClaim claim = claims
-                .findByEventIdAndConsumerName(seeded.getId(), properties.getConsumerName())
+                .findByEventIdAndConsumerName(seededId, properties.getConsumerName())
                 .orElseThrow();
         assertThat(claim.getCompletedAt()).isNotNull();
         assertThat(claim.getAttemptCount()).isEqualTo(1);
@@ -63,16 +96,16 @@ class EventWorkerOutboxIT {
 
     @Test
     void poll_skipsEventAlreadyCompletedByConsumer() {
-        OutboxEvent event = seed(EventStatus.PENDING, null, 0);
-        claims.save(claimFor(event, now().plusSeconds(3600), now()));
+        UUID eventId = seed(EventStatus.PENDING, null, 0);
+        claims.save(claimFor(eventId, now().plusSeconds(3600), now()));
 
         worker.pollOnce();
 
-        OutboxEvent refreshed = events.findById(event.getId()).orElseThrow();
+        OutboxEvent refreshed = events.findById(eventId).orElseThrow();
         assertThat(refreshed.getStatus()).isEqualTo(EventStatus.PENDING);
         assertThat(refreshed.getAttempts()).isZero();
         assertThat(claims
-                        .findByEventIdAndConsumerName(event.getId(), properties.getConsumerName())
+                        .findByEventIdAndConsumerName(eventId, properties.getConsumerName())
                         .orElseThrow()
                         .getCompletedAt())
                 .isNotNull();
@@ -80,16 +113,16 @@ class EventWorkerOutboxIT {
 
     @Test
     void poll_releasesExpiredLeaseAndRedeliversEvent() {
-        OutboxEvent event = seed(EventStatus.PROCESSING, null, 1);
-        claims.save(claimFor(event, now().minusSeconds(30), null));
+        UUID eventId = seed(EventStatus.PROCESSING, null, 1);
+        claims.save(claimFor(eventId, now().minusSeconds(30), null));
 
         worker.pollOnce();
 
-        OutboxEvent refreshed = events.findById(event.getId()).orElseThrow();
+        OutboxEvent refreshed = events.findById(eventId).orElseThrow();
         assertThat(refreshed.getStatus()).isEqualTo(EventStatus.SUCCEEDED);
         assertThat(refreshed.getAttempts()).isEqualTo(2);
         assertThat(claims
-                        .findByEventIdAndConsumerName(event.getId(), properties.getConsumerName())
+                        .findByEventIdAndConsumerName(eventId, properties.getConsumerName())
                         .orElseThrow()
                         .getAttemptCount())
                 .isEqualTo(2);
@@ -97,15 +130,15 @@ class EventWorkerOutboxIT {
 
     @Test
     void poll_reprocessesFailedEventWhoseRetryIsDue() {
-        OutboxEvent event = seed(EventStatus.FAILED, now(), 0);
+        UUID eventId = seed(EventStatus.FAILED, now().minusSeconds(1), 0);
 
         worker.pollOnce();
 
-        OutboxEvent refreshed = events.findById(event.getId()).orElseThrow();
+        OutboxEvent refreshed = events.findById(eventId).orElseThrow();
         assertThat(refreshed.getStatus()).isEqualTo(EventStatus.SUCCEEDED);
         assertThat(refreshed.getAttempts()).isEqualTo(1);
         assertThat(claims
-                        .findByEventIdAndConsumerName(event.getId(), properties.getConsumerName())
+                        .findByEventIdAndConsumerName(eventId, properties.getConsumerName())
                         .orElseThrow()
                         .getCompletedAt())
                 .isNotNull();
@@ -113,32 +146,32 @@ class EventWorkerOutboxIT {
 
     @Test
     void poll_skipsEventWhoseRetryIsNotYetDue() {
-        OutboxEvent event = seed(EventStatus.FAILED, now().plusSeconds(300), 0);
+        UUID eventId = seed(EventStatus.FAILED, now().plusSeconds(300), 0);
 
         worker.pollOnce();
 
-        assertThat(events.findById(event.getId()).orElseThrow().getStatus())
+        assertThat(events.findById(eventId).orElseThrow().getStatus())
                 .isEqualTo(EventStatus.FAILED);
-        assertThat(claims.findByEventIdAndConsumerName(event.getId(), properties.getConsumerName()))
+        assertThat(claims.findByEventIdAndConsumerName(eventId, properties.getConsumerName()))
                 .isEmpty();
     }
 
     @Test
     void poll_skipsPendingEventWhoseAvailabilityIsInTheFuture() {
-        OutboxEvent event = seed(EventStatus.PENDING, now().plusSeconds(300), 0);
+        UUID eventId = seed(EventStatus.PENDING, now().plusSeconds(300), 0);
 
         worker.pollOnce();
 
-        assertThat(events.findById(event.getId()).orElseThrow().getStatus())
+        assertThat(events.findById(eventId).orElseThrow().getStatus())
                 .isEqualTo(EventStatus.PENDING);
-        assertThat(claims.findByEventIdAndConsumerName(event.getId(), properties.getConsumerName()))
+        assertThat(claims.findByEventIdAndConsumerName(eventId, properties.getConsumerName()))
                 .isEmpty();
     }
 
     @Test
     void replay_deadLetteredEventReturnedToPendingAndRedelivered() {
-        OutboxEvent event = seed(EventStatus.DEAD_LETTERED, null, 4);
-        OutboxEventClaim claim = claimFor(event, null, null);
+        UUID eventId = seed(EventStatus.DEAD_LETTERED, null, 4);
+        OutboxEventClaim claim = claimFor(eventId, null, null);
         claim.setDeadLetterAt(now());
         claim.setLastError("permanent failure");
         claim.setAttemptCount(properties.getMaxAttempts());
@@ -147,13 +180,13 @@ class EventWorkerOutboxIT {
         int replayed = worker.replayDeadLettered();
         assertThat(replayed).isEqualTo(1);
 
-        OutboxEvent refreshed = events.findById(event.getId()).orElseThrow();
+        OutboxEvent refreshed = events.findById(eventId).orElseThrow();
         assertThat(refreshed.getStatus()).isEqualTo(EventStatus.PENDING);
         assertThat(refreshed.getAttempts()).isZero();
         assertThat(refreshed.getProcessedAt()).isNull();
 
         OutboxEventClaim claimRefreshed = claims
-                .findByEventIdAndConsumerName(event.getId(), properties.getConsumerName())
+                .findByEventIdAndConsumerName(eventId, properties.getConsumerName())
                 .orElseThrow();
         assertThat(claimRefreshed.getDeadLetterAt()).isNull();
         assertThat(claimRefreshed.getLastError()).isNull();
@@ -161,7 +194,7 @@ class EventWorkerOutboxIT {
 
         worker.pollOnce();
 
-        assertThat(events.findById(event.getId()).orElseThrow().getStatus())
+        assertThat(events.findById(eventId).orElseThrow().getStatus())
                 .isEqualTo(EventStatus.SUCCEEDED);
     }
 
@@ -169,9 +202,9 @@ class EventWorkerOutboxIT {
         return LocalDateTime.now();
     }
 
-    private OutboxEventClaim claimFor(OutboxEvent event, LocalDateTime lease, LocalDateTime completed) {
+    private OutboxEventClaim claimFor(UUID eventId, LocalDateTime lease, LocalDateTime completed) {
         OutboxEventClaim claim = new OutboxEventClaim();
-        claim.setEventId(event.getId());
+        claim.setEventId(eventId);
         claim.setConsumerName(properties.getConsumerName());
         claim.setWorkerId("test-worker");
         claim.setClaimedAt(now());

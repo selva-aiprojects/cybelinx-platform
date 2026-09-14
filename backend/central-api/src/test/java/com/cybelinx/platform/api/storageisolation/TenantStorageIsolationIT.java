@@ -6,9 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.cybelinx.platform.api.domain.DatabaseStatus;
 import com.cybelinx.platform.api.domain.Environment;
 import com.cybelinx.platform.api.domain.IsolationMode;
+import com.cybelinx.platform.api.domain.MembershipStatus;
 import com.cybelinx.platform.api.domain.PlanStatus;
 import com.cybelinx.platform.api.domain.ProductStatus;
 import com.cybelinx.platform.api.domain.ProvisioningState;
+import com.cybelinx.platform.api.domain.RoleScope;
 import com.cybelinx.platform.api.domain.RuntimeRole;
 import com.cybelinx.platform.api.domain.TenantProductStatus;
 import com.cybelinx.platform.api.domain.TenantResourceStatus;
@@ -42,6 +44,7 @@ import com.cybelinx.platform.api.persistence.entity.TenantProduct;
 import com.cybelinx.platform.api.persistence.entity.TenantResource;
 import com.cybelinx.platform.api.persistence.entity.User;
 import com.cybelinx.platform.api.security.AuthPrincipal;
+import com.cybelinx.platform.api.security.AuthorizationService;
 import com.cybelinx.platform.api.security.AuthPrincipal.AuthIdentity;
 import com.cybelinx.platform.api.security.AuthPrincipal.AuthUser;
 import com.cybelinx.platform.shared.ApiError;
@@ -111,6 +114,8 @@ class TenantStorageIsolationIT {
 
         platformAdmin = user("sia-");
         viewer = user("siv-");
+        Role adminRole = upsertRole(AuthorizationService.PLATFORM_ADMIN_ROLE, "Cybelinx Platform Administrator");
+        membership(platformAdmin, adminRole);
 
         product = new Product();
         product.setProductCode("SI_" + suffix);
@@ -276,5 +281,30 @@ class TenantStorageIsolationIT {
         user.setEmail(prefix + suffix.toLowerCase() + "@cybelinx.test");
         user.setDisplayName("Test " + prefix);
         return users.save(user);
+    }
+
+    private Role upsertRole(String code, String name) {
+        return roles.findByCode(code).orElseGet(() -> {
+            Role created = new Role();
+            created.setCode(code);
+            created.setName(name);
+            created.setScope(RoleScope.PLATFORM);
+            created.setSystem(true);
+            return roles.save(created);
+        });
+    }
+
+    private void membership(User user, Role role) {
+        TenantMembership membership = new TenantMembership();
+        membership.setTenant(host);
+        membership.setUser(user);
+        membership.setStatus(MembershipStatus.ACTIVE);
+        membership.setJoinedAt(LocalDateTime.now(ZoneOffset.UTC));
+        membership = memberships.save(membership);
+
+        MembershipRole membershipRole = new MembershipRole();
+        membershipRole.setMembership(membership);
+        membershipRole.setRole(role);
+        membershipRoles.save(membershipRole);
     }
 }

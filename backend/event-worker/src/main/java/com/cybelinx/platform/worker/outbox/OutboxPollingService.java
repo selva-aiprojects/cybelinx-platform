@@ -79,7 +79,7 @@ public class OutboxPollingService {
         List<OutboxEvent> deadLettered = eventRepository.findDeadLettered(page);
         for (OutboxEvent event : deadLettered) {
             event.setStatus(EventStatus.PENDING);
-            event.setAvailableAt(now);
+            event.setAvailableAt(null);
             event.setAttempts(0);
             event.setProcessedAt(null);
             eventRepository.save(event);
@@ -116,7 +116,7 @@ public class OutboxPollingService {
                                     claim.getWorkerId(),
                                     claim.getLeaseExpiresAt());
                             event.setStatus(EventStatus.PENDING);
-                            event.setAvailableAt(now);
+                            event.setAvailableAt(null);
                             eventRepository.save(event);
                         }
                     });
