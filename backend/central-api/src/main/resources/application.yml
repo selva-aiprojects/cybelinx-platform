@@ -41,3 +41,15 @@ cybelinx:
     jwt-secret: ${IDP_JWT_SECRET:}
     jwks-uri: ${IDP_JWKS_URI:}
     jwt-clock-skew-seconds: ${IDP_JWT_CLOCK_SKEW_SECONDS:0}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
