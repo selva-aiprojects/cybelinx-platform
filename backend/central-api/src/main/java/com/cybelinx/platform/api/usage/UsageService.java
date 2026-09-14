@@ -165,6 +165,12 @@ public class UsageService {
                         "Product not found: " + productCode, Map.of("productCode", productCode)));
     }
 
+    @Transactional(readOnly = true)
+    public BigDecimal getMonthlyUsageTotal(UUID tenantId, String eventType) {
+        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        return usageEvents.sumQuantityByTenantAndEventTypeSince(tenantId, eventType, startOfMonth);
+    }
+
     private UsageEventView toView(UsageEvent e) {
         return new UsageEventView(
                 e.getId() != null ? e.getId().toString() : null,

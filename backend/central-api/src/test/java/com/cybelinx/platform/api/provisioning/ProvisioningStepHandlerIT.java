@@ -29,6 +29,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.cybelinx.platform.api.provisioning.handlers.DeactivateResourceStepHandler;
+import com.cybelinx.platform.api.provisioning.handlers.DropSchemaStepHandler;
+
 /** Integration tests for individual ProvisioningStepHandlers (Capability 28). */
 @SpringBootTest
 @Transactional
@@ -37,6 +40,8 @@ class ProvisioningStepHandlerIT {
     @Autowired private CreateSchemaStepHandler createSchemaHandler;
     @Autowired private ApplyMigrationsStepHandler applyMigrationsHandler;
     @Autowired private ActivateResourceStepHandler activateResourceHandler;
+    @Autowired private DropSchemaStepHandler dropSchemaHandler;
+    @Autowired private DeactivateResourceStepHandler deactivateResourceHandler;
 
     @Autowired private TenantRepository tenants;
     @Autowired private com.cybelinx.platform.api.persistence.ProductRepository products;
@@ -149,5 +154,42 @@ class ProvisioningStepHandlerIT {
         assertThat(resource.getStatus()).isEqualTo(TenantResourceStatus.ACTIVE);
         assertThat(resource.getProvisioningState()).isEqualTo(ProvisioningState.SUCCEEDED);
         assertThat(step.getOutput()).containsEntry("resourceActivated", true);
+    }
+
+    @Test
+    void dropSchemaHandler_dropsExistingSchema() {
+        String schemaName = "tenant_handler_" + suffix;
+        jdbc.execute("CREATE SCHEMA IF NOT EXISTS \"" + schemaName + "\"");
+
+        ProvisioningStep step = new ProvisioningStep();
+        step.setName("DROP_SCHEMA");
+        step.setJob(job);
+        step.setSequence(0);
+        step.setStatus(ProvisioningStepStatus.IN_PROGRESS);
+
+        dropSchemaHandler.execute(job, step);
+
+        assertThat(step.getOutput()).containsEntry("dropped", true);
+
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name = ?",
+                Integer.class,
+                schemaName);
+        assertThat(count).isEqualTo(0);
+    }
+
+    @Test
+    void deactivateResourceHandler_deactivatesResource() {
+        ProvisioningStep step = new ProvisioningStep();
+        step.setName("DEACTIVATE_RESOURCE");
+        step.setJob(job);
+        step.setSequence(1);
+        step.setStatus(ProvisioningStepStatus.IN_PROGRESS);
+
+        deactivateResourceHandler.execute(job, step);
+
+        assertThat(resource.getStatus()).isEqualTo(TenantResourceStatus.SUSPENDED);
+        assertThat(resource.getProvisioningState()).isEqualTo(ProvisioningState.SUCCEEDED);
+        assertThat(step.getOutput()).containsEntry("resourceDeactivated", true);
     }
 }

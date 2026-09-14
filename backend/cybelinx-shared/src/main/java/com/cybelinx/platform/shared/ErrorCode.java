@@ -40,6 +40,7 @@ public enum ErrorCode {
     PROVISIONING_JOB_NOT_FOUND,
     PROVISIONING_JOB_NOT_CLAIMABLE,
     INVALID_TENANT_CONTEXT,
+    USAGE_QUOTA_EXCEEDED,
     INTERNAL_ERROR;
 
     /** HTTP status used when the {@link ApiError} does not declare one explicitly. */
@@ -61,6 +62,7 @@ public enum ErrorCode {
                     ENTITLEMENT_KEY_TAKEN, ENTITLEMENT_STATUS_TRANSITION_INVALID,
                     TENANT_RESOURCE_ALREADY_REGISTERED, EXTERNAL_ID_ALREADY_MAPPED,
                     PROVISIONING_JOB_NOT_CLAIMABLE -> 409;
+            case USAGE_QUOTA_EXCEEDED -> 429;
             case RESOURCE_NOT_READY -> 503;
             case TENANT_ACCESS_DENIED -> 403;
             case PROVISIONING_FAILED, INTERNAL_ERROR -> 500;

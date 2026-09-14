@@ -38,6 +38,7 @@ class ProvisioningEngineIT {
 
     @BeforeEach
     void seed() {
+        jobs.deleteAll();
         String suffix = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         Tenant created = new Tenant();
         created.setTenantCode("PRV_" + suffix);
