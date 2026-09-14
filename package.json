@@ -22,6 +22,7 @@
     "dev:api": "cmd /c \"cd /d backend && mvnw.cmd -f pom.xml -pl central-api -am spring-boot:run\"",
     "dev:worker": "cmd /c \"cd /d backend && mvnw.cmd -f pom.xml -pl event-worker -am spring-boot:run\"",
     "dev:portal": "npm run dev --workspace @cybelinx/admin-portal",
+    "mint:jwt": "node scripts/mint-dev-jwt.mjs",
     "db:up": "docker compose -f infra/docker/docker-compose.yml up -d postgres",
     "db:down": "docker compose -f infra/docker/docker-compose.yml down",
     "db:logs": "docker compose -f infra/docker/docker-compose.yml logs -f postgres"

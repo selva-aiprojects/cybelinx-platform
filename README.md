@@ -92,6 +92,30 @@ WORKER_PORT=3002
 
 Secrets are never committed. Only credential **references** are stored by the platform.
 
+## Development auth (API tokens)
+
+The platform authenticates requests with OIDC-JWT bearer tokens. For local
+development set a shared HMAC secret and mint short-lived JWT tokens:
+
+```bash
+# 1. Set the shared HS256 key (must be >= 32 bytes), then restart the API
+export IDP_JWT_SECRET=change-me-dev-only-32-bytes-minimum
+
+# 2. Mint a dev token (defaults: sub seed-dev-admin-0001, 24h TTL)
+npm run mint:jwt
+#    or override:  npm run mint:jwt -- --sub seed-dev-admin-0001 --email dev.admin@cybelinx.test --ttl 24
+```
+
+Copy the printed token into the Admin Portal **Settings → API token** field
+(it is stored in `localStorage`, never sent to the API as anything but a bearer
+token). The DMZ `IDP_JWT_SECRET` path is HMAC-over-claims; a `jwks-uri` verifier can
+be configured instead via `CYBELINX_IDP_JWKS_URI` when an OIDC provider is available.
+
+The migration `V6__seed_reference_data.sql` seeds the reference catalog (regions,
+roles, permissions incl. `product:write`, plans, entitlements), the ACME tenant and
+the bootstrap identity `seed-dev-admin-0001` (`dev.admin@cybelinx.test`) with the
+`CYBELINX_PLATFORM_ADMIN` and `TENANT_ADMIN` roles.
+
 ## Useful commands
 
 | Command | Purpose |
@@ -99,6 +123,8 @@ Secrets are never committed. Only credential **references** are stored by the pl
 | `npm run test:backend` | Run all backend tests (Maven, `backend/pom.xml`) |
 | `npm run dev:api` | Run central-api via `mvnw spring-boot:run` (port 3001) |
 | `npm run dev:worker` | Run event-worker via `mvnw spring-boot:run` (port 3002) |
+| `npm run dev:portal` | Run admin-portal (port 3000) |
+| `npm run mint:jwt` | Mint a local dev JWT (see Development auth above) |
 | `npm run build` | Build `packages/shared` + admin-portal |
 | `npm run lint` | ESLint (flat config) across frontend workspaces |
 | `npm run typecheck` | `tsc --noEmit` across frontend workspaces |
