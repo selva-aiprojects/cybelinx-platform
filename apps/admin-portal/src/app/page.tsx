@@ -62,7 +62,9 @@ export default function DashboardPage() {
         </div>
         <div className="stat">
           <div className="stat-value">
-            {health.data?.status === 'ok' ? (
+            {health.loading && !health.data ? (
+              '…'
+            ) : health.data?.status === 'ok' ? (
               <span style={{ color: 'var(--success)' }}>Online</span>
             ) : (
               <span style={{ color: 'var(--danger)' }}>Offline</span>
