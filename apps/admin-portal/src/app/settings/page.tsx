@@ -19,14 +19,31 @@ export default function SettingsPage() {
   const [baseUrl, setBaseUrl] = useState(() => resolveApiBaseUrl());
   const [saved, setSaved] = useState(false);
 
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const hasMixedContentRisk = isHttps && baseUrl.startsWith('http://');
+
   async function testConnection() {
     try {
       const res = await fetch(`${resolveApiBaseUrl()}/health`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`status ${res.status}`);
-      const body = (await res.json()) as { status?: string };
-      window.alert(`API reachable (status ${res.status}) — health ${body.status ?? 'ok'}`);
+      const body = (await res.json()) as { status?: string; mode?: string };
+      window.alert(`API reachable (status ${res.status}) — health ${body.status ?? 'ok'}${body.mode ? ` [${body.mode}]` : ''}`);
     } catch (error) {
       window.alert(`API unreachable via ${resolveApiBaseUrl()}: ${(error as Error).message}`);
+    }
+  }
+
+  async function mintDevToken() {
+    try {
+      const res = await fetch('/api/auth/token');
+      if (!res.ok) throw new Error(`Failed to mint token: status ${res.status}`);
+      const data = (await res.json()) as { token: string };
+      setToken(data.token);
+      storeSettings(data.token, baseUrl.trim() || null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      window.alert(`Token minting error: ${(err as Error).message}`);
     }
   }
 
@@ -60,10 +77,31 @@ export default function SettingsPage() {
             onChange={(event) => setBaseUrl(event.target.value)}
             placeholder={DEFAULT_API_BASE_URL}
           />
-          <div className="hint">
-            Defaults to <code>{DEFAULT_API_BASE_URL}</code> (Next.js env{' '}
-            <code>NEXT_PUBLIC_API_BASE_URL</code>) when left blank. On Vercel preview, point this
-            at your reachable central-api instance — the API is not deployed on Vercel.
+          <div className="flex" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setBaseUrl('/api/v1')}
+            >
+              Use Embedded API (/api/v1)
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setBaseUrl('http://localhost:3001/api/v1')}
+            >
+              Use Local Spring Boot (localhost:3001)
+            </button>
+          </div>
+          {hasMixedContentRisk && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <Alert kind="info">
+                You are accessing the portal over HTTPS ({typeof window !== 'undefined' ? window.location.origin : ''}). Browsers block requests to insecure HTTP endpoints (Mixed Content). Use <code>/api/v1</code> for the cloud API or an HTTPS tunnel if connecting to a remote backend.
+              </Alert>
+            </div>
+          )}
+          <div className="hint" style={{ marginTop: '0.5rem' }}>
+            Defaults to <code>{DEFAULT_API_BASE_URL}</code>. On Vercel, <code>/api/v1</code> routes to the embedded control plane API or proxy.
           </div>
         </div>
         <div className="flex">
@@ -87,7 +125,7 @@ export default function SettingsPage() {
             value={token}
             onChange={(event) => setToken(event.target.value)}
             placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.…"
-            style={{ fontFamily: 'var(--mono)' }}
+            style={{ fontFamily: 'var(--mono)', minHeight: 90 }}
           />
           <div className="hint">
             Stored locally in your browser (localStorage) and sent as{' '}
@@ -97,6 +135,9 @@ export default function SettingsPage() {
         <div className="flex">
           <button type="button" className="btn btn-primary" onClick={save}>
             Save settings
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={mintDevToken}>
+            ⚡ Mint & Auto-Apply Token
           </button>
           {saved && <Alert kind="success">Settings saved.</Alert>}
         </div>

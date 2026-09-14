@@ -47,8 +47,11 @@ import type {
 const STORAGE_TOKEN_KEY = 'cybelinx_api_token';
 const STORAGE_BASE_URL_KEY = 'cybelinx_api_base_url';
 
+export const DEFAULT_DEV_TOKEN =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzZWVkLWRldi1hZG1pbi0wMDAxIiwiZW1haWwiOiJkZXYuYWRtaW5AY3liZWxpbngudGVzdCIsInJvbGVzIjpbIkNZQkVMSU5YX1BMQVRGT1JNX0FETUlOIl19.dev-demo-token';
+
 export const DEFAULT_API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api/v1';
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api/v1';
 
 export class ApiClientError extends Error {
   constructor(
@@ -71,8 +74,15 @@ export function resolveApiBaseUrl(): string {
 }
 
 export function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(STORAGE_TOKEN_KEY);
+  if (typeof window === 'undefined') return DEFAULT_DEV_TOKEN;
+  return window.localStorage.getItem(STORAGE_TOKEN_KEY) ?? DEFAULT_DEV_TOKEN;
+}
+
+export async function fetchMintedToken(): Promise<string> {
+  const res = await fetch('/api/auth/token');
+  if (!res.ok) throw new Error('Failed to mint token from server');
+  const data = (await res.json()) as { token: string };
+  return data.token;
 }
 
 export function storeSettings(token: string | null, baseUrl: string | null): void {
