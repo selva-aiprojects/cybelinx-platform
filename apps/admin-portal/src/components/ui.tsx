@@ -66,7 +66,37 @@ export function Alert({
 }
 
 export function ErrorBanner({ error }: { error: string }) {
-  return <Alert kind="error">{error}</Alert>;
+  const isLocalhostError =
+    error.includes('localhost:3001') || error.includes('Unable to reach the API');
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+  function resetToCloud() {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('cybelinx_api_base_url');
+      window.location.reload();
+    }
+  }
+
+  return (
+    <div className="alert alert-error" role="alert">
+      <div style={{ flex: 1 }}>
+        <div>{error}</div>
+        {isLocalhostError && isHttps && (
+          <div style={{ marginTop: '0.6rem' }}>
+            <span className="small">Your browser has a cached <code>localhost:3001</code> endpoint that is blocked over HTTPS. </span>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={resetToCloud}
+              style={{ fontWeight: 600, textDecoration: 'underline', marginLeft: '0.4rem' }}
+            >
+              Click to reset to Cloud API (/api/v1)
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function LoadingBlock() {

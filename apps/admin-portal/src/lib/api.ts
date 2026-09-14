@@ -70,7 +70,20 @@ export const isApiClientError = (error: unknown): error is ApiClientError =>
 
 export function resolveApiBaseUrl(): string {
   if (typeof window === 'undefined') return DEFAULT_API_BASE_URL;
-  return window.localStorage.getItem(STORAGE_BASE_URL_KEY) ?? DEFAULT_API_BASE_URL;
+  const stored = window.localStorage.getItem(STORAGE_BASE_URL_KEY);
+  if (stored) {
+    // On HTTPS, browsers block http:// URLs (especially localhost) due to Mixed Content.
+    // Automatically sanitize and reset stale localhost base URLs to the cloud API endpoint.
+    if (
+      window.location.protocol === 'https:' &&
+      (stored.startsWith('http://localhost') || stored.startsWith('http://127.0.0.1'))
+    ) {
+      window.localStorage.removeItem(STORAGE_BASE_URL_KEY);
+      return DEFAULT_API_BASE_URL;
+    }
+    return stored;
+  }
+  return DEFAULT_API_BASE_URL;
 }
 
 export function getStoredToken(): string | null {

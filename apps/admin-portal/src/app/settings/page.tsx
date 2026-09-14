@@ -16,10 +16,15 @@ const KNOWN_SERVICES: Array<[string, string]> = [
 
 export default function SettingsPage() {
   const [token, setToken] = useState(() => getStoredToken() ?? '');
-  const [baseUrl, setBaseUrl] = useState(() => resolveApiBaseUrl());
-  const [saved, setSaved] = useState(false);
-
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const [baseUrl, setBaseUrl] = useState(() => {
+    const active = resolveApiBaseUrl();
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && (active.startsWith('http://localhost') || active.startsWith('http://127.0.0.1'))) {
+      return '/api/v1';
+    }
+    return active;
+  });
+  const [saved, setSaved] = useState(false);
   const hasMixedContentRisk = isHttps && baseUrl.startsWith('http://');
 
   async function testConnection() {
