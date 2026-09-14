@@ -6,6 +6,7 @@ import com.cybelinx.platform.api.domain.ProvisioningState;
 import com.cybelinx.platform.api.domain.TenantProductStatus;
 import com.cybelinx.platform.api.domain.TenantResourceStatus;
 import com.cybelinx.platform.api.domain.TenantStatus;
+import com.cybelinx.platform.api.events.OutboxPublisher;
 import com.cybelinx.platform.api.persistence.AuditEventRepository;
 import com.cybelinx.platform.api.persistence.ProductRepository;
 import com.cybelinx.platform.api.persistence.ResourceCatalogRepository;
@@ -54,6 +55,7 @@ public class TenantResourcesService {
     private final TenantProductRepository tenantProducts;
     private final UserRepository users;
     private final AuditEventRepository auditEvents;
+    private final OutboxPublisher outbox;
     private final AuthorizationService authorization;
     private final TenantResourceResolver resourceResolver;
 
@@ -67,6 +69,7 @@ public class TenantResourcesService {
             TenantProductRepository tenantProducts,
             UserRepository users,
             AuditEventRepository auditEvents,
+            OutboxPublisher outbox,
             AuthorizationService authorization,
             TenantResourceResolver resourceResolver) {
         this.tenantResources = tenantResources;
@@ -76,6 +79,7 @@ public class TenantResourcesService {
         this.tenantProducts = tenantProducts;
         this.users = users;
         this.auditEvents = auditEvents;
+        this.outbox = outbox;
         this.authorization = authorization;
         this.resourceResolver = resourceResolver;
     }
@@ -177,6 +181,13 @@ public class TenantResourcesService {
                 product.getId(),
                 tenantResource.getId(),
                 "tenant_resource.created",
+                toRegistryMetadata(request.getProductCode(), catalogEntry.getResourceTypeCode(), environment));
+
+        outbox.publishResourceEvent(
+                OutboxPublisher.RESOURCE_CREATED,
+                tenants.getReferenceById(tenantId),
+                product,
+                tenantResource.getId(),
                 toRegistryMetadata(request.getProductCode(), catalogEntry.getResourceTypeCode(), environment));
 
         return toView(tenantResource);

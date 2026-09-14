@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cybelinx.platform.api.domain.MembershipStatus;
+import com.cybelinx.platform.api.domain.EventStatus;
 import com.cybelinx.platform.api.domain.PlanStatus;
 import com.cybelinx.platform.api.domain.ProvisioningOperation;
 import com.cybelinx.platform.api.domain.ProvisioningState;
@@ -15,6 +16,7 @@ import com.cybelinx.platform.api.domain.TenantStatus;
 import com.cybelinx.platform.api.persistence.AuditEventRepository;
 import com.cybelinx.platform.api.persistence.MembershipRoleRepository;
 import com.cybelinx.platform.api.persistence.PlanRepository;
+import com.cybelinx.platform.api.persistence.PlatformEventRepository;
 import com.cybelinx.platform.api.persistence.ProductRepository;
 import com.cybelinx.platform.api.persistence.ProvisioningJobRepository;
 import com.cybelinx.platform.api.persistence.ResourceCatalogRepository;
@@ -28,6 +30,7 @@ import com.cybelinx.platform.api.persistence.entity.AuditEvent;
 import com.cybelinx.platform.api.persistence.entity.MembershipRole;
 import com.cybelinx.platform.api.persistence.entity.Plan;
 import com.cybelinx.platform.api.persistence.entity.Product;
+import com.cybelinx.platform.api.persistence.entity.PlatformEvent;
 import com.cybelinx.platform.api.persistence.entity.Resource;
 import com.cybelinx.platform.api.persistence.entity.Role;
 import com.cybelinx.platform.api.persistence.entity.RolePermission;
@@ -77,6 +80,7 @@ class TenantsServiceIT {
     @Autowired private TenantResourceRepository tenantResources;
     @Autowired private ProvisioningJobRepository jobs;
     @Autowired private AuditEventRepository auditEvents;
+    @Autowired private PlatformEventRepository platformEvents;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private EntityManager entityManager;
 
@@ -232,6 +236,32 @@ class TenantsServiceIT {
                     assertThat(job.getSteps().get(1).getSequence()).isEqualTo(2);
                     assertThat(job.getSteps().get(2).getSequence()).isEqualTo(3);
                 });
+    }
+
+    @Test
+    void createTenant_emitsTenantCreatedOutboxEvent() {
+        CreateTenantRequest request = new CreateTenantRequest();
+        request.setTenantCode("OUTBX1");
+        request.setName("Outbox Records Co");
+        TenantProductRequest product = new TenantProductRequest();
+        product.setProductCode("JIOPLIX");
+        product.setPlanCode("BASIC");
+        request.setProducts(List.of(product));
+
+        TenantViews.CreateTenantResponse response = service.createTenant(principal(), request);
+        UUID tenantId = UUID.fromString(response.tenant().tenantId());
+
+        List<PlatformEvent> outbox = platformEvents.findByTenantId(tenantId);
+        assertThat(outbox).hasSize(1);
+        PlatformEvent event = outbox.get(0);
+        assertThat(event.getEventType()).isEqualTo("TENANT_CREATED");
+        assertThat(event.getSchemaVersion()).isEqualTo("1.0");
+        assertThat(event.getSource()).isEqualTo("control-plane");
+        assertThat(event.getEntityType()).isEqualTo("tenant");
+        assertThat(event.getEntityId()).isEqualTo(tenantId);
+        assertThat(event.getOccurredAt()).isNotNull();
+        assertThat(event.getAvailableAt()).isNotNull();
+        assertThat(event.getStatus()).isEqualTo(EventStatus.PENDING);
     }
 
     @Test

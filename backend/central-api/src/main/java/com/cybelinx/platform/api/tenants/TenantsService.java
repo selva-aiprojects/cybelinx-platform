@@ -14,6 +14,7 @@ import com.cybelinx.platform.api.domain.ProvisioningStepStatus;
 import com.cybelinx.platform.api.domain.TenantProductStatus;
 import com.cybelinx.platform.api.domain.TenantResourceStatus;
 import com.cybelinx.platform.api.domain.TenantStatus;
+import com.cybelinx.platform.api.events.OutboxPublisher;
 import com.cybelinx.platform.api.persistence.AuditEventRepository;
 import com.cybelinx.platform.api.persistence.MembershipRoleRepository;
 import com.cybelinx.platform.api.persistence.PlanRepository;
@@ -96,6 +97,7 @@ public class TenantsService {
     private final TenantResourceRepository tenantResources;
     private final ProvisioningJobRepository provisioningJobs;
     private final AuditEventRepository auditEvents;
+    private final OutboxPublisher outbox;
     private final UserRepository users;
     private final AuthorizationService authorization;
 
@@ -115,6 +117,7 @@ public class TenantsService {
             TenantResourceRepository tenantResources,
             ProvisioningJobRepository provisioningJobs,
             AuditEventRepository auditEvents,
+            OutboxPublisher outbox,
             UserRepository users,
             AuthorizationService authorization) {
         this.tenants = tenants;
@@ -130,6 +133,7 @@ public class TenantsService {
         this.tenantResources = tenantResources;
         this.provisioningJobs = provisioningJobs;
         this.auditEvents = auditEvents;
+        this.outbox = outbox;
         this.users = users;
         this.authorization = authorization;
     }
@@ -193,6 +197,12 @@ public class TenantsService {
                 tenant.getId(), principal.user().id(), "tenant.created", toAuditProducts(request.getProducts()));
         audit.setEntityId(tenant.getId());
         auditEvents.save(audit);
+
+        // 7b. Emit the transactional outbox event (TRD section 22).
+        outbox.publishTenantEvent(OutboxPublisher.TENANT_CREATED, activeTenant, Map.of(
+                "tenantCode", activeTenant.getTenantCode(),
+                "name", activeTenant.getName(),
+                "status", activeTenant.getStatus().name()));
 
         // 8. Return tenant context information.
         return new CreateTenantResponse(
@@ -296,6 +306,7 @@ public class TenantsService {
         tenants.save(tenant);
         tenantProducts.updateStatusByTenantId(tenantId, TenantProductStatus.SUSPENDED);
         writeAudit(principal, tenantId, "tenant.suspended");
+        outbox.publishTenantEvent(OutboxPublisher.TENANT_SUSPENDED, tenant, Map.of("status", next.name()));
 
         return new TenantActionResponse(tenantId.toString(), next.name());
     }
@@ -320,6 +331,7 @@ public class TenantsService {
             }
         }
         writeAudit(principal, tenantId, "tenant.activated");
+        outbox.publishTenantEvent(OutboxPublisher.TENANT_ACTIVATED, tenant, Map.of("status", next.name()));
 
         return new TenantActionResponse(tenantId.toString(), next.name());
     }
@@ -334,6 +346,7 @@ public class TenantsService {
         tenant.setStatus(next);
         tenants.save(tenant);
         writeAudit(principal, tenantId, "tenant.deletion_requested");
+        outbox.publishTenantEvent(OutboxPublisher.TENANT_DEACTIVATED, tenant, Map.of("status", next.name()));
 
         return new TenantActionResponse(tenantId.toString(), next.name());
     }
@@ -349,6 +362,7 @@ public class TenantsService {
         tenants.save(tenant);
         tenantProducts.updateStatusByTenantId(tenantId, TenantProductStatus.DISABLED);
         writeAudit(principal, tenantId, "tenant.deletion_finalized");
+        outbox.publishTenantEvent(OutboxPublisher.TENANT_DELETED, tenant, Map.of("status", next.name()));
 
         return new TenantActionResponse(tenantId.toString(), next.name());
     }

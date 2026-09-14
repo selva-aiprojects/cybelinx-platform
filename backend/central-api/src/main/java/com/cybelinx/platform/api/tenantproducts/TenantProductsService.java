@@ -5,6 +5,7 @@ import com.cybelinx.platform.api.domain.PlanStatus;
 import com.cybelinx.platform.api.domain.ProductStatus;
 import com.cybelinx.platform.api.domain.TenantProductStatus;
 import com.cybelinx.platform.api.domain.TenantStatus;
+import com.cybelinx.platform.api.events.OutboxPublisher;
 import com.cybelinx.platform.api.persistence.AuditEventRepository;
 import com.cybelinx.platform.api.persistence.PlanRepository;
 import com.cybelinx.platform.api.persistence.ProductRepository;
@@ -47,6 +48,7 @@ public class TenantProductsService {
     private final PlanRepository plans;
     private final UserRepository users;
     private final AuditEventRepository auditEvents;
+    private final OutboxPublisher outbox;
     private final AuthorizationService authorization;
 
     private static final ObjectMapper AUDIT_JSON = new ObjectMapper();
@@ -58,6 +60,7 @@ public class TenantProductsService {
             PlanRepository plans,
             UserRepository users,
             AuditEventRepository auditEvents,
+            OutboxPublisher outbox,
             AuthorizationService authorization) {
         this.tenantProducts = tenantProducts;
         this.tenants = tenants;
@@ -65,6 +68,7 @@ public class TenantProductsService {
         this.plans = plans;
         this.users = users;
         this.auditEvents = auditEvents;
+        this.outbox = outbox;
         this.authorization = authorization;
     }
 
@@ -123,6 +127,13 @@ public class TenantProductsService {
                 "tenant_product.created",
                 Map.of("productCode", product.getProductCode(), "planCode", plan.getPlanCode()));
 
+        outbox.publishProductEvent(
+                OutboxPublisher.PRODUCT_ENABLED,
+                tenants.getReferenceById(tenantId),
+                product,
+                tenantProduct.getId(),
+                Map.of("productCode", product.getProductCode(), "planCode", plan.getPlanCode()));
+
         return toView(tenantProduct);
     }
 
@@ -168,6 +179,13 @@ public class TenantProductsService {
                 productId,
                 tenantProduct.getId(),
                 "tenant_product.removed",
+                Map.of("productCode", tenantProduct.getProduct().getProductCode()));
+
+        outbox.publishProductEvent(
+                OutboxPublisher.PRODUCT_DISABLED,
+                tenants.getReferenceById(tenantId),
+                tenantProduct.getProduct(),
+                tenantProduct.getId(),
                 Map.of("productCode", tenantProduct.getProduct().getProductCode()));
 
         return new TenantProductActionResponse(

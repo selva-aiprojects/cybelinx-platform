@@ -35,6 +35,8 @@ class EventWorkerOutboxIT {
         event.setEntityId(UUID.randomUUID());
         event.setCorrelationId(UUID.randomUUID().toString());
         event.setStatus(status);
+        event.setOccurredAt(now());
+        event.setSource("control-plane");
         event.setAvailableAt(availableAt);
         event.setAttempts(attempts);
         return events.save(event);
@@ -131,6 +133,36 @@ class EventWorkerOutboxIT {
                 .isEqualTo(EventStatus.PENDING);
         assertThat(claims.findByEventIdAndConsumerName(event.getId(), properties.getConsumerName()))
                 .isEmpty();
+    }
+
+    @Test
+    void replay_deadLetteredEventReturnedToPendingAndRedelivered() {
+        OutboxEvent event = seed(EventStatus.DEAD_LETTERED, null, 4);
+        OutboxEventClaim claim = claimFor(event, null, null);
+        claim.setDeadLetterAt(now());
+        claim.setLastError("permanent failure");
+        claim.setAttemptCount(properties.getMaxAttempts());
+        claims.save(claim);
+
+        int replayed = worker.replayDeadLettered();
+        assertThat(replayed).isEqualTo(1);
+
+        OutboxEvent refreshed = events.findById(event.getId()).orElseThrow();
+        assertThat(refreshed.getStatus()).isEqualTo(EventStatus.PENDING);
+        assertThat(refreshed.getAttempts()).isZero();
+        assertThat(refreshed.getProcessedAt()).isNull();
+
+        OutboxEventClaim claimRefreshed = claims
+                .findByEventIdAndConsumerName(event.getId(), properties.getConsumerName())
+                .orElseThrow();
+        assertThat(claimRefreshed.getDeadLetterAt()).isNull();
+        assertThat(claimRefreshed.getLastError()).isNull();
+        assertThat(claimRefreshed.getAttemptCount()).isZero();
+
+        worker.pollOnce();
+
+        assertThat(events.findById(event.getId()).orElseThrow().getStatus())
+                .isEqualTo(EventStatus.SUCCEEDED);
     }
 
     private LocalDateTime now() {

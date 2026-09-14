@@ -32,4 +32,12 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     List<OutboxEvent> findDueEvents(@Param("now") LocalDateTime now, Pageable pageable);
 
     Optional<OutboxEvent> findByCorrelationId(String correlationId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT e FROM OutboxEvent e
+        WHERE e.status = com.cybelinx.platform.worker.outbox.EventStatus.DEAD_LETTERED
+        ORDER BY e.createdAt ASC
+        """)
+    List<OutboxEvent> findDeadLettered(Pageable pageable);
 }

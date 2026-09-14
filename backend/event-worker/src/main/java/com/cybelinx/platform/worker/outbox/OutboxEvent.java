@@ -15,7 +15,7 @@ import org.hibernate.type.SqlTypes;
 /**
  * Read model of {@code platform_events} for the outbox worker. Deliberately keeps
  * {@code tenant_id}/{@code product_id} as plain UUID columns instead of JPA relations so the
- * worker never pulls in the central-api entity graph. Column set reflects V1 + V4 exactly;
+ * worker never pulls in the central-api entity graph. Column set reflects V1 + V4 + V5 exactly;
  * {@code ddl-auto: validate} enforces the match at boot.
  */
 @Entity
@@ -50,6 +50,12 @@ public class OutboxEvent extends BaseTimestampedEntity {
 
     @Column(name = "aggregate_id", columnDefinition = "uuid")
     private UUID aggregateId;
+
+    @Column(name = "occurred_at", nullable = false)
+    private LocalDateTime occurredAt;
+
+    @Column(name = "source", length = 64)
+    private String source;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload", columnDefinition = "jsonb")
@@ -134,6 +140,22 @@ public class OutboxEvent extends BaseTimestampedEntity {
 
     public void setAggregateId(UUID aggregateId) {
         this.aggregateId = aggregateId;
+    }
+
+    public LocalDateTime getOccurredAt() {
+        return occurredAt;
+    }
+
+    public void setOccurredAt(LocalDateTime occurredAt) {
+        this.occurredAt = occurredAt;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 
     public Map<String, Object> getPayload() {

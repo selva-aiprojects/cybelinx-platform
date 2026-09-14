@@ -2,9 +2,12 @@ package com.cybelinx.platform.api.provisioning;
 
 import com.cybelinx.platform.api.domain.ProvisioningState;
 import com.cybelinx.platform.api.domain.ProvisioningStepStatus;
+import com.cybelinx.platform.api.events.OutboxPublisher;
 import com.cybelinx.platform.api.persistence.ProvisioningJobRepository;
+import com.cybelinx.platform.api.persistence.entity.Product;
 import com.cybelinx.platform.api.persistence.entity.ProvisioningJob;
 import com.cybelinx.platform.api.persistence.entity.ProvisioningStep;
+import com.cybelinx.platform.api.persistence.entity.TenantProduct;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -28,12 +31,14 @@ public class DefaultProvisioningEngine implements ProvisioningEngine {
     private static final Logger log = LoggerFactory.getLogger(DefaultProvisioningEngine.class);
 
     private final ProvisioningJobRepository jobs;
+    private final OutboxPublisher outbox;
     private final Map<String, ProvisioningStepHandler> handlers;
     private final String defaultWorkerId = "worker-" + UUID.randomUUID().toString().substring(0, 8);
 
     public DefaultProvisioningEngine(
-            ProvisioningJobRepository jobs, List<ProvisioningStepHandler> stepHandlers) {
+            ProvisioningJobRepository jobs, List<ProvisioningStepHandler> stepHandlers, OutboxPublisher outbox) {
         this.jobs = jobs;
+        this.outbox = outbox;
         this.handlers = stepHandlers.stream()
                 .collect(Collectors.toMap(
                         ProvisioningStepHandler::supportedStepName,
@@ -102,6 +107,7 @@ public class DefaultProvisioningEngine implements ProvisioningEngine {
             job.setFinishedAt(now);
             job.setLeaseOwner(null);
             job.setLeaseExpiresAt(null);
+            emitProvisioned(job);
             return job;
         }
 
@@ -133,6 +139,7 @@ public class DefaultProvisioningEngine implements ProvisioningEngine {
                 job.setFinishedAt(now);
                 job.setLeaseOwner(null);
                 job.setLeaseExpiresAt(null);
+                emitFailed(job, current.getName(), failure.getMessage());
             } else {
                 long backoffSeconds = (long) Math.pow(2, nextAttempt) * 2;
                 job.setNextRetryAt(now.plusSeconds(backoffSeconds));
@@ -156,6 +163,7 @@ public class DefaultProvisioningEngine implements ProvisioningEngine {
             job.setFinishedAt(now);
             job.setLeaseOwner(null);
             job.setLeaseExpiresAt(null);
+            emitProvisioned(job);
         }
 
         return job;
@@ -171,5 +179,41 @@ public class DefaultProvisioningEngine implements ProvisioningEngine {
                 || state == ProvisioningState.FAILED
                 || state == ProvisioningState.CANCELLED
                 || state == ProvisioningState.ROLLED_BACK;
+    }
+
+    private void emitProvisioned(ProvisioningJob job) {
+        Product product = productOf(job);
+        outbox.publishProvisioningEvent(
+                OutboxPublisher.TENANT_PROVISIONED,
+                job.getTenant(),
+                product,
+                job.getTenantResource() != null ? job.getTenantResource().getId() : null,
+                Map.of(
+                        "jobId", job.getId().toString(),
+                        "operation", job.getOperation().name(),
+                        "state", job.getState().name()));
+    }
+
+    private void emitFailed(ProvisioningJob job, String stepName, String message) {
+        Product product = productOf(job);
+        outbox.publishProvisioningEvent(
+                OutboxPublisher.RESOURCE_FAILED,
+                job.getTenant(),
+                product,
+                job.getTenantResource() != null ? job.getTenantResource().getId() : null,
+                Map.of(
+                        "jobId", job.getId().toString(),
+                        "step", stepName,
+                        "error", message));
+    }
+
+    private Product productOf(ProvisioningJob job) {
+        if (job.getTenantProduct() != null && job.getTenantProduct().getProduct() != null) {
+            return job.getTenantProduct().getProduct();
+        }
+        if (job.getTenantResource() != null && job.getTenantResource().getProduct() != null) {
+            return job.getTenantResource().getProduct();
+        }
+        return null;
     }
 }

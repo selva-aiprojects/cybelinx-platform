@@ -147,6 +147,11 @@ database. It consumes the transaction-outbox rows written by the API into
 (at-least-once delivery, retry + exponential backoff, dead-letter handling, consumer
 processing status, manual replay via `platform_events.status`).
 
+Production writes go through `OutboxPublisher` (central-api): every business mutation
+that should fan out (tenant lifecycle, provisioning terminal states, product
+attach/detach, resource registration) appends its `platform_events` row **in the same
+transaction**, so the event is never lost if the write commits.
+
 Its only HTTP surface is the health endpoints (§ Health endpoints above), served on
 `WORKER_PORT` (default `3002`) under `/api/v1`; readiness reports worker state
 (`STARTING` → `RUNNING` → `STOPPED`), not the database.
@@ -184,15 +189,38 @@ consumers without double effects.
 ### Standard event contract
 
 `platform_events` carries the TRD §20 envelope. Mandatory: `id`, `event_type`,
-`status`. Recommended fields surfaced to consumers: `schema_version`, `tenant_id`,
-`product_id`, `entity_type`, `entity_id`, `correlation_id`, `aggregate_id`, `payload`
-(JSONB). `status` uses the PostgreSQL `eventstatus` enum:
+`status`, `occurred_at`. Recommended fields surfaced to consumers: `schema_version`,
+`tenant_id`, `product_id`, `entity_type`, `entity_id`, `source`, `correlation_id`,
+`aggregate_id`, `payload` (JSONB). `OutboxPublisher` emits `source = "control-plane"`
+by default. `status` uses the PostgreSQL `eventstatus` enum:
 
 ```
 PENDING → PROCESSING → SUCCEEDED
                     ↘ FAILED (retry due via available_at)
-                           ↘ DEAD_LETTERED (terminal)
+                           ↘ DEAD_LETTERED (terminal, replayable)
 ```
+
+Manual replay: `OutboxPollingService.replayDeadLettered()` resets every
+`DEAD_LETTERED` row back to `PENDING` (`attempts`/`available_at`/claim error state
+cleared, `processed_at` null) so the next poll delivers it again — this is the
+TRD §20 "manual replay" path.
+
+### Outbox producer
+
+Every emit point in central-api publishes through `OutboxPublisher`:
+
+| Business action | Event type | Entity |
+| --- | --- | --- |
+| Tenant created | `TENANT_CREATED` | tenant |
+| Tenant activated | `TENANT_ACTIVATED` | tenant |
+| Tenant suspended | `TENANT_SUSPENDED` | tenant |
+| Deletion requested | `TENANT_DEACTIVATED` | tenant |
+| Deletion finalized | `TENANT_DELETED` | tenant |
+| Provisioning job succeeded | `TENANT_PROVISIONED` | resource |
+| Provisioning job failed | `RESOURCE_FAILED` | resource |
+| Product attached | `PRODUCT_ENABLED` | tenant_product |
+| Product detached | `PRODUCT_DISABLED` | tenant_product |
+| Resource registered | `RESOURCE_CREATED` | tenant_resource |
 
 ### Configuration
 

@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,6 +69,38 @@ public class OutboxPollingService {
         for (OutboxEvent event : due) {
             process(event, now);
         }
+    }
+
+    @Transactional
+    public int replayDeadLettered() {
+        LocalDateTime now = LocalDateTime.now();
+        int replayed = 0;
+        Pageable page = PageRequest.of(0, properties.getBatchSize());
+        List<OutboxEvent> deadLettered = eventRepository.findDeadLettered(page);
+        for (OutboxEvent event : deadLettered) {
+            event.setStatus(EventStatus.PENDING);
+            event.setAvailableAt(now);
+            event.setAttempts(0);
+            event.setProcessedAt(null);
+            eventRepository.save(event);
+            claimRepository
+                    .findByEventIdAndConsumerName(event.getId(), properties.getConsumerName())
+                    .ifPresent(claim -> {
+                        claim.setDeadLetterAt(null);
+                        claim.setLastError(null);
+                        claim.setErrorStack(null);
+                        claim.setLeaseExpiresAt(null);
+                        claim.setCompletedAt(null);
+                        claim.setAttemptCount(0);
+                        claimRepository.save(claim);
+                    });
+            LOG.info(
+                    "Replayed dead-lettered event {} (type {}) back to PENDING",
+                    event.getId(),
+                    event.getEventType());
+            replayed++;
+        }
+        return replayed;
     }
 
     private void releaseExpiredLeases(LocalDateTime now) {

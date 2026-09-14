@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.PrePersist;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -53,6 +54,12 @@ public class PlatformEvent extends BaseTimestampedEntity {
     @Column(name = "aggregate_id", columnDefinition = "uuid")
     private UUID aggregateId;
 
+    @Column(name = "occurred_at", nullable = false)
+    private LocalDateTime occurredAt;
+
+    @Column(name = "source", length = 64)
+    private String source;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload", columnDefinition = "jsonb")
     private Map<String, Object> payload;
@@ -69,6 +76,13 @@ public class PlatformEvent extends BaseTimestampedEntity {
 
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
+
+    @PrePersist
+    void prePersist() {
+        if (occurredAt == null) {
+            occurredAt = LocalDateTime.now();
+        }
+    }
 
     @OneToOne(mappedBy = "event", fetch = FetchType.LAZY)
     private EventProcessing processing;
@@ -143,6 +157,22 @@ public class PlatformEvent extends BaseTimestampedEntity {
 
     public void setAggregateId(UUID aggregateId) {
         this.aggregateId = aggregateId;
+    }
+
+    public LocalDateTime getOccurredAt() {
+        return occurredAt;
+    }
+
+    public void setOccurredAt(LocalDateTime occurredAt) {
+        this.occurredAt = occurredAt;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 
     public Map<String, Object> getPayload() {

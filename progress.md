@@ -141,13 +141,13 @@ repositories — the docs alone were not trusted.
 | 11 | Provisioning Engine | SCAFFOLD_ONLY | jobs/steps created inertly at tenant create (progress 10, 3 static steps); nothing executes |
 | 12 | Provisioning Jobs | PARTIALLY_IMPLEMENTED | `provisioning_jobs`+`provisioning_steps` tables/entities + creation; no claim/execute/retry; no `attempt_count`/`next_retry_at`/lease cols |
 | 13 | Provisioning Retry / Recovery | NOT_IMPLEMENTED | no attempt counter, no lease, no `FOR UPDATE SKIP LOCKED` |
-| 14 | Transactional Outbox | SCAFFOLD_ONLY | `platform_events` table + entity; nothing writes/reads; missing `occurred_at`/`source`/`last_error`; TRD still says `outbox_events` |
-| 15 | Event Worker | SCAFFOLD_ONLY | heartbeat/health only; `poll-interval-ms`/`batch-size` config dormant; no DB deps |
-| 16 | Event Contract | PARTIALLY_IMPLEMENTED | envelope cols on `platform_events`; `occurred_at`/`source` missing |
-| 17 | Event Idempotency | SCAFFOLD_ONLY | `event_processing` unique on `event_id` only; no `consumer_name` → per-consumer idempotency impossible |
-| 18 | Retry / Backoff | NOT_IMPLEMENTED | `available_at` exists; no policy code |
-| 19 | Dead Letter Handling | NOT_IMPLEMENTED | `DEAD_LETTERED` enum only; no DLQ/replay |
-| 20 | Event Replay | NOT_IMPLEMENTED | nothing |
+| 14 | Transactional Outbox | IMPLEMENTED | `OutboxPublisher` (@Service) writes `platform_events` in the business tx; `occurred_at`/`source` via V5; emit points: tenant lifecycle, provisioning terminal states, product attach/detach, resource register |
+| 15 | Event Worker | IMPLEMENTED | worker loop (claim→process→retry/DLQ→replay) over shared PG schema; JPA read models, lease reclaim, backoff, `EventProcessor` SPI |
+| 16 | Event Contract | IMPLEMENTED | TRD §20 envelope on `platform_events` + `occurred_at` (NOT NULL) + `source` (V5); mandatory/recommended fields mapped by both entities |
+| 17 | Event Idempotency | IMPLEMENTED | `event_processing` unique `(event_id, consumer_name)` idempotent per-consumer claims |
+| 18 | Retry / Backoff | IMPLEMENTED | `5 × 2^(attempt-1)` s capped 300 via `available_at` on `FAILED`; retry-due rows re-claimed |
+| 19 | Dead Letter Handling | IMPLEMENTED | `DEAD_LETTERED` after `max-attempts` with claim `dead_letter_at`/`last_error`/`error_stack` |
+| 20 | Event Replay | IMPLEMENTED | `OutboxPollingService.replayDeadLettered()` resets DLQ → PENDING for re-delivery (TRD §20 manual replay) |
 | 21 | Platform Audit | PARTIALLY_IMPLEMENTED | `audit_events` written on tenant lifecycle; write-only (no query API), no membership/product/entitlement/event-replay audits |
 | 22 | Usage / Metering Foundation | SCAFFOLD_ONLY | `usage_events` table + entity (dedupe_key); nothing writes/reads |
 | 23 | Product SDK | NOT_IMPLEMENTED | retired; needs new TS `@cybelinx/product-sdk` |
@@ -298,6 +298,18 @@ repositories — the docs alone were not trusted.
   - [x] Lease reclaim: PROCESSING events with lapsed claim → release to PENDING (available_at = now); exponential backoff on retryable failure (`5 * 2^(attempt-1)`, cap 300 s); dead-letter terminal after `maxAttempts`
   - [x] `WorkerProperties` (`cybelinx.worker.*`): `poll-interval-ms`, `batch-size`, `max-attempts`, `lease-seconds`, `consumer-name`
   - [x] event-worker `application.yml`: JPA (validate), Flyway disabled (central owns migrations), driver + naming strategy + JSON mapper; datasource inherited from `CommonEnvironmentPostProcessor`
-  - [x] `EventWorkerOutboxIT` (5 tests): claim+complete, skip already-completed claim, release expired lease+redeliver, reprocess due FAILED, skip future-available events
+  - [x] `EventWorkerOutboxIT` (6 tests): claim+complete, skip already-completed claim, release expired lease+redeliver, reprocess due FAILED, skip future-available events, dead-letter replay
   - [x] `DefaultEventProcessorTest` (2 tests): consumerName binding, no-throw processing
   - [x] `docs/api/API.md` reflect the worker once its loop lands
+
+### Capability 13/14 delta — Transactional Outbox Producer [SCAFFOLD → COMPLETE]
+- [x] Migration `V5__event_outbox_contract_columns.sql`: `occurred_at` (NOT NULL, backfilled from `created_at`) + `source` on `platform_events` + `occurred_at` index (TRD §20 mandatory/recommended contract columns)
+- [x] `PlatformEvent` entity (+ worker `OutboxEvent` read model) map `occurredAt`/`source` — worker `ddl-auto: validate` stays green
+- [x] `OutboxPublisher` (@Service, central-api): transactional writer (`publish`, `publishTenantEvent`, `publishProvisioningEvent`, `publishProductEvent`, `publishResourceEvent`) — every emit runs in the same tx as the business write (TRD §19), sets `source = "control-plane"`, `PENDING` + `available_at = now`
+- [x] Emit points wired: `TenantsService` create/suspend/activate/deletion-request/finalize → `TENANT_CREATED`/`TENANT_SUSPENDED`/`TENANT_ACTIVATED`/`TENANT_DEACTIVATED`/`TENANT_DELETED`; `DefaultProvisioningEngine` terminal `SUCCEEDED`→`TENANT_PROVISIONED`, `FAILED`→`RESOURCE_FAILED`; `TenantProductsService` attach/detach → `PRODUCT_ENABLED`/`PRODUCT_DISABLED`; `TenantResourcesService` register → `RESOURCE_CREATED`
+- [x] `TenantsServiceIT.createTenant_emitsTenantCreatedOutboxEvent` — assert `TENANT_CREATED` row (`schema_version 1.0`, `source=control-plane`, entity type/id, `PENDING`)
+
+### Capability 15/16/17/18 delta — Worker Manual Replay [REPLAY DONE]
+- [x] `OutboxEventRepository.findDeadLettered(Pageable)` (pessimistic lock over `DEAD_LETTERED`)
+- [x] `OutboxPollingService.replayDeadLettered()` — reset batch of `DEAD_LETTERED` → `PENDING` (attempts/processed_at/claim error + dead-letter + attempt-count cleared, `available_at = now`) so the next poll re-delivers (TRD §20 manual replay)
+- [x] `EventWorkerOutboxIT.replay_deadLetteredEventReturnedToPendingAndRedelivered` — replay resets state, next `pollOnce()` re-processes to `SUCCEEDED`
