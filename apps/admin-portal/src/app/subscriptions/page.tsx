@@ -98,6 +98,7 @@ export default function SubscriptionsPage() {
                   <tr>
                     <th>Tenant</th>
                     <th>Product</th>
+                    <th>App Launch URL</th>
                     <th>Plan</th>
                     <th>Status</th>
                     <th>Activated</th>
@@ -122,6 +123,21 @@ export default function SubscriptionsPage() {
                             </Link>
                           ) : (
                             row.productCode
+                          )}
+                        </td>
+                        <td>
+                          {row.appUrl ? (
+                            <a
+                              href={row.appUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mono"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none', color: '#0284c7', fontWeight: 600, fontSize: '0.85rem' }}
+                            >
+                              {row.appUrl} ↗
+                            </a>
+                          ) : (
+                            <span className="muted">—</span>
                           )}
                         </td>
                         <td className="mono muted">{row.planCode ?? '—'}</td>

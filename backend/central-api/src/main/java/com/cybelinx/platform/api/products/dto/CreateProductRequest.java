@@ -20,6 +20,9 @@ public class CreateProductRequest {
     @Size(max = 2000, message = "description must not exceed 2000 characters")
     private String description;
 
+    @Size(max = 256, message = "baseUrl must not exceed 256 characters")
+    private String baseUrl;
+
     public String getProductCode() {
         return productCode;
     }
@@ -42,5 +45,13 @@ public class CreateProductRequest {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getBaseUrl() {
+        return baseUrl;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = baseUrl;
     }
 }

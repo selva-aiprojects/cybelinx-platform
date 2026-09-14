@@ -54,6 +54,9 @@ public class TenantProduct extends BaseTimestampedEntity {
     @Column(name = "activated_at")
     private LocalDateTime activatedAt;
 
+    @Column(name = "app_url", length = 256)
+    private String appUrl;
+
     public UUID getId() {
         return id;
     }
@@ -100,5 +103,13 @@ public class TenantProduct extends BaseTimestampedEntity {
 
     public void setActivatedAt(LocalDateTime activatedAt) {
         this.activatedAt = activatedAt;
+    }
+
+    public String getAppUrl() {
+        return appUrl;
+    }
+
+    public void setAppUrl(String appUrl) {
+        this.appUrl = appUrl;
     }
 }

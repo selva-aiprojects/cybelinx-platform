@@ -106,7 +106,7 @@ class ProvisioningStepHandlerIT {
 
         createSchemaHandler.execute(job, step);
 
-        String expectedSchema = "tenant_handler_" + suffix;
+        String expectedSchema = "tenant_handler_" + suffix + "_handler_prod_" + suffix;
         assertThat(resource.getSchemaName()).isEqualTo(expectedSchema);
         assertThat(step.getOutput()).containsEntry("created", true);
 

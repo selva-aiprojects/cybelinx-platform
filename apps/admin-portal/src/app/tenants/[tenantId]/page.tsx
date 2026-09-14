@@ -164,6 +164,7 @@ export default function TenantDetailPage() {
               <thead>
                 <tr>
                   <th>Product</th>
+                  <th>App Launch URL</th>
                   <th>Plan</th>
                   <th>Status</th>
                   <th>Activated</th>
@@ -182,6 +183,21 @@ export default function TenantDetailPage() {
                           </Link>
                         ) : (
                           product.productCode
+                        )}
+                      </td>
+                      <td>
+                        {product.appUrl ? (
+                          <a
+                            href={product.appUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mono"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none', color: '#0284c7', fontWeight: 600, fontSize: '0.85rem' }}
+                          >
+                            {product.appUrl} ↗
+                          </a>
+                        ) : (
+                          <span className="muted">—</span>
                         )}
                       </td>
                       <td className="mono muted">{product.planCode ?? '—'}</td>

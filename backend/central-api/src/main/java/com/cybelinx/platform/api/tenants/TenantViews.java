@@ -21,7 +21,8 @@ public final class TenantViews {
             String productCode,
             String planCode,
             String status,
-            String activatedAt) {}
+            String activatedAt,
+            String appUrl) {}
 
     public record TenantProductListResponse(List<TenantProductView> data) {}
 

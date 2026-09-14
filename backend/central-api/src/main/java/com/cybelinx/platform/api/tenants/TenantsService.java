@@ -644,7 +644,23 @@ public class TenantsService {
                 product.getProduct() != null ? product.getProduct().getProductCode() : "",
                 product.getPlan() != null ? product.getPlan().getPlanCode() : "",
                 product.getStatus().name(),
-                IsoTime.format(product.getActivatedAt()));
+                IsoTime.format(product.getActivatedAt()),
+                product.getAppUrl() != null ? product.getAppUrl() : buildAppUrl(product.getTenant(), product.getProduct()));
+    }
+
+    private static String buildAppUrl(Tenant tenant, Product product) {
+        if (product == null) return null;
+        String baseUrl = product.getBaseUrl();
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            baseUrl = "https://" + product.getProductCode().toLowerCase() + ".com";
+        }
+        String code = tenant != null && tenant.getTenantCode() != null ? tenant.getTenantCode().toLowerCase() : "app";
+        if (baseUrl.startsWith("https://")) {
+            return "https://" + code + "." + baseUrl.substring(8);
+        } else if (baseUrl.startsWith("http://")) {
+            return "http://" + code + "." + baseUrl.substring(7);
+        }
+        return "https://" + code + "." + baseUrl;
     }
 
     private static TenantResourceView toResourceView(TenantResource resource) {

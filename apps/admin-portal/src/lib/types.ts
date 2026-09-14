@@ -31,6 +31,7 @@ export interface ProductView {
   productCode: string;
   name: string;
   description: string | null;
+  baseUrl: string | null;
   status: ProductStatus;
   currentVersionId: string | null;
   createdAt: string;
@@ -127,6 +128,7 @@ export interface TenantProductView {
   planCode: string;
   status: TenantProductStatus;
   activatedAt: string | null;
+  appUrl: string | null;
 }
 
 export interface TenantProductListResponse {
@@ -212,6 +214,7 @@ export interface CreateProductRequest {
   productCode: string;
   name: string;
   description?: string;
+  baseUrl?: string;
 }
 
 export interface UpdateProductRequest {

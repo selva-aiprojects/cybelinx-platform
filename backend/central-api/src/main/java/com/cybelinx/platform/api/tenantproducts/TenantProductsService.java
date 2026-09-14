@@ -85,7 +85,7 @@ public class TenantProductsService {
     @Transactional
     public TenantProductView attachProduct(
             AuthPrincipal principal, UUID tenantId, AttachTenantProductRequest request) {
-        requireTenant(tenantId);
+        Tenant tenant = requireTenant(tenantId);
         assertCanManageTenant(principal, tenantId, TenantConstants.PERMISSION_TENANT_WRITE);
 
         Product product = products.findByProductCode(request.getProductCode())
@@ -112,11 +112,12 @@ public class TenantProductsService {
         }
 
         TenantProduct tenantProduct = new TenantProduct();
-        tenantProduct.setTenant(tenants.getReferenceById(tenantId));
+        tenantProduct.setTenant(tenant);
         tenantProduct.setProduct(product);
         tenantProduct.setPlan(plan);
         tenantProduct.setStatus(TenantProductStatus.ACTIVE);
         tenantProduct.setActivatedAt(LocalDateTime.now(ZoneOffset.UTC));
+        tenantProduct.setAppUrl(buildAppUrl(tenant, product));
         tenantProduct = tenantProducts.save(tenantProduct);
 
         writeAudit(
@@ -129,7 +130,7 @@ public class TenantProductsService {
 
         outbox.publishProductEvent(
                 OutboxPublisher.PRODUCT_ENABLED,
-                tenants.getReferenceById(tenantId),
+                tenant,
                 product,
                 tenantProduct.getId(),
                 Map.of("productCode", product.getProductCode(), "planCode", plan.getPlanCode()));
@@ -195,6 +196,20 @@ public class TenantProductsService {
     // ---------------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------------
+
+    private static String buildAppUrl(Tenant tenant, Product product) {
+        String baseUrl = product.getBaseUrl();
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            baseUrl = "https://" + product.getProductCode().toLowerCase() + ".com";
+        }
+        String code = tenant.getTenantCode() != null ? tenant.getTenantCode().toLowerCase() : "app";
+        if (baseUrl.startsWith("https://")) {
+            return "https://" + code + "." + baseUrl.substring(8);
+        } else if (baseUrl.startsWith("http://")) {
+            return "http://" + code + "." + baseUrl.substring(7);
+        }
+        return "https://" + code + "." + baseUrl;
+    }
 
     private Plan resolvePlan(UUID tenantId, Product product, String planCode) {
         Plan plan;
@@ -289,6 +304,7 @@ public class TenantProductsService {
                 tenantProduct.getProduct().getProductCode(),
                 tenantProduct.getPlan().getPlanCode(),
                 tenantProduct.getStatus().name(),
-                IsoTime.format(tenantProduct.getActivatedAt()));
+                IsoTime.format(tenantProduct.getActivatedAt()),
+                tenantProduct.getAppUrl() != null ? tenantProduct.getAppUrl() : buildAppUrl(tenantProduct.getTenant(), tenantProduct.getProduct()));
     }
 }

@@ -10,6 +10,7 @@ public final class ProductViews {
             String productCode,
             String name,
             String description,
+            String baseUrl,
             String status,
             String currentVersionId,
             String createdAt) {}

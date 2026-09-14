@@ -73,6 +73,7 @@ public class ProductsService {
         product.setProductCode(request.getProductCode());
         product.setName(request.getName());
         product.setDescription(request.getDescription());
+        product.setBaseUrl(request.getBaseUrl() != null ? request.getBaseUrl() : "https://" + request.getProductCode().toLowerCase() + ".com");
         product.setStatus(ProductStatus.DRAFT);
         product = products.save(product);
 
@@ -210,6 +211,7 @@ public class ProductsService {
                 product.getProductCode(),
                 product.getName(),
                 product.getDescription(),
+                product.getBaseUrl(),
                 product.getStatus().name(),
                 product.getCurrentVersion() == null ? null : product.getCurrentVersion().getId().toString(),
                 IsoTime.format(product.getCreatedAt()));

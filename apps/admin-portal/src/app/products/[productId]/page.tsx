@@ -81,6 +81,16 @@ export default function ProductDetailPage() {
           <div className="kv">
             <span className="k">Code</span>
             <span className="v mono">{p.productCode}</span>
+            <span className="k">Base URL</span>
+            <span className="v mono">
+              {p.baseUrl ? (
+                <a href={p.baseUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#0284c7', fontWeight: 600 }}>
+                  {p.baseUrl} ↗
+                </a>
+              ) : (
+                '—'
+              )}
+            </span>
             <span className="k">Created</span>
             <span className="v">{formatDate(p.createdAt)}</span>
           </div>

@@ -38,6 +38,9 @@ public class Product extends BaseTimestampedEntity {
     @Column(name = "description")
     private String description;
 
+    @Column(name = "base_url", length = 256)
+    private String baseUrl;
+
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "status", nullable = false)
     private ProductStatus status = ProductStatus.DRAFT;
@@ -76,6 +79,14 @@ public class Product extends BaseTimestampedEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getBaseUrl() {
+        return baseUrl;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = baseUrl;
     }
 
     public ProductStatus getStatus() {

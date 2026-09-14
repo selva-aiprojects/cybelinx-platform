@@ -203,11 +203,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
 
   // POST /products
   if (p === 'products') {
+    const prodCode = String(body.productCode || '').trim().toUpperCase();
     const newProd: ProductView = {
       productId: crypto.randomUUID(),
-      productCode: String(body.productCode || '').trim().toUpperCase(),
+      productCode: prodCode,
       name: String(body.name || '').trim(),
       description: body.description || null,
+      baseUrl: body.baseUrl || `https://${prodCode.toLowerCase()}.com`,
       status: 'DRAFT',
       currentVersionId: null,
       createdAt: new Date().toISOString(),
@@ -306,6 +308,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
           planCode: prod.planCode || 'STARTER',
           status: 'ACTIVE',
           activatedAt: new Date().toISOString(),
+          appUrl: `https://${newTenant.tenantCode}.${prod.productCode.toLowerCase()}.com`,
         });
       });
     }
@@ -342,13 +345,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
   // POST /tenants/:tenantId/products
   if (path.length === 3 && path[0] === 'tenants' && path[2] === 'products') {
     const tenantId = path[1];
+    const tenantObj = mockStore.tenants.find((t) => t.tenantId === tenantId);
+    const tenantCode = tenantObj?.tenantCode || 'app';
+    const prodCode = String(body.productCode || '');
     const newTP: TenantProductView = {
       tenantProductId: crypto.randomUUID(),
       tenantId,
-      productCode: String(body.productCode || ''),
+      productCode: prodCode,
       planCode: String(body.planCode || 'STARTER'),
       status: 'ACTIVE',
       activatedAt: new Date().toISOString(),
+      appUrl: `https://${tenantCode}.${prodCode.toLowerCase()}.com`,
     };
     if (!mockStore.tenantProducts[tenantId]) mockStore.tenantProducts[tenantId] = [];
     mockStore.tenantProducts[tenantId].push(newTP);
