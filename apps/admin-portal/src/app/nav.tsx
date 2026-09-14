@@ -35,18 +35,18 @@ export function AppNav() {
 
   return (
     <aside className="sidebar">
-      <div className="brand" style={{ background: '#0f172a', padding: '10px 12px', borderRadius: '10px', border: '1px solid #1e293b', boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' }}>
+      <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <Image
           src="/cybelinx-logo.png"
           alt="Cybelinx"
           width={573}
           height={160}
-          style={{ height: 32, width: 'auto' }}
+          style={{ height: 32, width: 'auto', filter: 'brightness(0)' }}
           priority
         />
         <div>
-          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#ffffff' }}>Admin Portal</div>
-          <div className="brand-readout" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Control Plane</div>
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Admin Portal</div>
+          <div className="brand-readout" style={{ color: '#64748b', fontSize: '0.75rem' }}>Control Plane</div>
         </div>
       </div>
 
