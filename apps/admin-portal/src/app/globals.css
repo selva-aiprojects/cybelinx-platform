@@ -101,48 +101,55 @@ pre,
   flex-direction: column;
   gap: 1.25rem;
   padding: 1.25rem 0.9rem;
-  border-right: 1px solid #1a2740;
-  background: #0e1a33;
-  color: #e0e7f2;
+  border-right: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.03);
 }
 
 .sidebar a {
-  color: #a3b5d1;
+  color: #475569;
 }
 
 .sidebar a:hover {
-  color: #ffffff;
+  color: #0284c7;
 }
 
 .sidebar .nav-link {
-  color: #a3b5d1;
+  color: #475569;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: all 0.15s ease;
 }
 
 .sidebar .nav-link:hover {
-  color: #ffffff;
-  background: rgba(132, 218, 254, 0.1);
+  color: #0284c7;
+  background: #f1f5f9;
 }
 
 .sidebar .nav-link.active {
-  color: #84dafe;
-  background: rgba(132, 218, 254, 0.14);
+  color: #0284c7;
+  background: #e0f2fe;
+  font-weight: 600;
 }
 
 .sidebar .brand-readout {
-  color: #667fa6;
+  color: #64748b;
 }
 
 .sidebar .brand {
-  color: #ffffff;
+  color: #0f172a;
 }
 
 .sidebar .brand > div > div:first-child {
-  color: #ffffff;
+  color: #0f172a;
 }
 
 .sidebar .sidebar-footer {
-  border-top-color: #1e3252;
-  color: #667fa6;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  padding-top: 1rem;
 }
 
 .brand {
