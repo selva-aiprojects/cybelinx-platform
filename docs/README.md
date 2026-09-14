@@ -8,5 +8,6 @@
 | [`architecture/`](./architecture/) | Architecture documentation |
 | [`api/`](./api/) | API reference and conventions |
 | [`adr/`](./adr/) | Architecture Decision Records |
+| [`OPERATOR-MANUAL.md`](./OPERATOR-MANUAL.md) | Simplified configuration guide (holistic view) |
 | [`../progress.md`](../progress.md) | Live implementation progress tracker |
 | [`../README.md`](../README.md) | Repository quick start |
