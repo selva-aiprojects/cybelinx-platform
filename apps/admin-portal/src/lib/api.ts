@@ -94,8 +94,8 @@ export function resolveApiBaseUrl(): string {
 }
 
 export function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return DEFAULT_DEV_TOKEN;
-  return window.localStorage.getItem(STORAGE_TOKEN_KEY) ?? DEFAULT_DEV_TOKEN;
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(STORAGE_TOKEN_KEY);
 }
 
 export async function fetchMintedToken(): Promise<string> {
@@ -125,7 +125,7 @@ const jsonHeaders = (): Record<string, string> => ({ 'Content-Type': 'applicatio
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, token, signal } = options;
   const headers = jsonHeaders();
-  const activeToken = token !== undefined ? token : getStoredToken();
+  const activeToken = token !== undefined ? token : (getStoredToken() ?? DEFAULT_DEV_TOKEN);
   if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
 
   let response: Response;
