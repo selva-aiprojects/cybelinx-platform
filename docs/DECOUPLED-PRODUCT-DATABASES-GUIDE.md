@@ -54,3 +54,28 @@ PRODUCT_DB_PASSWORD_JIOPLIX=<secure_password>
 2. **Connection Resolution (`TargetDatabaseConnectionResolver`)**: The worker resolves the dynamic `JdbcTemplate` for `storeai-db-prod.cybelinx.internal`.
 3. **Product DDL Template Loading**: The worker loads `/product-schemas/storeai_tenant_schema.sql`.
 4. **Remote DDL Execution**: Executes schema and table creation DDL directly against the remote StoreAI database server without touching the central control plane database.
+
+---
+
+## 4. Local & Vercel Testing Setup
+
+For rapid local testing and Vercel preview environments, target database connection strings are specified via `.env` or Vercel Environment Variables:
+
+1. **Local Development (`.env`)**:
+   Add product target database URLs to `.env`:
+   ```env
+   PRODUCT_DB_URL_STOREAI_PRODUCTION=jdbc:postgresql://localhost:5432/cybelinx_platform
+   PRODUCT_DB_URL_STOREAI_DEMO=jdbc:postgresql://localhost:5432/cybelinx_platform
+   PRODUCT_DB_USER_STOREAI=cybelinx
+   PRODUCT_DB_PASSWORD_STOREAI=cybelinx_dev_password
+   ```
+
+2. **Vercel Environment Variables**:
+   In Vercel Dashboard ➔ **Project Settings ➔ Environment Variables**:
+   * Key: `PRODUCT_DB_URL_STOREAI_PRODUCTION` | Value: `jdbc:postgresql://<your-cloud-db-host>:5432/storeai_prod`
+   * Key: `PRODUCT_DB_USER_STOREAI` | Value: `<cloud_user>`
+   * Key: `PRODUCT_DB_PASSWORD_STOREAI` | Value: `<cloud_password>`
+
+3. **Production Transition Path (Vault / Secrets Manager)**:
+   Once local and Vercel testing pass thoroughly, production deployment shifts credential resolution from `.env` to HashiCorp Vault URNs (`credential_reference = "vault://prod/products/storeai/db"`).
+
