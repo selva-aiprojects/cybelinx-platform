@@ -1,5 +1,6 @@
 package com.cybelinx.platform.api.persistence.entity;
 
+import com.cybelinx.platform.api.domain.ProductCategory;
 import com.cybelinx.platform.api.domain.ProductStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -40,6 +41,10 @@ public class Product extends BaseTimestampedEntity {
 
     @Column(name = "base_url", length = 256)
     private String baseUrl;
+
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "product_category", nullable = false)
+    private ProductCategory productCategory = ProductCategory.ENTERPRISE_OPERATIONS;
 
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "status", nullable = false)
@@ -87,6 +92,14 @@ public class Product extends BaseTimestampedEntity {
 
     public void setBaseUrl(String baseUrl) {
         this.baseUrl = baseUrl;
+    }
+
+    public ProductCategory getProductCategory() {
+        return productCategory;
+    }
+
+    public void setProductCategory(ProductCategory productCategory) {
+        this.productCategory = productCategory;
     }
 
     public ProductStatus getStatus() {

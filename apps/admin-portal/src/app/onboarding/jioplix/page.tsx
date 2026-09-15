@@ -6,7 +6,7 @@ import { Alert } from '@/components/ui';
 import { StatusBadge } from '@/components/badges';
 
 export default function JioplixOnboardingPage() {
-  const [tab, setTab] = useState<'single' | 'signup' | 'lookup'>('single');
+  const [tab, setTab] = useState<'single' | 'batch' | 'signup' | 'lookup'>('single');
 
   // Single Hospital Onboarding State
   const [externalId, setExternalId] = useState('JIOPLIX_NEXUS');
@@ -19,6 +19,21 @@ export default function JioplixOnboardingPage() {
   const [regionCode, setRegionCode] = useState('ap-south-1');
   const [country, setCountry] = useState('IN');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
+
+  // Batch 7 Hospitals State
+  const DEFAULT_BATCH_JSON = JSON.stringify({
+    tenants: [
+      { externalId: "NEXUS_HOSP_01", tenantCode: "JIOPLIX_HOSP_01", tenantName: "Apollo Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp1", domain: "https://hosp1.jioplix.com" },
+      { externalId: "NEXUS_HOSP_02", tenantCode: "JIOPLIX_HOSP_02", tenantName: "Max Healthcare", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp2", domain: "https://hosp2.jioplix.com" },
+      { externalId: "NEXUS_HOSP_03", tenantCode: "JIOPLIX_HOSP_03", tenantName: "Fortis Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp3", domain: "https://hosp3.jioplix.com" },
+      { externalId: "NEXUS_HOSP_04", tenantCode: "JIOPLIX_HOSP_04", tenantName: "Manipal Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp4", domain: "https://hosp4.jioplix.com" },
+      { externalId: "NEXUS_HOSP_05", tenantCode: "JIOPLIX_HOSP_05", tenantName: "Narayana Health", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp5", domain: "https://hosp5.jioplix.com" },
+      { externalId: "NEXUS_HOSP_06", tenantCode: "JIOPLIX_HOSP_06", tenantName: "Medanta Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp6", domain: "https://hosp6.jioplix.com" },
+      { externalId: "NEXUS_HOSP_07", tenantCode: "JIOPLIX_HOSP_07", tenantName: "Aster CMI Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp7", domain: "https://hosp7.jioplix.com" }
+    ]
+  }, null, 2);
+
+  const [batchJson, setBatchJson] = useState(DEFAULT_BATCH_JSON);
 
   // New SaaS Signup State
   const [signupCode, setSignupCode] = useState('');

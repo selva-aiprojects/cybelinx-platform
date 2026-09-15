@@ -33,6 +33,7 @@ export interface ProductView {
   description: string | null;
   baseUrl: string | null;
   status: ProductStatus;
+  productCategory?: 'REGULATED_MARKETS' | 'ENTERPRISE_OPERATIONS' | 'CORE_PAAS_AI';
   currentVersionId: string | null;
   createdAt: string;
 }
