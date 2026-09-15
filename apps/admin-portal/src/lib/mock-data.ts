@@ -24,6 +24,17 @@ export interface MockStore {
 
 const INITIAL_PRODUCTS: ProductView[] = [
   {
+    productId: '00000000-0000-0000-0000-000000000070',
+    productCode: 'CYBEHEALTH',
+    name: 'CybeHealth & Pharma',
+    description: 'Clinical EMR, FHIR Interoperability & ABDM Level 2 Certified Healthcare Platform',
+    baseUrl: 'https://cybelinx.com/products/cybehealth',
+    productCategory: 'REGULATED_MARKETS',
+    status: 'ACTIVE',
+    currentVersionId: '00000000-0000-0000-0000-000000000071',
+    createdAt: '2026-09-15T00:00:00Z',
+  },
+  {
     productId: '00000000-0000-0000-0000-000000000010',
     productCode: 'JIOPLIX',
     name: 'Jioplix Core',
