@@ -125,6 +125,16 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
             Sign Out
           </button>
         </div>
+
+        <div style={{ marginTop: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <a href="/onboarding/storeai" className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff', textDecoration: 'none' }}>
+            ⚡ Go to StoreAI Merchant Dashboard
+          </a>
+          <a href="/tenants" className="btn btn-ghost btn-sm">
+            View Tenant Subscriptions
+          </a>
+        </div>
+
         {msg && (
           <div style={{ marginTop: '0.8rem' }}>
             <Alert kind={msg.kind}>{msg.text}</Alert>
