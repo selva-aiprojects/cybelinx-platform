@@ -22,6 +22,8 @@ services:
         value: "3001"
 
       # ── Aiven PostgreSQL ──────────────────────────────────────────
+      - key: DATABASE_URL
+        sync: false   # Optional: standard postgres:// URL
       - key: SPRING_DATASOURCE_URL
         value: "jdbc:postgresql://pg-jioclinic-aiservices-selva.f.aivencloud.com:19168/cybelinx-platform?sslmode=require"
       - key: SPRING_DATASOURCE_USERNAME

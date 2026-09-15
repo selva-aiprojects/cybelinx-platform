@@ -39,10 +39,12 @@ public class CommonEnvironmentPostProcessor implements EnvironmentPostProcessor 
         Map<String, Object> derived = new HashMap<>();
 
         String databaseUrl = environment.getProperty("DATABASE_URL");
-        if (!StringUtils.hasText(databaseUrl)) {
-            databaseUrl = DEFAULT_DATABASE_URL;
+        if (StringUtils.hasText(databaseUrl)) {
+            applyDatabaseUrl(databaseUrl, derived);
+        } else if (!environment.containsProperty("spring.datasource.url")
+                && !StringUtils.hasText(environment.getProperty("SPRING_DATASOURCE_URL"))) {
+            applyDatabaseUrl(DEFAULT_DATABASE_URL, derived);
         }
-        applyDatabaseUrl(databaseUrl, derived);
 
         String logLevel = environment.getProperty("LOG_LEVEL");
         if (StringUtils.hasText(logLevel)) {
