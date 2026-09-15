@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.cybelinx.platform.worker.outbox.OutboxEvent;
 import com.cybelinx.platform.worker.outbox.WorkerProperties;
@@ -17,15 +18,19 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class StoreAiTenantSchemaProvisionerProcessorTest {
 
     private WorkerProperties properties;
-    private JdbcTemplate jdbcTemplate;
+    private JdbcTemplate targetJdbcTemplate;
+    private TargetDatabaseConnectionResolver connectionResolver;
     private StoreAiTenantSchemaProvisionerProcessor processor;
 
     @BeforeEach
     void setUp() {
         properties = new WorkerProperties();
         properties.setConsumerName("test-worker-consumer");
-        jdbcTemplate = Mockito.mock(JdbcTemplate.class);
-        processor = new StoreAiTenantSchemaProvisionerProcessor(properties, jdbcTemplate);
+        targetJdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        connectionResolver = Mockito.mock(TargetDatabaseConnectionResolver.class);
+        when(connectionResolver.resolveTargetJdbcTemplate(anyString(), anyString(), Mockito.nullable(String.class)))
+                .thenReturn(targetJdbcTemplate);
+        processor = new StoreAiTenantSchemaProvisionerProcessor(properties, connectionResolver);
     }
 
     @Test
@@ -49,6 +54,6 @@ class StoreAiTenantSchemaProvisionerProcessorTest {
 
         processor.process(event);
 
-        verify(jdbcTemplate, atLeastOnce()).execute(anyString());
+        verify(targetJdbcTemplate, atLeastOnce()).execute(anyString());
     }
 }

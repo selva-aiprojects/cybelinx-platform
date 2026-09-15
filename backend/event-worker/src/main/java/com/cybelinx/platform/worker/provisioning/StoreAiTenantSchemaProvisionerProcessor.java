@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Dynamic PostgreSQL Schema-per-Tenant provisioner for StoreAI Composable Commerce.
- * Derived directly from the StoreAI product repository DDL schema script template
- * (`/product-schemas/storeai_tenant_schema.sql`).
+ * Executes target database DDL against the decoupled StoreAI Product Database server instance
+ * via {@link TargetDatabaseConnectionResolver}.
  */
 @Component
 public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
@@ -23,11 +23,13 @@ public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
     private static final Logger LOG = LoggerFactory.getLogger(StoreAiTenantSchemaProvisionerProcessor.class);
 
     private final WorkerProperties properties;
-    private final JdbcTemplate jdbcTemplate;
+    private final TargetDatabaseConnectionResolver connectionResolver;
 
-    public StoreAiTenantSchemaProvisionerProcessor(WorkerProperties properties, JdbcTemplate jdbcTemplate) {
+    public StoreAiTenantSchemaProvisionerProcessor(
+            WorkerProperties properties,
+            TargetDatabaseConnectionResolver connectionResolver) {
         this.properties = properties;
-        this.jdbcTemplate = jdbcTemplate;
+        this.connectionResolver = connectionResolver;
     }
 
     @Override
@@ -55,27 +57,32 @@ public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
         }
 
         String tenantCode = (String) payload.getOrDefault("tenantCode", "STORE_MERCHANT");
+        String environment = (String) payload.getOrDefault("environment", "PRODUCTION");
+        String customJdbcUrl = (String) payload.get("jdbcUrl");
         String schemaName = (String) payload.getOrDefault("schemaResourceName",
                 "tenant_" + tenantCode.toLowerCase().replaceAll("[^a-z0-9_]", "_") + "_storeai");
 
-        LOG.info("Provisioning StoreAI tenant target database schema: {} for tenant {}", schemaName, event.getTenantId());
+        LOG.info("Provisioning StoreAI tenant target database schema: {} on remote product server [{}]", schemaName, environment);
 
         try {
-            // 1. Load the product repository DDL template script
+            // 1. Resolve remote target database connection for StoreAI product server
+            JdbcTemplate targetJdbcTemplate = connectionResolver.resolveTargetJdbcTemplate("STOREAI", environment, customJdbcUrl);
+
+            // 2. Load the product repository DDL template script
             String ddlTemplate = loadProductDdlTemplate("storeai");
 
-            // 2. Substitute `${tenant_schema}` placeholder with the target tenant schema name
+            // 3. Substitute `${tenant_schema}` placeholder with the target tenant schema name
             String renderedDdl = ddlTemplate.replace("${tenant_schema}", schemaName);
 
-            // 3. Execute rendered DDL statements against target PostgreSQL database
+            // 4. Execute rendered DDL statements remotely on the product database server
             for (String statement : renderedDdl.split(";")) {
                 String sql = statement.trim();
                 if (!sql.isEmpty()) {
-                    jdbcTemplate.execute(sql);
+                    targetJdbcTemplate.execute(sql);
                 }
             }
 
-            LOG.info("Successfully provisioned isolated target DDL schema: {} derived from StoreAI product repository", schemaName);
+            LOG.info("Successfully provisioned isolated target DDL schema: {} on remote StoreAI database server", schemaName);
         } catch (Exception e) {
             LOG.error("Failed to provision StoreAI tenant schema: {}", schemaName, e);
             throw new RuntimeException("StoreAI schema provisioning failed", e);
