@@ -33,6 +33,9 @@ public class Product extends BaseTimestampedEntity {
     @Column(name = "product_code", nullable = false, unique = true, length = 64)
     private String productCode;
 
+    @Column(name = "portfolio_code", length = 64)
+    private String portfolioCode;
+
     @Column(name = "name", nullable = false, length = 200)
     private String name;
 
@@ -68,6 +71,14 @@ public class Product extends BaseTimestampedEntity {
 
     public void setProductCode(String productCode) {
         this.productCode = productCode;
+    }
+
+    public String getPortfolioCode() {
+        return portfolioCode;
+    }
+
+    public void setPortfolioCode(String portfolioCode) {
+        this.portfolioCode = portfolioCode;
     }
 
     public String getName() {

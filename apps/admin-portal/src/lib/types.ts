@@ -29,6 +29,7 @@ export type ProvisioningOperation = 'PROVISION' | 'DEPROVISION' | 'MIGRATE';
 export interface ProductView {
   productId: string;
   productCode: string;
+  portfolioCode?: string | null;
   name: string;
   description: string | null;
   baseUrl: string | null;
