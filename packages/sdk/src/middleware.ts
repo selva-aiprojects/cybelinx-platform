@@ -39,6 +39,21 @@ export function createCybelinxMiddleware(config: CybelinxSdkConfig) {
       // Merge header overrides if provided by Edge Gateway
       if (tenantHeader && typeof tenantHeader === 'string') claims.tenant_id = tenantHeader;
       if (tenantCodeHeader && typeof tenantCodeHeader === 'string') claims.tenant_code = tenantCodeHeader;
+
+      // Extract tenant code from Host header subdomain if not already set
+      if (!claims.tenant_code && req.headers && req.headers.host) {
+        const host = req.headers.host.split(':')[0]; // strip port
+        const parts = host.split('.');
+        // e.g. omega-inc.storeai.cybelinx.com (4 parts) or omega-inc.cybelinx.com (3 parts)
+        if (parts.length >= 3) {
+          const subdomain = parts[0].toLowerCase();
+          const reservedSubdomains = ['www', 'app', 'api', 'admin', 'storeai', 'jioplix', 'cybehealth', 'lims', 'localhost'];
+          if (!reservedSubdomains.includes(subdomain)) {
+            claims.tenant_code = subdomain;
+          }
+        }
+      }
+
       claims.product_code = claims.product_code || config.productCode;
 
       if (!claims.tenant_id && !claims.tenant_code) {

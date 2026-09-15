@@ -33,4 +33,26 @@ describe('Cybelinx SDK Tenant Context & Schema Resolution', () => {
     expect(ctx.hasRole('TENANT_ADMIN')).toBe(true);
     expect(ctx.hasRole('PLATFORM_ADMIN')).toBe(false);
   });
+
+  it('should extract tenant code from Host header subdomain in middleware', () => {
+    const { createCybelinxMiddleware } = require('../src');
+    const middleware = createCybelinxMiddleware({ productCode: 'STOREAI', allowAnonymous: false });
+
+    const req: any = {
+      headers: {
+        host: 'omega-inc.storeai.cybelinx.com',
+      },
+    };
+    const res: any = {};
+    let nextCalled = false;
+
+    middleware(req, res, () => {
+      nextCalled = true;
+    });
+
+    expect(nextCalled).toBe(true);
+    expect(req.cybelinxContext).toBeDefined();
+    expect(req.cybelinxContext.tenantCode).toBe('OMEGA-INC');
+    expect(req.cybelinxContext.schemaName).toBe('tenant_omega_inc_storeai');
+  });
 });
