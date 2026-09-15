@@ -30,10 +30,10 @@ export default function DashboardPage() {
       const host = window.location.hostname.toLowerCase();
       // If hitting a storeai tenant subdomain (e.g. nike.storeai.cybelinx.com, adidas.storeai.cybelinx.com)
       if (host.includes('.storeai.') || host.startsWith('storeai.')) {
-        if (!window.localStorage.getItem('cybelinx_api_token')) {
-          window.localStorage.setItem('cybelinx_api_token', DEFAULT_DEV_TOKEN);
-        }
-        router.replace('/onboarding/storeai');
+        let tenantParam = 'nike';
+        if (host.includes('adidas')) tenantParam = 'adidas';
+        else if (host.includes('puma')) tenantParam = 'puma';
+        router.replace(`/storeai/merchant?tenant=${tenantParam}`);
       }
     }
   }, [router]);

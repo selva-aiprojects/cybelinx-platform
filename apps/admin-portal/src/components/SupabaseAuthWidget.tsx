@@ -127,8 +127,8 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
         </div>
 
         <div style={{ marginTop: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <a href="/onboarding/storeai" className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff', textDecoration: 'none' }}>
-            ⚡ Go to StoreAI Merchant Dashboard
+          <a href="/storeai/merchant?tenant=nike" className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff', textDecoration: 'none' }}>
+            ⚡ Go to Nike Merchant Dashboard
           </a>
           <a href="/tenants" className="btn btn-ghost btn-sm">
             View Tenant Subscriptions

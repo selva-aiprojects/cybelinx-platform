@@ -11,8 +11,9 @@ const NAV_SECTIONS = [
     links: [
       { href: '/tenants', label: 'Tenants', icon: '▤' },
       { href: '/products', label: 'Products', icon: '▣' },
+      { href: '/storeai/merchant?tenant=nike', label: 'Nike Store Dashboard', icon: '⚡' },
       { href: '/onboarding/jioplix', label: 'Jioplix HMS Onboarding', icon: '🏥' },
-      { href: '/onboarding/storeai', label: 'StoreAI Commerce', icon: '🛍️' },
+      { href: '/onboarding/storeai', label: 'StoreAI Provisioning', icon: '🛍️' },
     ],
   },
   {
