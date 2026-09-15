@@ -5,13 +5,14 @@
   "description": "Cybelinx Central SaaS Platform - control plane for tenant, identity, RBAC, entitlement, resource, provisioning and event plumbing",
   "workspaces": [
     "apps/admin-portal",
-    "packages/shared"
+    "packages/shared",
+    "packages/sdk"
   ],
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
-    "build:packages": "npm run build --workspace @cybelinx/shared",
+    "build:packages": "npm run build --workspace @cybelinx/shared && npm run build --workspace @cybelinx/sdk",
     "build:apps": "npm run build --workspace @cybelinx/admin-portal",
     "build": "npm run build:packages && npm run build:apps",
     "lint": "npm run lint --workspaces --if-present",
