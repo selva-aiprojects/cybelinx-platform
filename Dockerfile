@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1
+
+# ──────────────────────────────────────────────────────────────────────
+# Multi-stage build for the Control Plane API (Java 21 / Spring Boot)
+# Build context: repo root  (render.yaml sets dockerContext: .)
+# ──────────────────────────────────────────────────────────────────────
+
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /build
+RUN apk add --no-cache libc6-compat
+
+# Copy Maven wrapper next to the root pom so they stay co-located
+COPY backend/.mvn .mvn
+COPY backend/mvnw .
+RUN chmod +x mvnw
+
+# Copy all POMs first for dependency layer caching
+COPY backend/pom.xml .
+COPY backend/cybelinx-shared/pom.xml cybelinx-shared/pom.xml
+COPY backend/central-api/pom.xml central-api/pom.xml
+RUN ./mvnw -pl central-api -am -DskipTests dependency:go-offline -q
+
+# Copy source and build the fat JAR
+COPY backend/cybelinx-shared cybelinx-shared
+COPY backend/central-api central-api
+RUN ./mvnw -pl central-api -am -DskipTests package -q
+
+# ── Runtime image ──────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine AS runner
+WORKDIR /app
+RUN addgroup -S cybelinx && adduser -S cybelinx -G cybelinx
+
+COPY --from=builder /build/central-api/target/*.jar app.jar
+
+ENV JAVA_OPTS="-Xms128m -Xmx384m -XX:+UseContainerSupport"
+ENV API_PORT=3001
+
+USER cybelinx
+EXPOSE 3001
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar --server.port=${PORT:-${API_PORT:-3001}}"]

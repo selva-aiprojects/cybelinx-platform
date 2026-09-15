@@ -10,7 +10,7 @@ services:
   - type: web
     name: cybelinx-central-api
     runtime: docker
-    dockerfilePath: ./infra/docker/Dockerfile.central-api
+    dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
     region: oregon
