@@ -37,7 +37,13 @@ export function AppNav() {
 
   return (
     <aside className="sidebar">
-      <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <a 
+        href="https://cybelinx.com" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="brand" 
+        style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}
+      >
         <Image
           src="/cybelinx-logo.png"
           alt="Cybelinx"
@@ -50,7 +56,7 @@ export function AppNav() {
           <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>Admin Portal</div>
           <div className="brand-readout" style={{ color: '#64748b', fontSize: '0.75rem' }}>Control Plane</div>
         </div>
-      </div>
+      </a>
 
       <nav className="nav">
         <Link href="/" className={`nav-link${isActive('/') && pathname === '/' ? ' active' : ''}`}>
