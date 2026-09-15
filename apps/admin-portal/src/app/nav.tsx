@@ -49,7 +49,7 @@ export function AppNav() {
           alt="Cybelinx"
           width={573}
           height={160}
-          style={{ height: 32, width: 'auto', filter: 'brightness(0)' }}
+          style={{ height: 32, width: 'auto' }}
           priority
         />
         <div>
