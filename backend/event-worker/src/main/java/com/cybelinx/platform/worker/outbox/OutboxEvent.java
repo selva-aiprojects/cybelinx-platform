@@ -78,6 +78,10 @@ public class OutboxEvent extends BaseTimestampedEntity {
         return id;
     }
 
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
     public String getEventType() {
         return eventType;
     }

@@ -8,6 +8,7 @@ import {
   DEFAULT_API_BASE_URL,
 } from '@/lib/api';
 import { Alert } from '@/components/ui';
+import { SupabaseAuthWidget } from '@/components/SupabaseAuthWidget';
 
 const KNOWN_SERVICES: Array<[string, string]> = [
   ['Control plane API', `${DEFAULT_API_BASE_URL}/health`],
@@ -115,6 +116,8 @@ export default function SettingsPage() {
           </button>
         </div>
       </section>
+
+      <SupabaseAuthWidget onTokenChange={(t) => setToken(t ?? '')} />
 
       <section className="card card-pad">
         <h2 className="card-title" style={{ marginTop: 0 }}>

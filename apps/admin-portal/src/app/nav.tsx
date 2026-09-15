@@ -11,6 +11,7 @@ const NAV_SECTIONS = [
     links: [
       { href: '/tenants', label: 'Tenants', icon: '▤' },
       { href: '/products', label: 'Products', icon: '▣' },
+      { href: '/onboarding/jioplix', label: 'Jioplix HMS Onboarding', icon: '🏥' },
     ],
   },
   {

@@ -13,4 +13,10 @@ public interface TenantExternalIdentifierRepository
 
     boolean existsByTenant_IdAndProduct_IdAndExternalId(
             UUID tenantId, UUID productId, String externalId);
+
+    java.util.Optional<TenantExternalIdentifier> findByProviderAndExternalId(
+            String provider, String externalId);
+
+    java.util.Optional<TenantExternalIdentifier> findByProduct_IdAndProviderAndExternalId(
+            UUID productId, String provider, String externalId);
 }

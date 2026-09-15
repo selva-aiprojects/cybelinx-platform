@@ -35,11 +35,11 @@ springdoc:
 
 cybelinx:
   idp:
-    provider: ${IDP_PROVIDER:generic}
-    issuer: ${IDP_ISSUER:}
-    audience: ${IDP_AUDIENCE:}
+    provider: ${IDP_PROVIDER:supabase}
+    issuer: ${IDP_ISSUER:${SUPABASE_URL:}/auth/v1}
+    audience: ${IDP_AUDIENCE:authenticated}
     jwt-secret: ${IDP_JWT_SECRET:}
-    jwks-uri: ${IDP_JWKS_URI:}
+    jwks-uri: ${IDP_JWKS_URI:${SUPABASE_JWKS_URL:}}
     jwt-clock-skew-seconds: ${IDP_JWT_CLOCK_SKEW_SECONDS:0}
 
 management:

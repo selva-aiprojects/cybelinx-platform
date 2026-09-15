@@ -229,3 +229,22 @@ Swagger UI: `GET /api/v1/docs`.
 5. **Schema changes go through Flyway migrations only** (Hibernate runs `ddl-auto: validate`).
 6. Missing rows after a fresh setup? Migration `V6` seeds reference data **idempotently** —
    existing rows are never duplicated.
+
+---
+
+## 8. Jioplix Hospital Management System (https://jioplix.com) SaaS Onboarding
+
+The Cybelinx platform provides formal REST onboarding APIs for migrating existing standalone **Jioplix** hospital/clinic customers and registering new multi-tenant SaaS subscriptions:
+
+### REST Endpoints (`/api/v1/onboarding/jioplix`)
+
+| Method | Path | Permission | Description |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/onboarding/jioplix/single` | `tenant:write` | Onboard an existing Jioplix hospital customer (maps legacy external ID `JIOPLIX_NEXUS`, creates tenant, attaches plan, registers isolated database/schema resource). |
+| `POST` | `/api/v1/onboarding/jioplix/batch` | `tenant:write` | Bulk onboard a list of existing Jioplix hospital customers in a single request. |
+| `POST` | `/api/v1/onboarding/jioplix/signup` | `tenant:write` | Self-service signup for a new multi-tenant Jioplix SaaS customer. |
+| `GET` | `/api/v1/onboarding/jioplix/tenants/{externalId}` | `tenant:read` | Query multi-tenant SaaS onboarding and resource status by Jioplix external ID. |
+
+### Operational Steps for Customer Migration
+1. Issue a `POST /api/v1/onboarding/jioplix/single` payload with legacy `externalId` (e.g. `jio-hosp-101`), `tenantName`, `tenantCode`, `planCode` (default `JIOPLIX_ENTERPRISE`), and optional hospital admin email.
+2. The control plane idempotently creates/links the canonical tenant, attaches active subscription, registers `POSTGRES_SCHEMA` resources, assigns `TENANT_ADMIN` role, and emits `TENANT_CREATED` and `PRODUCT_ENABLED` outbox events.

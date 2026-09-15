@@ -7,4 +7,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /** Spring Data repository for {@code audit_events} — write and read paths. */
 public interface AuditEventRepository
-        extends JpaRepository<AuditEvent, UUID>, JpaSpecificationExecutor<AuditEvent> {}
+        extends JpaRepository<AuditEvent, UUID>, JpaSpecificationExecutor<AuditEvent> {
+
+    java.util.List<AuditEvent> findByTenant_Id(UUID tenantId);
+}

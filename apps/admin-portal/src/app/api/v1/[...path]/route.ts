@@ -190,6 +190,44 @@ export async function GET(req: NextRequest, context: { params: Promise<{ path: s
     return json({ data: mockStore.tenantResources[path[1]] || [] });
   }
 
+  // GET /onboarding/jioplix/tenants/:externalId
+  if (path.length === 4 && path[0] === 'onboarding' && path[1] === 'jioplix' && path[2] === 'tenants') {
+    const extId = path[3];
+    return json({
+      status: 'SUCCESS',
+      providerCode: 'JIOPLIX_NEXUS',
+      externalId: extId,
+      tenantId: 'd0a1b2c3-4444-5555-6666-777788889999',
+      tenantCode: 'JIOPLIX_APOLLO_01',
+      schemaResourceName: 'tenant_jioplix_apollo_01_jioplix',
+      productCode: 'JIOPLIX',
+      planCode: 'HEALTHCARE_TIER',
+      domain: 'https://jioplix.com',
+      provisionedAt: new Date().toISOString(),
+    });
+  }
+
+  // GET /iam/providers
+  if (p === 'iam/providers') {
+    return json({
+      data: [
+        { provider: 'supabase', name: 'Supabase Auth (OIDC)', freeTier: '50,000 Free MAU', jwksUrl: 'https://uvddwyfcqdxuvssunuby.supabase.co/auth/v1/.well-known/jwks.json' },
+        { provider: 'keycloak', name: 'Keycloak OIDC / SAML', freeTier: 'Self-Hosted Docker', jwksUrl: null },
+        { provider: 'auth0', name: 'Auth0', freeTier: '7,500 Free MAU', jwksUrl: null },
+      ],
+    });
+  }
+
+  // GET /broker/status
+  if (p === 'broker/status') {
+    return json({
+      status: 'UP',
+      brokerMode: 'IN_MEMORY',
+      activeTopics: ['cybelinx.events.TENANT_CREATED', 'cybelinx.events.SUBSCRIPTION_ATTACHED'],
+      publishedCount: 42,
+    });
+  }
+
   return error(`Not found: /${p}`, 404, 'NOT_FOUND');
 }
 
@@ -378,6 +416,91 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
     if (!mockStore.tenantResources[tenantId]) mockStore.tenantResources[tenantId] = [];
     mockStore.tenantResources[tenantId].push(newTR);
     return json(newTR, 201);
+  }
+
+  // POST /onboarding/jioplix/single
+  if (p === 'onboarding/jioplix/single') {
+    const tenantId = crypto.randomUUID();
+    const extId = String(body.externalId || 'JIOPLIX_NEXUS');
+    const tenantCode = String(body.tenantCode || 'JIOPLIX_HOSPITAL').toUpperCase();
+    const name = String(body.name || 'Jioplix Healthcare Hospital');
+    const prodCode = 'JIOPLIX';
+    const planCode = String(body.planCode || 'HEALTHCARE_TIER');
+
+    const newTenant: TenantView = {
+      tenantId,
+      tenantCode,
+      name,
+      status: 'ACTIVE',
+      regionCode: body.regionCode || 'ap-south-1',
+      country: body.country || 'IN',
+      timezone: body.timezone || 'Asia/Kolkata',
+      createdAt: new Date().toISOString(),
+    };
+    mockStore.tenants.unshift(newTenant);
+    mockStore.tenantProducts[tenantId] = [{
+      tenantProductId: crypto.randomUUID(),
+      tenantId,
+      productCode: prodCode,
+      planCode,
+      status: 'ACTIVE',
+      activatedAt: new Date().toISOString(),
+      appUrl: `https://${tenantCode.toLowerCase()}.jioplix.com`,
+    }];
+    mockStore.tenantResources[tenantId] = [{
+      tenantResourceId: crypto.randomUUID(),
+      tenantId,
+      productCode: prodCode,
+      resourceTypeCode: 'POSTGRES_SCHEMA',
+      isolationMode: 'SCHEMA_PER_TENANT',
+      environment: 'PRODUCTION',
+      status: 'ACTIVE',
+      provisioningState: 'SUCCEEDED',
+    }];
+
+    return json({
+      status: 'SUCCESS',
+      providerCode: 'JIOPLIX_NEXUS',
+      externalId: extId,
+      tenantId,
+      tenantCode,
+      schemaResourceName: `tenant_${tenantCode.toLowerCase()}_jioplix`,
+      productCode: prodCode,
+      planCode,
+      domain: body.domain || 'https://jioplix.com',
+      provisionedAt: new Date().toISOString(),
+      eventsFired: ['TENANT_CREATED', 'TENANT_EXTERNAL_ID_REGISTERED', 'TENANT_PRODUCT_ATTACHED', 'RESOURCE_PROVISIONED'],
+    }, 201);
+  }
+
+  // POST /onboarding/jioplix/signup
+  if (p === 'onboarding/jioplix/signup') {
+    const tenantId = crypto.randomUUID();
+    const hospitalCode = String(body.hospitalCode || 'HOSPITAL').toUpperCase();
+    const name = String(body.hospitalName || 'New SaaS Hospital');
+
+    const newTenant: TenantView = {
+      tenantId,
+      tenantCode: hospitalCode,
+      name,
+      status: 'ACTIVE',
+      regionCode: body.regionCode || 'ap-south-1',
+      country: body.country || 'IN',
+      timezone: 'UTC',
+      createdAt: new Date().toISOString(),
+    };
+    mockStore.tenants.unshift(newTenant);
+
+    return json({
+      status: 'SUCCESS',
+      tenantId,
+      tenantCode: hospitalCode,
+      hospitalName: name,
+      adminEmail: body.adminEmail,
+      planCode: body.planCode || 'HEALTHCARE_TIER',
+      appUrl: `https://${hospitalCode.toLowerCase()}.jioplix.com`,
+      createdAt: new Date().toISOString(),
+    }, 201);
   }
 
   return error(`Action not supported: /${p}`, 400);
