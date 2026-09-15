@@ -1,4 +1,4 @@
-﻿# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1
 
 # ──────────────────────────────────────────────────────────────────────
 # Multi-stage build for the Control Plane API (Java 21 / Spring Boot)
@@ -37,4 +37,4 @@ ENV API_PORT=3001
 
 USER cybelinx
 EXPOSE 3001
-ENTRYPOINT ["sh", "-c", "java \ -jar app.jar --server.port=\"]
+ENTRYPOINT ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar --server.port=${PORT:-${API_PORT:-3001}}"]
