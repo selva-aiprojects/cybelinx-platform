@@ -14,7 +14,7 @@ export interface TenantContext {
 export const STOREAI_TENANTS: Record<string, TenantContext> = {
   STOREAI_NIKE_01: {
     tenantCode: 'STOREAI_NIKE_01',
-    tenantId: '00000000-0000-0000-0000-000000000t11',
+    tenantId: '00000000-0000-0000-0000-000000000c11',
     name: 'Nike Flagship Store',
     storeDomain: 'https://nike.storeai.cybelinx.com',
     externalId: 'STOREAI_NEXUS_RETAIL_01',
@@ -24,7 +24,7 @@ export const STOREAI_TENANTS: Record<string, TenantContext> = {
   },
   STOREAI_ADIDAS_01: {
     tenantCode: 'STOREAI_ADIDAS_01',
-    tenantId: '00000000-0000-0000-0000-000000000t12',
+    tenantId: '00000000-0000-0000-0000-000000000c12',
     name: 'Adidas Sportswear Store',
     storeDomain: 'https://adidas.storeai.cybelinx.com',
     externalId: 'STOREAI_NEXUS_02',
@@ -34,7 +34,7 @@ export const STOREAI_TENANTS: Record<string, TenantContext> = {
   },
   STORE_PUMA_01: {
     tenantCode: 'STORE_PUMA_01',
-    tenantId: '00000000-0000-0000-0000-000000000t13',
+    tenantId: '00000000-0000-0000-0000-000000000c13',
     name: 'Puma Retail Store',
     storeDomain: 'https://puma.storeai.cybelinx.com',
     externalId: 'STOREAI_NEXUS_03',

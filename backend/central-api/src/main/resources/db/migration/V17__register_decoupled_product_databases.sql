@@ -49,7 +49,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.databases WHERE name = 'jioplix_productio
 UPDATE public.tenant_resources
 SET database_id = (SELECT id FROM public.databases WHERE name = 'storeai_demo_db_server')
 WHERE product_id = (SELECT id FROM public.products WHERE product_code = 'STOREAI')
-  AND environment = 'DEMO';
+  AND environment = 'DEVELOPMENT';
 
 UPDATE public.tenant_resources
 SET database_id = (SELECT id FROM public.databases WHERE name = 'storeai_production_db_server')
