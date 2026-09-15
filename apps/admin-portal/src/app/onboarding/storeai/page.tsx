@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { resolveApiBaseUrl, getStoredToken } from '@/lib/api';
 import { Alert } from '@/components/ui';
 import { StatusBadge } from '@/components/badges';
@@ -17,6 +17,37 @@ export default function StoreAiOnboardingPage() {
   const [adminUserId, setAdminUserId] = useState('seed-dev-admin-0001');
   const [planCode, setPlanCode] = useState('STOREAI_ENTERPRISE');
   const [schemaName, setSchemaName] = useState('storeai_nike_01');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname.toLowerCase();
+      if (host.includes('adidas')) {
+        setTenantCode('STOREAI_ADIDAS_01');
+        setStoreName('Adidas Sportswear Store');
+        setExternalId('STOREAI_NEXUS_02');
+        setStoreDomain('https://adidas.storeai.cybelinx.com');
+        setMerchantEmail('merchant@adidas.com');
+        setSchemaName('storeai_adidas_db');
+        setLookupId('STOREAI_NEXUS_02');
+      } else if (host.includes('puma')) {
+        setTenantCode('STORE_PUMA_01');
+        setStoreName('Puma Retail Store');
+        setExternalId('STOREAI_NEXUS_03');
+        setStoreDomain('https://puma.storeai.cybelinx.com');
+        setMerchantEmail('merchant@puma.com');
+        setSchemaName('storeai_puma_db');
+        setLookupId('STOREAI_NEXUS_03');
+      } else if (host.includes('nike')) {
+        setTenantCode('STOREAI_NIKE_01');
+        setStoreName('Nike Flagship Store');
+        setExternalId('STOREAI_NEXUS_RETAIL_01');
+        setStoreDomain('https://nike.storeai.cybelinx.com');
+        setMerchantEmail('merchant@nike.com');
+        setSchemaName('storeai_nike_01');
+        setLookupId('STOREAI_NEXUS_RETAIL_01');
+      }
+    }
+  }, []);
 
   // Batch Merchants State
   const DEFAULT_BATCH_JSON = JSON.stringify({

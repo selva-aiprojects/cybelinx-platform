@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { api, resolveApiBaseUrl, getStoredToken } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { api, resolveApiBaseUrl, getStoredToken, DEFAULT_DEV_TOKEN } from '@/lib/api';
 import { useAsyncData, ErrorBanner, LoadingBlock, Empty } from '@/components/ui';
 import { StatusBadge, formatDate } from '@/components/badges';
 
@@ -17,10 +19,24 @@ function useApiHealth() {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const token = getStoredToken();
   const health = useApiHealth();
   const products = useAsyncData(() => api.products.list({ limit: 5 }), []);
   const tenants = useAsyncData(() => api.tenants.list({ limit: 5 }), []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname.toLowerCase();
+      // If hitting a storeai tenant subdomain (e.g. nike.storeai.cybelinx.com, adidas.storeai.cybelinx.com)
+      if (host.includes('.storeai.') || host.startsWith('storeai.')) {
+        if (!window.localStorage.getItem('cybelinx_api_token')) {
+          window.localStorage.setItem('cybelinx_api_token', DEFAULT_DEV_TOKEN);
+        }
+        router.replace('/onboarding/storeai');
+      }
+    }
+  }, [router]);
 
   const productTotal = products.data?.meta.total;
   const tenantTotal = tenants.data?.meta.total;
