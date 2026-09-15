@@ -1,4 +1,4 @@
-﻿# =====================================================================
+# =====================================================================
 # Render Blueprint — Cybelinx Platform
 # https://render.com/docs/blueprint-spec
 # =====================================================================
@@ -21,32 +21,32 @@ services:
       - key: API_PORT
         value: "3001"
 
-      # PostgreSQL (set manually in Render dashboard)
+      # ── Aiven PostgreSQL ──────────────────────────────────────────
       - key: SPRING_DATASOURCE_URL
-        sync: false
+        value: "jdbc:postgresql://pg-jioclinic-aiservices-selva.f.aivencloud.com:19168/cybelinx-platform?sslmode=require"
       - key: SPRING_DATASOURCE_USERNAME
-        sync: false
+        value: avnadmin
       - key: SPRING_DATASOURCE_PASSWORD
-        sync: false
+        sync: false   # Set in Render dashboard (Aiven DB password)
 
-      # CORS - allow Vercel frontend
+      # ── CORS (allow Vercel + local dev) ───────────────────────────
       - key: CORS_ORIGINS
         value: "https://cybelinx-platform.vercel.app,http://localhost:3000"
 
-      # Identity Provider (Supabase JWT)
+      # ── Identity Provider (Supabase JWT) ──────────────────────────
       - key: IDP_PROVIDER
         value: supabase
       - key: IDP_ISSUER
-        sync: false
+        value: "https://uvddwyfcqdxuvssunuby.supabase.co/auth/v1"
       - key: IDP_AUDIENCE
         value: authenticated
       - key: IDP_JWKS_URI
-        sync: false
+        value: "https://uvddwyfcqdxuvssunuby.supabase.co/auth/v1/.well-known/jwks.json"
       - key: IDP_JWT_SECRET
-        sync: false
+        sync: false   # Set in Render dashboard (Supabase JWT secret)
       - key: IDP_JWT_CLOCK_SKEW_SECONDS
         value: "30"
 
-      # JVM tuning for free-tier memory limits
+      # ── JVM tuning for free-tier memory limits ────────────────────
       - key: JAVA_OPTS
         value: "-Xms128m -Xmx384m -XX:+UseContainerSupport"
