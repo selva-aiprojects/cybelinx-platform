@@ -77,3 +77,23 @@ When a user logs in via Supabase for the first time:
 2. `SupabaseIdentityProvider` validates the JWT signature and extracts `sub` (Supabase User UUID) and `email`.
 3. `UserMappingService` automatically provisions a canonical platform user record in `user_identities` (`provider="supabase"`, `externalSubject=<sub-uuid>`).
 4. Authorization RBAC rules are evaluated from tenant memberships.
+
+---
+
+## 5. StoreAI Demo Users & Environment Segregation
+
+### Pre-Seeded StoreAI Demo Credentials
+The platform provides pre-seeded demo user identity mappings (`V16__seed_storeai_demo_users_and_env_segregation.sql`):
+
+| Role / Preset | Email | Target Tenant | Subdomain |
+|---|---|---|---|
+| **StoreAI Platform Admin** | `storeai.admin@cybelinx.com` | Central Platform Control Plane | `cybelinx.com` |
+| **Nike Merchant Admin** | `demo.nike@cybelinx.com` | `STOREAI_NIKE_01` | `nike.storeai.cybelinx.com` |
+| **Adidas Merchant Admin** | `demo.adidas@cybelinx.com` | `STOREAI_ADIDAS_01` | `adidas.storeai.cybelinx.com` |
+| **Puma Merchant Admin** | `demo.puma@cybelinx.com` | `STORE_PUMA_01` | `puma.storeai.cybelinx.com` |
+
+### Environment Segregation (`DEMO` vs `PRODUCTION`)
+Each tenant's schema database resources are cleanly segregated by environment:
+- **`DEMO` Schemas**: `tenant_demo_storeai_nike_db`, `tenant_demo_storeai_adidas_db`
+- **`PRODUCTION` Schemas**: `tenant_prod_storeai_nike_db`, `tenant_prod_storeai_adidas_db`
+

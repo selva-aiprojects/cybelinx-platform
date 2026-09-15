@@ -3,15 +3,19 @@ package com.cybelinx.platform.worker.provisioning;
 import com.cybelinx.platform.worker.outbox.EventProcessor;
 import com.cybelinx.platform.worker.outbox.OutboxEvent;
 import com.cybelinx.platform.worker.outbox.WorkerProperties;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
  * Dynamic PostgreSQL Schema-per-Tenant provisioner for StoreAI Composable Commerce.
- * Triggered automatically on outbox event handling when a tenant registers StoreAI.
+ * Derived directly from the StoreAI product repository DDL schema script template
+ * (`/product-schemas/storeai_tenant_schema.sql`).
  */
 @Component
 public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
@@ -54,40 +58,42 @@ public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
         String schemaName = (String) payload.getOrDefault("schemaResourceName",
                 "tenant_" + tenantCode.toLowerCase().replaceAll("[^a-z0-9_]", "_") + "_storeai");
 
-        LOG.info("Provisioning StoreAI dynamic tenant schema: {} for tenant {}", schemaName, event.getTenantId());
+        LOG.info("Provisioning StoreAI tenant target database schema: {} for tenant {}", schemaName, event.getTenantId());
 
         try {
-            // 1. Create Isolated PostgreSQL Tenant Schema
-            jdbcTemplate.execute("CREATE SCHEMA IF NOT EXISTS " + schemaName);
+            // 1. Load the product repository DDL template script
+            String ddlTemplate = loadProductDdlTemplate("storeai");
 
-            // 2. Provision Core Operational Tables inside Tenant Schema
-            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS " + schemaName + ".\"Product\" ("
-                    + "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
-                    + "name VARCHAR(255) NOT NULL, "
-                    + "sku VARCHAR(64) UNIQUE NOT NULL, "
-                    + "price NUMERIC(10,2) NOT NULL DEFAULT 0.00, "
-                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-                    + ")");
+            // 2. Substitute `${tenant_schema}` placeholder with the target tenant schema name
+            String renderedDdl = ddlTemplate.replace("${tenant_schema}", schemaName);
 
-            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS " + schemaName + ".\"Stock\" ("
-                    + "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
-                    + "product_id UUID REFERENCES " + schemaName + ".\"Product\"(id), "
-                    + "quantity INT NOT NULL DEFAULT 0, "
-                    + "warehouse_code VARCHAR(64) NOT NULL DEFAULT 'DEFAULT_WH'"
-                    + ")");
+            // 3. Execute rendered DDL statements against target PostgreSQL database
+            for (String statement : renderedDdl.split(";")) {
+                String sql = statement.trim();
+                if (!sql.isEmpty()) {
+                    jdbcTemplate.execute(sql);
+                }
+            }
 
-            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS " + schemaName + ".\"Sale\" ("
-                    + "id UUID PRIMARY KEY DEFAULT gen_random_uuid(), "
-                    + "invoice_number VARCHAR(64) UNIQUE NOT NULL, "
-                    + "total_amount NUMERIC(12,2) NOT NULL, "
-                    + "customer_email VARCHAR(255), "
-                    + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-                    + ")");
-
-            LOG.info("Successfully provisioned isolated DDL schema: {} for StoreAI merchant", schemaName);
+            LOG.info("Successfully provisioned isolated target DDL schema: {} derived from StoreAI product repository", schemaName);
         } catch (Exception e) {
             LOG.error("Failed to provision StoreAI tenant schema: {}", schemaName, e);
             throw new RuntimeException("StoreAI schema provisioning failed", e);
+        }
+    }
+
+    private String loadProductDdlTemplate(String productCode) {
+        try {
+            ClassPathResource resource = new ClassPathResource("product-schemas/" + productCode.toLowerCase() + "_tenant_schema.sql");
+            try (InputStream is = resource.getInputStream()) {
+                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            LOG.warn("Could not load product DDL schema file for {}. Falling back to default schema template.", productCode, e);
+            return "CREATE SCHEMA IF NOT EXISTS ${tenant_schema}; "
+                    + "CREATE TABLE IF NOT EXISTS ${tenant_schema}.\"Product\" (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), name VARCHAR(255) NOT NULL, sku VARCHAR(64) UNIQUE NOT NULL, price NUMERIC(10,2) DEFAULT 0.00); "
+                    + "CREATE TABLE IF NOT EXISTS ${tenant_schema}.\"Stock\" (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), product_id UUID REFERENCES ${tenant_schema}.\"Product\"(id), quantity INT DEFAULT 0); "
+                    + "CREATE TABLE IF NOT EXISTS ${tenant_schema}.\"Sale\" (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), invoice_number VARCHAR(64) UNIQUE NOT NULL, total_amount NUMERIC(12,2) DEFAULT 0.00);";
         }
     }
 }
