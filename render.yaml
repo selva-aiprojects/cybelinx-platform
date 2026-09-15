@@ -1,0 +1,52 @@
+﻿# =====================================================================
+# Render Blueprint — Cybelinx Platform
+# https://render.com/docs/blueprint-spec
+# =====================================================================
+
+services:
+  # -------------------------------------------------------------------
+  # Central API — Spring Boot 3 / Java 21 Control Plane
+  # -------------------------------------------------------------------
+  - type: web
+    name: cybelinx-central-api
+    runtime: docker
+    dockerfilePath: ./infra/docker/Dockerfile.central-api
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /api/v1/actuator/health
+
+    envVars:
+      # Server
+      - key: API_PORT
+        value: "3001"
+
+      # PostgreSQL (set manually in Render dashboard)
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+
+      # CORS - allow Vercel frontend
+      - key: CORS_ORIGINS
+        value: "https://cybelinx-platform.vercel.app,http://localhost:3000"
+
+      # Identity Provider (Supabase JWT)
+      - key: IDP_PROVIDER
+        value: supabase
+      - key: IDP_ISSUER
+        sync: false
+      - key: IDP_AUDIENCE
+        value: authenticated
+      - key: IDP_JWKS_URI
+        sync: false
+      - key: IDP_JWT_SECRET
+        sync: false
+      - key: IDP_JWT_CLOCK_SKEW_SECONDS
+        value: "30"
+
+      # JVM tuning for free-tier memory limits
+      - key: JAVA_OPTS
+        value: "-Xms128m -Xmx384m -XX:+UseContainerSupport"
