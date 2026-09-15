@@ -207,6 +207,22 @@ export async function GET(req: NextRequest, context: { params: Promise<{ path: s
     });
   }
 
+  // GET /onboarding/storeai/tenants/:externalId
+  if (path.length === 4 && path[0] === 'onboarding' && path[1] === 'storeai' && path[2] === 'tenants') {
+    const extId = path[3];
+    return json({
+      externalId: extId,
+      providerCode: 'STOREAI_NEXUS',
+      productCode: 'STOREAI',
+      tenantId: 'e1f2a3b4-5555-6666-7777-888899990000',
+      tenantCode: 'STOREAI_RETAIL_01',
+      tenantStatus: 'ACTIVE',
+      subscriptionStatus: 'ACTIVE',
+      resourceStatus: 'SUCCEEDED',
+      provisionedAt: new Date().toISOString(),
+    });
+  }
+
   // GET /iam/providers
   if (p === 'iam/providers') {
     return json({
@@ -500,6 +516,116 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
       planCode: body.planCode || 'HEALTHCARE_TIER',
       appUrl: `https://${hospitalCode.toLowerCase()}.jioplix.com`,
       createdAt: new Date().toISOString(),
+    }, 201);
+  }
+
+  // POST /onboarding/storeai/single
+  if (p === 'onboarding/storeai/single') {
+    const tenantId = crypto.randomUUID();
+    const extId = String(body.externalId || 'STOREAI_NEXUS_01');
+    const tenantCode = String(body.tenantCode || 'STORE_RETAIL').toUpperCase();
+    const storeName = String(body.storeName || 'StoreAI Flagship Retail');
+    const planCode = String(body.planCode || 'STOREAI_ENTERPRISE');
+
+    const newTenant: TenantView = {
+      tenantId,
+      tenantCode,
+      name: storeName,
+      status: 'ACTIVE',
+      regionCode: 'eu-west-1',
+      country: 'DE',
+      timezone: 'Europe/Berlin',
+      createdAt: new Date().toISOString(),
+    };
+    mockStore.tenants.unshift(newTenant);
+    mockStore.tenantProducts[tenantId] = [{
+      tenantProductId: crypto.randomUUID(),
+      tenantId,
+      productCode: 'STOREAI',
+      planCode,
+      status: 'ACTIVE',
+      activatedAt: new Date().toISOString(),
+      appUrl: `https://${tenantCode.toLowerCase()}.storeai.com`,
+    }];
+
+    return json({
+      tenantId,
+      tenantCode,
+      storeName,
+      productCode: 'STOREAI',
+      planCode,
+      externalId: extId,
+      providerCode: 'STOREAI_NEXUS',
+      status: 'SUCCESS',
+      tenantStatus: 'ACTIVE',
+      message: `StoreAI retail merchant '${storeName}' onboarded successfully into multi-tenant schema isolation.`,
+      timestamp: new Date().toISOString(),
+    }, 201);
+  }
+
+  // POST /onboarding/storeai/batch
+  if (p === 'onboarding/storeai/batch') {
+    const stores = Array.isArray(body.stores) ? body.stores : [];
+    const results = stores.map((s: { externalId?: string; tenantCode?: string; storeName?: string; planCode?: string }) => {
+      const tenantId = crypto.randomUUID();
+      const extId = String(s.externalId || 'STOREAI_BATCH');
+      const tCode = String(s.tenantCode || 'STORE_BATCH').toUpperCase();
+      const name = String(s.storeName || 'StoreAI Batch Store');
+      const pCode = String(s.planCode || 'STOREAI_ENTERPRISE');
+      return {
+        tenantId,
+        tenantCode: tCode,
+        storeName: name,
+        productCode: 'STOREAI',
+        planCode: pCode,
+        externalId: extId,
+        providerCode: 'STOREAI_NEXUS',
+        status: 'SUCCESS',
+        tenantStatus: 'ACTIVE',
+        message: `StoreAI merchant '${name}' batch onboarded.`,
+        timestamp: new Date().toISOString(),
+      };
+    });
+
+    return json({
+      totalProcessed: stores.length,
+      succeeded: stores.length,
+      failed: 0,
+      results,
+    }, 200);
+  }
+
+  // POST /onboarding/storeai/signup
+  if (p === 'onboarding/storeai/signup') {
+    const tenantId = crypto.randomUUID();
+    const merchantCode = String(body.merchantCode || 'STORE').toUpperCase();
+    const merchantName = String(body.merchantName || 'New Retail Merchant');
+    const planCode = String(body.planCode || 'STOREAI_ENTERPRISE');
+
+    const newTenant: TenantView = {
+      tenantId,
+      tenantCode: merchantCode,
+      name: merchantName,
+      status: 'ACTIVE',
+      regionCode: body.regionCode || 'eu-west-1',
+      country: body.country || 'IE',
+      timezone: 'UTC',
+      createdAt: new Date().toISOString(),
+    };
+    mockStore.tenants.unshift(newTenant);
+
+    return json({
+      tenantId,
+      tenantCode: merchantCode,
+      storeName: merchantName,
+      productCode: 'STOREAI',
+      planCode,
+      externalId: `STOREAI_SELF_${merchantCode}`,
+      providerCode: 'STOREAI_NEXUS',
+      status: 'SUCCESS',
+      tenantStatus: 'ACTIVE',
+      message: `StoreAI merchant '${merchantName}' self-service signup completed successfully.`,
+      timestamp: new Date().toISOString(),
     }, 201);
   }
 

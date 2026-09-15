@@ -74,9 +74,11 @@ const INITIAL_PRODUCTS: ProductView[] = [
   {
     productId: '00000000-0000-0000-0000-000000000040',
     productCode: 'STOREAI',
-    name: 'StoreAI Retail Intelligence',
-    description: 'Store intelligence and automated inventory analytics',
+    portfolioCode: 'ENTERPRISE_OPERATIONS',
+    name: 'StoreAI Composable Commerce',
+    description: 'Composable retail commerce, store intelligence & real-time automated inventory analytics',
     baseUrl: 'https://storeai.com',
+    productCategory: 'ENTERPRISE_OPERATIONS',
     status: 'ACTIVE',
     currentVersionId: '00000000-0000-0000-0000-000000000041',
     createdAt: '2026-09-10T00:00:00Z',
