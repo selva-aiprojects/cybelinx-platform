@@ -18,6 +18,7 @@ RUN chmod +x mvnw
 COPY backend/pom.xml .
 COPY backend/cybelinx-shared/pom.xml cybelinx-shared/pom.xml
 COPY backend/central-api/pom.xml central-api/pom.xml
+COPY backend/event-worker/pom.xml event-worker/pom.xml
 RUN ./mvnw -pl central-api -am -DskipTests dependency:go-offline -q
 
 # Copy source and build the fat JAR
