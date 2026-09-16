@@ -386,3 +386,101 @@ export interface RegisterExternalIdRequest {
   provider: string;
   externalId: string;
 }
+
+// --- Generic Product Onboarding Framework --------------------------------
+
+export interface FormFieldDefinition {
+  key: string;
+  label: string;
+  type: 'text' | 'email' | 'url' | 'select' | 'number';
+  required: boolean;
+  placeholder?: string;
+  defaultValue?: string;
+  options?: string[];
+  hint?: string;
+}
+
+export interface TenantIdentifierDefinition {
+  key: string;
+  label: string;
+  placeholder: string;
+  required: boolean;
+  hint: string;
+}
+
+export interface SubscriptionRequirement {
+  required: boolean;
+  defaultPlanCode: string;
+  availablePlans: string[];
+}
+
+export interface ResourceRequirement {
+  defaultResourceType: string;
+  supportedIsolationModes: string[];
+  defaultIsolationMode: string;
+  schemaPrefix: string;
+}
+
+export interface ProductOnboardingDefinition {
+  productCode: string;
+  version: string;
+  displayName: string;
+  description: string;
+  provider: string;
+  tenantIdentifier: TenantIdentifierDefinition;
+  fields: FormFieldDefinition[];
+  subscription: SubscriptionRequirement;
+  resource: ResourceRequirement;
+  provisioningSteps: string[];
+  healthCheckEndpoint: string;
+}
+
+export interface GenericOnboardRequest {
+  productCode: string;
+  externalId: string;
+  tenantCode: string;
+  tenantName: string;
+  planCode?: string;
+  domain?: string;
+  adminEmail?: string;
+  adminName?: string;
+  adminUserId?: string;
+  isolationMode?: string;
+  environment?: string;
+  schemaName?: string;
+  regionCode?: string;
+  customFields?: Record<string, unknown>;
+}
+
+export interface GenericOnboardResponse {
+  tenantId?: string;
+  tenantCode: string;
+  tenantName: string;
+  productCode: string;
+  planCode: string;
+  externalId: string;
+  provider: string;
+  status: 'SUCCESS' | 'ALREADY_ONBOARDED' | 'FAILED' | string;
+  tenantStatus: string;
+  resourceStatus: string;
+  schemaName: string;
+  message: string;
+  timestamp: string;
+  executedSteps: string[];
+}
+
+export interface GenericOnboardStatusView {
+  externalId: string;
+  provider: string;
+  productCode: string;
+  tenantId: string;
+  tenantCode: string;
+  tenantName: string;
+  tenantStatus: string;
+  subscriptionStatus: string;
+  planCode?: string;
+  resourceStatus: string;
+  schemaName?: string;
+  isolationMode?: string;
+  onboardedAt: string;
+}

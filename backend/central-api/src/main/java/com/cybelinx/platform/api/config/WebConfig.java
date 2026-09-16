@@ -30,7 +30,12 @@ public class WebConfig implements WebMvcConfigurer {
                         "/tenants/**",
                         "/products/**",
                         "/audit/**",
-                        "/events/**");
+                        "/events/**",
+                        "/api/v1/onboarding/**",
+                        "/onboarding/**")
+                .excludePathPatterns(
+                        "/api/v1/onboarding/definitions/**",
+                        "/onboarding/definitions/**");
     }
 
     @Override

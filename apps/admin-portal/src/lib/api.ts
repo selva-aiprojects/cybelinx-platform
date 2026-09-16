@@ -49,6 +49,10 @@ import type {
   UpdateTenantResourceRequest,
   UpdateTenantRequest,
   UsageListResponse,
+  ProductOnboardingDefinition,
+  GenericOnboardRequest,
+  GenericOnboardResponse,
+  GenericOnboardStatusView,
 } from './types';
 
 const STORAGE_TOKEN_KEY = 'cybelinx_api_token';
@@ -328,6 +332,17 @@ export const api = {
       request<unknown>(`/tenants/${tenantId}/external-ids`, { method: 'POST', body }),
     remove: (tenantId: string, id: string) =>
       request<unknown>(`/tenants/${tenantId}/external-ids/${id}`, { method: 'DELETE' }),
+  },
+
+  onboarding: {
+    listDefinitions: () =>
+      request<ProductOnboardingDefinition[]>('/onboarding/definitions'),
+    getDefinition: (productCode: string) =>
+      request<ProductOnboardingDefinition>(`/onboarding/definitions/${productCode}`),
+    execute: (body: GenericOnboardRequest) =>
+      request<GenericOnboardResponse>('/onboarding/execute', { method: 'POST', body }),
+    getStatus: (productCode: string, externalId: string) =>
+      request<GenericOnboardStatusView>(`/onboarding/status/${productCode}/${encodeURIComponent(externalId)}`),
   },
 };
 
