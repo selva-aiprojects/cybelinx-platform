@@ -57,10 +57,18 @@ async function tryProxy(req: NextRequest, path: string[]) {
       cache: 'no-store',
     });
     const resData = await upstreamRes.text();
+    // `fetch` transparently decodes compressed upstream bodies. Forwarding
+    // content-encoding/content-length would make Vercel clients decode an
+    // already-decoded body (the observed empty portal API response).
+    const responseHeaders = new Headers(upstreamRes.headers);
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
+    responseHeaders.delete('transfer-encoding');
+    responseHeaders.delete('connection');
     return new NextResponse(resData, {
       status: upstreamRes.status,
       headers: {
-        ...Object.fromEntries(upstreamRes.headers.entries()),
+        ...Object.fromEntries(responseHeaders.entries()),
         ...corsHeaders(),
       },
     });
