@@ -11,8 +11,17 @@ const SEEDED_USERS: UserView[] = [
     displayName: 'Cybelinx Platform Admin',
     status: 'ACTIVE',
     identities: ['seed-jwt', 'supabase-auth'],
-    tenantCount: 3,
+    tenantCount: 4,
     createdAt: '2026-09-01T08:00:00Z',
+  },
+  {
+    userId: 'user-selva-admin-003',
+    email: 'b.selvakumar@gmail.com',
+    displayName: 'Selvakumar B (Tenant Admin)',
+    status: 'ACTIVE',
+    identities: ['supabase-auth'],
+    tenantCount: 1,
+    createdAt: '2026-09-16T12:00:00Z',
   },
   {
     userId: 'user-acme-admin-001',
@@ -35,6 +44,19 @@ const SEEDED_USERS: UserView[] = [
 ];
 
 const SEEDED_MEMBERS: Record<string, TenantMemberView[]> = {
+  selva_healthcare: [
+    {
+      membershipId: 'mem-selva-001',
+      tenantId: 'selva_healthcare',
+      userId: 'user-selva-admin-003',
+      email: 'b.selvakumar@gmail.com',
+      displayName: 'Selvakumar B',
+      status: 'ACTIVE',
+      roles: ['TENANT_ADMIN'],
+      permissions: ['TENANT_WRITE', 'PRODUCT_ACCESS', 'USER_MANAGE'],
+      joinedAt: '2026-09-16T12:00:00Z',
+    },
+  ],
   acme: [
     {
       membershipId: 'mem-acme-001',

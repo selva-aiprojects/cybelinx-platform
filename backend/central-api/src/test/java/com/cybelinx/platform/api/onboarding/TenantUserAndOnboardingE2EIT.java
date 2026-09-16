@@ -282,4 +282,48 @@ class TenantUserAndOnboardingE2EIT {
         assertThat(acmeSchema).contains("acme");
         assertThat(nikeSchema).contains("nike");
     }
+
+    @Test
+    @DisplayName("TEST 6: Jioplix Product Onboarding & Subscription Activation for Tenant Contact Email (b.selvakumar@gmail.com)")
+    void test6_JioplixSelvakumarOnboardingWithEmail() {
+        GenericOnboardRequest request = new GenericOnboardRequest(
+                "JIOPLIX",
+                "HOSP_SELVA_01",
+                "SELVA_HEALTHCARE",
+                "Selvakumar Healthcare & Diagnostics",
+                "JIOPLIX_ENTERPRISE",
+                "https://selva-health.jioplix.com",
+                "b.selvakumar@gmail.com",
+                "Selvakumar B",
+                "usr_selva_admin_01",
+                "SCHEMA_PER_TENANT",
+                "PRODUCTION",
+                "tenant_selva_jioplix_db",
+                "ap-south-1",
+                Map.of("hospitalName", "Selvakumar Healthcare & Diagnostics", "country", "India")
+        );
+
+        GenericOnboardResponse res = onboardingService.onboardTenant(platformAdminPrincipal, request);
+
+        assertThat(res.status()).isIn("SUCCESS", "ALREADY_ONBOARDED");
+        assertThat(res.tenantCode()).isEqualTo("SELVA_HEALTHCARE");
+        assertThat(res.productCode()).isEqualTo("JIOPLIX");
+        assertThat(res.planCode()).isEqualTo("JIOPLIX_ENTERPRISE");
+        assertThat(res.schemaName()).contains("tenant_selva_jioplix_db");
+
+        // Verify Tenant & Admin User Identity Created with b.selvakumar@gmail.com
+        Optional<Tenant> tenantOpt = tenants.findByTenantCode("SELVA_HEALTHCARE");
+        assertThat(tenantOpt).isPresent();
+
+        Optional<User> userOpt = users.findByEmail("b.selvakumar@gmail.com");
+        assertThat(userOpt).isPresent();
+        assertThat(userOpt.get().getDisplayName()).isEqualTo("Selvakumar B");
+
+        Optional<TenantMembership> tmOpt = memberships.findByTenant_IdAndUser_Id(tenantOpt.get().getId(), userOpt.get().getId());
+        assertThat(tmOpt).isPresent();
+
+        List<MembershipRole> roles = membershipRoles.findByMembership_Id(tmOpt.get().getId());
+        assertThat(roles).isNotEmpty();
+        assertThat(roles.stream().anyMatch(r -> r.getRole().getCode().equals("TENANT_ADMIN"))).isTrue();
+    }
 }
