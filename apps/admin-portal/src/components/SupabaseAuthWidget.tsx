@@ -8,6 +8,7 @@ import {
   signOutSupabase,
   syncSupabaseToken,
 } from '@/lib/supabase';
+import { parseUserSecurityProfile } from '@/lib/rbac';
 import { Alert } from './ui';
 
 export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: string | null) => void }) {
@@ -106,6 +107,17 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
   }
 
   if (user && session) {
+    const profile = parseUserSecurityProfile(syncSupabaseToken(session), user);
+    const userTenantCode = profile?.memberships?.[0]?.tenantCode || 'STOREAI_NIKE_01';
+    const tenantParam = userTenantCode.toLowerCase().replace('storeai_', '').replace('_01', '').replace('store_', '');
+    const tenantLabel =
+      userTenantCode === 'STOREAI_ADIDAS_01'
+        ? 'Adidas Merchant Dashboard'
+        : userTenantCode === 'STORE_PUMA_01'
+        ? 'Puma Merchant Dashboard'
+        : 'Nike Merchant Dashboard';
+    const dashboardUrl = `/storeai/merchant?tenant=${tenantParam}`;
+
     return (
       <div className="card card-pad" style={{ background: 'var(--card-bg, #f8fafc)', border: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -127,8 +139,8 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
         </div>
 
         <div style={{ marginTop: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <a href="/storeai/merchant?tenant=nike" className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff', textDecoration: 'none' }}>
-            ⚡ Go to Nike Merchant Dashboard
+          <a href={dashboardUrl} className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff', textDecoration: 'none' }}>
+            ⚡ Go to {tenantLabel}
           </a>
           <a href="/tenants" className="btn btn-ghost btn-sm">
             View Tenant Subscriptions
