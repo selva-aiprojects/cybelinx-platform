@@ -347,38 +347,62 @@ export async function GET(req: NextRequest, context: { params: Promise<{ path: s
   if (p === 'audit') {
     const page = Math.max(1, Number(req.nextUrl.searchParams.get('page') || '1'));
     const limit = Math.max(1, Number(req.nextUrl.searchParams.get('limit') || '20'));
-    const auditData = [
+    const tenantIdFilter = req.nextUrl.searchParams.get('tenantId');
+    const entityTypeFilter = req.nextUrl.searchParams.get('entityType');
+    let auditData = [
       {
         eventId: 'aud-001',
-        eventType: 'TENANT_ONBOARDED',
-        action: 'ONBOARD_TENANT',
+        action: 'product.tenant.onboarded',
+        resourceType: 'TENANT',
+        resourceId: 'acme',
         tenantId: 'acme',
         actorUserId: 'seed-dev-admin-0001',
-        actorEmail: 'dev.admin@cybelinx.test',
-        details: { tenantCode: 'ACME_HOSPITAL', productCode: 'JIOPLIX', planCode: 'JIOPLIX_ENTERPRISE' },
+        details: { tenantCode: 'ACME_HOSPITAL', productCode: 'JIOPLIX', planCode: 'JIOPLIX_ENTERPRISE', schemaName: 'tenant_acme_jioplix' },
         createdAt: '2026-09-15T10:15:00Z',
       },
       {
         eventId: 'aud-002',
-        eventType: 'TENANT_ONBOARDED',
-        action: 'ONBOARD_TENANT',
+        action: 'product.tenant.onboarded',
+        resourceType: 'TENANT',
+        resourceId: 'nike',
         tenantId: 'nike',
         actorUserId: 'seed-dev-admin-0001',
-        actorEmail: 'dev.admin@cybelinx.test',
-        details: { tenantCode: 'NIKE_STORE', productCode: 'STOREAI', planCode: 'STOREAI_STANDARD' },
+        details: { tenantCode: 'NIKE_STORE', productCode: 'STOREAI', planCode: 'STOREAI_STANDARD', schemaName: 'tenant_demo_storeai_nike_db' },
         createdAt: '2026-09-15T11:20:00Z',
       },
       {
         eventId: 'aud-003',
-        eventType: 'IAM_MEMBER_INVITED',
-        action: 'INVITE_TENANT_MEMBER',
+        action: 'iam.member.invited',
+        resourceType: 'MEMBERSHIP',
+        resourceId: 'mem-acme-001',
         tenantId: 'acme',
         actorUserId: 'seed-dev-admin-0001',
-        actorEmail: 'dev.admin@cybelinx.test',
         details: { invitedEmail: 'admin@acme-hospital.org', role: 'TENANT_ADMIN' },
         createdAt: '2026-09-15T10:16:00Z',
       },
+      {
+        eventId: 'aud-004',
+        action: 'iam.member.invited',
+        resourceType: 'MEMBERSHIP',
+        resourceId: 'mem-nike-001',
+        tenantId: 'nike',
+        actorUserId: 'seed-dev-admin-0001',
+        details: { invitedEmail: 'merchant@nike-e2e.com', role: 'TENANT_ADMIN' },
+        createdAt: '2026-09-15T11:21:00Z',
+      },
+      {
+        eventId: 'aud-005',
+        action: 'product.tenant.onboarded',
+        resourceType: 'TENANT',
+        resourceId: 'selva_healthcare',
+        tenantId: 'selva_healthcare',
+        actorUserId: 'seed-dev-admin-0001',
+        details: { tenantCode: 'SELVA_HEALTHCARE', productCode: 'JIOPLIX', planCode: 'JIOPLIX_ENTERPRISE', adminEmail: 'b.selvakumar@gmail.com' },
+        createdAt: '2026-09-16T12:00:00Z',
+      },
     ];
+    if (tenantIdFilter) auditData = auditData.filter((e) => e.tenantId === tenantIdFilter);
+    if (entityTypeFilter) auditData = auditData.filter((e) => e.resourceType?.toLowerCase() === entityTypeFilter.toLowerCase());
     return json({
       data: auditData,
       meta: { page, limit, total: auditData.length, totalPages: 1 },
@@ -389,35 +413,66 @@ export async function GET(req: NextRequest, context: { params: Promise<{ path: s
   if (p === 'events') {
     const page = Math.max(1, Number(req.nextUrl.searchParams.get('page') || '1'));
     const limit = Math.max(1, Number(req.nextUrl.searchParams.get('limit') || '20'));
-    const eventData = [
+    const aggregateTypeFilter = req.nextUrl.searchParams.get('aggregateType');
+    const eventTypeFilter = req.nextUrl.searchParams.get('eventType');
+    let eventData = [
       {
         eventId: 'evt-outbox-001',
         aggregateType: 'TENANT',
         aggregateId: 'acme',
         eventType: 'TENANT_CREATED',
-        payload: { tenantCode: 'ACME_HOSPITAL', status: 'ACTIVE', region: 'ap-south-1' },
-        status: 'PROCESSED',
+        tenantId: 'acme',
+        payload: { tenantCode: 'ACME_HOSPITAL', status: 'ACTIVE', region_code: 'ap-south-1' },
         createdAt: '2026-09-15T10:15:00Z',
       },
       {
         eventId: 'evt-outbox-002',
-        aggregateType: 'SUBSCRIPTION',
-        aggregateId: 'sub-acme-001',
-        eventType: 'SUBSCRIPTION_ATTACHED',
+        aggregateType: 'PRODUCT',
+        aggregateId: 'jioplix',
+        eventType: 'PRODUCT_ENABLED',
+        tenantId: 'acme',
         payload: { tenantCode: 'ACME_HOSPITAL', productCode: 'JIOPLIX', planCode: 'JIOPLIX_ENTERPRISE' },
-        status: 'PROCESSED',
         createdAt: '2026-09-15T10:15:05Z',
       },
       {
         eventId: 'evt-outbox-003',
+        aggregateType: 'RESOURCE',
+        aggregateId: 'tenant_acme_jioplix',
+        eventType: 'RESOURCE_CREATED',
+        tenantId: 'acme',
+        payload: { resource_type: 'POSTGRES_SCHEMA', environment: 'DEVELOPMENT', isolation_mode: 'SCHEMA_PER_TENANT', schema_name: 'tenant_acme_jioplix' },
+        createdAt: '2026-09-15T10:15:10Z',
+      },
+      {
+        eventId: 'evt-outbox-004',
         aggregateType: 'TENANT',
         aggregateId: 'nike',
         eventType: 'TENANT_CREATED',
-        payload: { tenantCode: 'NIKE_STORE', status: 'ACTIVE', region: 'eu-west-1' },
-        status: 'PROCESSED',
+        tenantId: 'nike',
+        payload: { tenantCode: 'NIKE_STORE', status: 'ACTIVE', region_code: 'eu-west-1' },
         createdAt: '2026-09-15T11:20:00Z',
       },
+      {
+        eventId: 'evt-outbox-005',
+        aggregateType: 'PRODUCT',
+        aggregateId: 'storeai',
+        eventType: 'PRODUCT_ENABLED',
+        tenantId: 'nike',
+        payload: { tenantCode: 'NIKE_STORE', productCode: 'STOREAI', planCode: 'STOREAI_STANDARD' },
+        createdAt: '2026-09-15T11:20:05Z',
+      },
+      {
+        eventId: 'evt-outbox-006',
+        aggregateType: 'TENANT',
+        aggregateId: 'selva_healthcare',
+        eventType: 'TENANT_CREATED',
+        tenantId: 'selva_healthcare',
+        payload: { tenantCode: 'SELVA_HEALTHCARE', status: 'ACTIVE', region_code: 'ap-south-1' },
+        createdAt: '2026-09-16T12:00:00Z',
+      },
     ];
+    if (aggregateTypeFilter) eventData = eventData.filter((e) => e.aggregateType?.toLowerCase() === aggregateTypeFilter.toLowerCase());
+    if (eventTypeFilter) eventData = eventData.filter((e) => e.eventType?.toLowerCase().includes(eventTypeFilter.toLowerCase()));
     return json({
       data: eventData,
       meta: { page, limit, total: eventData.length, totalPages: 1 },

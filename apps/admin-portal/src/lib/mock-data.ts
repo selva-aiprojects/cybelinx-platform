@@ -231,23 +231,33 @@ const INITIAL_ENTITLEMENTS: Record<string, EntitlementView[]> = {
 const INITIAL_TENANTS: TenantView[] = [
   {
     tenantId: '00000000-0000-0000-0000-000000000001',
-    tenantCode: 'acme',
-    name: 'Acme Corporation',
+    tenantCode: 'ACME_HOSPITAL',
+    name: 'ACME Multispecialty Hospital',
     status: 'ACTIVE',
-    regionCode: 'eu-west-1',
-    country: 'IE',
-    timezone: 'UTC',
-    createdAt: '2026-09-01T00:00:00Z',
+    regionCode: 'ap-south-1',
+    country: 'IN',
+    timezone: 'Asia/Kolkata',
+    createdAt: '2026-09-15T10:15:00Z',
   },
   {
     tenantId: '00000000-0000-0000-0000-000000000011',
-    tenantCode: 'STOREAI_NIKE_01',
-    name: 'Nike Flagship Store',
+    tenantCode: 'NIKE_STORE',
+    name: 'Nike Flagship Retail',
     status: 'ACTIVE',
     regionCode: 'eu-west-1',
-    country: 'IE',
-    timezone: 'UTC',
-    createdAt: '2026-09-10T00:00:00Z',
+    country: 'DE',
+    timezone: 'Europe/Berlin',
+    createdAt: '2026-09-15T11:20:00Z',
+  },
+  {
+    tenantId: '00000000-0000-0000-0000-000000000015',
+    tenantCode: 'SELVA_HEALTHCARE',
+    name: 'Selvakumar Healthcare Group',
+    status: 'ACTIVE',
+    regionCode: 'ap-south-1',
+    country: 'IN',
+    timezone: 'Asia/Kolkata',
+    createdAt: '2026-09-16T12:00:00Z',
   },
   {
     tenantId: '00000000-0000-0000-0000-000000000012',
@@ -281,25 +291,17 @@ const INITIAL_TENANTS: TenantView[] = [
   },
 ];
 
+
 const INITIAL_TENANT_PRODUCTS: Record<string, TenantProductView[]> = {
   '00000000-0000-0000-0000-000000000001': [
     {
       tenantProductId: '00000000-0000-0000-0000-000000000301',
       tenantId: '00000000-0000-0000-0000-000000000001',
       productCode: 'JIOPLIX',
-      planCode: 'STARTER',
+      planCode: 'JIOPLIX_ENTERPRISE',
       status: 'ACTIVE',
-      activatedAt: '2026-09-01T00:00:00Z',
+      activatedAt: '2026-09-15T10:15:00Z',
       appUrl: 'https://acme.jioplix.com',
-    },
-    {
-      tenantProductId: '00000000-0000-0000-0000-000000000302',
-      tenantId: '00000000-0000-0000-0000-000000000001',
-      productCode: 'STOREAI',
-      planCode: 'STARTER',
-      status: 'ACTIVE',
-      activatedAt: '2026-09-02T00:00:00Z',
-      appUrl: 'https://acme.storeai.com',
     },
   ],
   '00000000-0000-0000-0000-000000000011': [
@@ -307,10 +309,21 @@ const INITIAL_TENANT_PRODUCTS: Record<string, TenantProductView[]> = {
       tenantProductId: '00000000-0000-0000-0000-000000000311',
       tenantId: '00000000-0000-0000-0000-000000000011',
       productCode: 'STOREAI',
-      planCode: 'STOREAI_ENTERPRISE',
+      planCode: 'STOREAI_STANDARD',
       status: 'ACTIVE',
-      activatedAt: '2026-09-10T00:00:00Z',
-      appUrl: 'https://nike.storeai.cybelinx.com',
+      activatedAt: '2026-09-15T11:20:00Z',
+      appUrl: 'https://nike.storeai.com',
+    },
+  ],
+  '00000000-0000-0000-0000-000000000015': [
+    {
+      tenantProductId: '00000000-0000-0000-0000-000000000315',
+      tenantId: '00000000-0000-0000-0000-000000000015',
+      productCode: 'JIOPLIX',
+      planCode: 'JIOPLIX_ENTERPRISE',
+      status: 'ACTIVE',
+      activatedAt: '2026-09-16T12:00:00Z',
+      appUrl: 'https://selvahealthcare.jioplix.com',
     },
   ],
   '00000000-0000-0000-0000-000000000012': [
@@ -347,6 +360,7 @@ const INITIAL_TENANT_PRODUCTS: Record<string, TenantProductView[]> = {
     },
   ],
 };
+
 
 const INITIAL_TENANT_RESOURCES: Record<string, TenantResourceView[]> = {
   '00000000-0000-0000-0000-000000000001': [
