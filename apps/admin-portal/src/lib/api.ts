@@ -98,8 +98,8 @@ export function resolveApiBaseUrl(): string {
 }
 
 export function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(STORAGE_TOKEN_KEY);
+  if (typeof window === 'undefined') return DEFAULT_DEV_TOKEN;
+  return window.localStorage.getItem(STORAGE_TOKEN_KEY) || DEFAULT_DEV_TOKEN;
 }
 
 export async function fetchMintedToken(): Promise<string> {
