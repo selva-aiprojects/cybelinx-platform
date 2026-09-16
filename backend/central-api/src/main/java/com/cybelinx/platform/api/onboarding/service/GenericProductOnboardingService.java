@@ -9,6 +9,7 @@ import com.cybelinx.platform.api.domain.ProductStatus;
 import com.cybelinx.platform.api.domain.TenantProductStatus;
 import com.cybelinx.platform.api.domain.TenantResourceStatus;
 import com.cybelinx.platform.api.domain.TenantStatus;
+import com.cybelinx.platform.api.email.EmailNotificationService;
 import com.cybelinx.platform.api.events.OutboxPublisher;
 import com.cybelinx.platform.api.onboarding.adapter.ProductAdapter;
 import com.cybelinx.platform.api.onboarding.adapter.ProductAdapterRegistry;
@@ -87,6 +88,7 @@ public class GenericProductOnboardingService {
     private final AuditEventRepository auditEvents;
     private final OutboxPublisher outbox;
     private final AuthorizationService authorization;
+    private final EmailNotificationService emailNotificationService;
 
     public GenericProductOnboardingService(
             ProductAdapterRegistry adapterRegistry,
@@ -104,7 +106,8 @@ public class GenericProductOnboardingService {
             MembershipRoleRepository membershipRoles,
             AuditEventRepository auditEvents,
             OutboxPublisher outbox,
-            AuthorizationService authorization) {
+            AuthorizationService authorization,
+            EmailNotificationService emailNotificationService) {
         this.adapterRegistry = adapterRegistry;
         this.tenants = tenants;
         this.products = products;
@@ -121,6 +124,7 @@ public class GenericProductOnboardingService {
         this.auditEvents = auditEvents;
         this.outbox = outbox;
         this.authorization = authorization;
+        this.emailNotificationService = emailNotificationService;
     }
 
     @Transactional
@@ -361,7 +365,7 @@ public class GenericProductOnboardingService {
                 "schema_name", finalSchemaName
         ));
 
-        return new GenericOnboardResponse(
+        GenericOnboardResponse response = new GenericOnboardResponse(
                 tenant.getId().toString(),
                 tenant.getTenantCode(),
                 tenant.getName(),
@@ -377,6 +381,12 @@ public class GenericProductOnboardingService {
                 IsoTime.format(externalIdMapping.getCreatedAt()),
                 executedSteps
         );
+
+        if (emailNotificationService != null) {
+            emailNotificationService.dispatchOnboardingEmails(request, response);
+        }
+
+        return response;
     }
 
     @Transactional
