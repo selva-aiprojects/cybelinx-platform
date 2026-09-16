@@ -108,7 +108,7 @@ class GenericProductOnboardingServiceIT {
         List<ProductOnboardingDefinition> definitions = registry.getAvailableDefinitions();
         assertThat(definitions).isNotEmpty();
         assertThat(definitions).extracting(ProductOnboardingDefinition::productCode)
-                .contains("JIOPLIX", "STOREAI");
+                .contains("JIOPLIX", "STOREAI", "SYNTHALYST");
     }
 
     @Test
@@ -145,9 +145,9 @@ class GenericProductOnboardingServiceIT {
         // Status Lookup
         GenericOnboardStatusView status = genericService.getOnboardingStatus(platformAdminPrincipal, "JIOPLIX", extId);
         assertThat(status.externalId()).isEqualTo(extId);
-        assertThat(status.tenantCode()).isEqualTo(tenantCode);
+        assertThat(status.tenantCode()).isEqualTo(tenantCode.toUpperCase());
         assertThat(status.subscriptionStatus()).isEqualTo("ACTIVE");
-        assertThat(status.resourceStatus()).isEqualTo("ACTIVE");
+        assertThat(status.resourceStatus()).isEqualTo("PROVISIONING");
 
         // Idempotency
         GenericOnboardResponse idempotent = genericService.onboardTenant(platformAdminPrincipal, request);
@@ -187,8 +187,24 @@ class GenericProductOnboardingServiceIT {
         // Status Lookup
         GenericOnboardStatusView status = genericService.getOnboardingStatus(platformAdminPrincipal, "STOREAI", extId);
         assertThat(status.externalId()).isEqualTo(extId);
-        assertThat(status.tenantCode()).isEqualTo(tenantCode);
+        assertThat(status.tenantCode()).isEqualTo(tenantCode.toUpperCase());
         assertThat(status.subscriptionStatus()).isEqualTo("ACTIVE");
-        assertThat(status.resourceStatus()).isEqualTo("ACTIVE");
+        assertThat(status.resourceStatus()).isEqualTo("PROVISIONING");
+    }
+
+    @Test
+    void shouldOnboardSynthalystViaGenericFramework() {
+        String externalId = "SYNTH_SMOKE_" + UUID.randomUUID().toString().substring(0, 8);
+        GenericOnboardResponse response = genericService.onboardTenant(platformAdminPrincipal, new GenericOnboardRequest(
+                "synthalyst", externalId, "SYNTH_SMOKE_" + UUID.randomUUID().toString().substring(0, 8),
+                "Synthalyst Smoke Tenant", null, "https://synthalyst.cybelinx.com",
+                "smoke-admin@example.test", "Smoke Admin", null, "schema_per_tenant", "development", null,
+                "eu-west-1", Map.of()));
+
+        assertThat(response.status()).isEqualTo("SUCCESS");
+        assertThat(response.productCode()).isEqualTo("SYNTHALYST");
+        assertThat(response.provider()).isEqualTo("SYNTHALYST_HRM");
+        assertThat(response.schemaName()).startsWith("synthalyst_");
+        assertThat(response.resourceStatus()).isEqualTo("PROVISIONING");
     }
 }

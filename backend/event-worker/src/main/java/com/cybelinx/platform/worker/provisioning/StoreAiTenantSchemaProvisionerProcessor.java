@@ -6,6 +6,7 @@ import com.cybelinx.platform.worker.outbox.WorkerProperties;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -24,12 +25,15 @@ public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
 
     private final WorkerProperties properties;
     private final TargetDatabaseConnectionResolver connectionResolver;
+    private final JdbcTemplate controlPlaneJdbcTemplate;
 
     public StoreAiTenantSchemaProvisionerProcessor(
             WorkerProperties properties,
-            TargetDatabaseConnectionResolver connectionResolver) {
+            TargetDatabaseConnectionResolver connectionResolver,
+            JdbcTemplate controlPlaneJdbcTemplate) {
         this.properties = properties;
         this.connectionResolver = connectionResolver;
+        this.controlPlaneJdbcTemplate = controlPlaneJdbcTemplate;
     }
 
     @Override
@@ -39,9 +43,7 @@ public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
 
     @Override
     public boolean supports(String eventType) {
-        return "TENANT_CREATED".equals(eventType)
-                || "TENANT_EXTERNAL_ID_REGISTERED".equals(eventType)
-                || "TENANT_PRODUCT_ATTACHED".equals(eventType);
+        return "RESOURCE_CREATED".equals(eventType);
     }
 
     @Override
@@ -49,18 +51,20 @@ public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
         Map<String, Object> payload = event.getPayload();
         if (payload == null) return;
 
-        String productCode = (String) payload.getOrDefault("productCode", "");
-        String provider = (String) payload.getOrDefault("provider", "");
+        String productCode = stringValue(payload, "productCode", "product_code");
+        String provider = stringValue(payload, "provider");
 
         if (!"STOREAI".equalsIgnoreCase(productCode) && !"STOREAI_NEXUS".equalsIgnoreCase(provider)) {
             return;
         }
 
-        String tenantCode = (String) payload.getOrDefault("tenantCode", "STORE_MERCHANT");
-        String environment = (String) payload.getOrDefault("environment", "PRODUCTION");
-        String customJdbcUrl = (String) payload.get("jdbcUrl");
-        String schemaName = (String) payload.getOrDefault("schemaResourceName",
-                "tenant_" + tenantCode.toLowerCase().replaceAll("[^a-z0-9_]", "_") + "_storeai");
+        String tenantCode = stringValue(payload, "tenantCode", "tenant_code");
+        if (tenantCode == null) tenantCode = "STORE_MERCHANT";
+        String environment = stringValue(payload, "environment");
+        if (environment == null) environment = "PRODUCTION";
+        String customJdbcUrl = stringValue(payload, "jdbcUrl", "jdbc_url");
+        String schemaName = stringValue(payload, "schemaResourceName", "schema_name");
+        if (schemaName == null) schemaName = "tenant_" + tenantCode.toLowerCase().replaceAll("[^a-z0-9_]", "_") + "_storeai";
 
         LOG.info("Provisioning StoreAI tenant target database schema: {} on remote product server [{}]", schemaName, environment);
 
@@ -83,10 +87,29 @@ public class StoreAiTenantSchemaProvisionerProcessor implements EventProcessor {
             }
 
             LOG.info("Successfully provisioned isolated target DDL schema: {} on remote StoreAI database server", schemaName);
+            markResource(event.getEntityId(), "ACTIVE", "SUCCEEDED");
         } catch (Exception e) {
+            markResource(event.getEntityId(), "FAILED", "FAILED");
             LOG.error("Failed to provision StoreAI tenant schema: {}", schemaName, e);
             throw new RuntimeException("StoreAI schema provisioning failed", e);
         }
+    }
+
+    private void markResource(UUID resourceId, String status, String provisioningState) {
+        if (resourceId == null) return;
+        controlPlaneJdbcTemplate.update(
+                "UPDATE tenant_resources SET status = CAST(? AS \"TenantResourceStatus\"), "
+                        + "provisioning_state = CAST(? AS \"ProvisioningState\"), updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE id = ?",
+                status, provisioningState, resourceId);
+    }
+
+    private static String stringValue(Map<String, Object> payload, String... keys) {
+        for (String key : keys) {
+            Object value = payload.get(key);
+            if (value != null) return String.valueOf(value);
+        }
+        return null;
     }
 
     private String loadProductDdlTemplate(String productCode) {

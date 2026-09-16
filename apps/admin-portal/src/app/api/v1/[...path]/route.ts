@@ -39,7 +39,11 @@ function error(message: string, status = 400, code?: string) {
 
 // Optional proxy to real backend if configured
 async function tryProxy(req: NextRequest, path: string[]) {
-  const upstreamBase = process.env.CENTRAL_API_URL;
+  // A production portal must never silently mutate in-memory mock data. The
+  // explicit variable remains available for staging/local targets; Vercel uses
+  // the deployed control plane by default.
+  const upstreamBase = process.env.CENTRAL_API_URL
+    ?? (process.env.VERCEL ? 'https://cybelinx-central-api.onrender.com/api/v1' : undefined);
   if (!upstreamBase) return null;
   const targetUrl = `${upstreamBase.replace(/\/$/, '')}/${path.join('/')}${req.nextUrl.search}`;
   try {
@@ -60,7 +64,11 @@ async function tryProxy(req: NextRequest, path: string[]) {
         ...corsHeaders(),
       },
     });
-  } catch {
+  } catch (cause) {
+    if (process.env.VERCEL) {
+      const message = cause instanceof Error ? cause.message : 'Unknown proxy failure';
+      return error(`Control plane is unavailable: ${message}`, 502, 'CONTROL_PLANE_UNAVAILABLE');
+    }
     return null;
   }
 }

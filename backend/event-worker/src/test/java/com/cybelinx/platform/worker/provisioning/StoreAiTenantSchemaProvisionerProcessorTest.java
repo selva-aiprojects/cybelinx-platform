@@ -19,6 +19,7 @@ class StoreAiTenantSchemaProvisionerProcessorTest {
 
     private WorkerProperties properties;
     private JdbcTemplate targetJdbcTemplate;
+    private JdbcTemplate controlPlaneJdbcTemplate;
     private TargetDatabaseConnectionResolver connectionResolver;
     private StoreAiTenantSchemaProvisionerProcessor processor;
 
@@ -27,17 +28,17 @@ class StoreAiTenantSchemaProvisionerProcessorTest {
         properties = new WorkerProperties();
         properties.setConsumerName("test-worker-consumer");
         targetJdbcTemplate = Mockito.mock(JdbcTemplate.class);
+        controlPlaneJdbcTemplate = Mockito.mock(JdbcTemplate.class);
         connectionResolver = Mockito.mock(TargetDatabaseConnectionResolver.class);
         when(connectionResolver.resolveTargetJdbcTemplate(anyString(), anyString(), Mockito.nullable(String.class)))
                 .thenReturn(targetJdbcTemplate);
-        processor = new StoreAiTenantSchemaProvisionerProcessor(properties, connectionResolver);
+        processor = new StoreAiTenantSchemaProvisionerProcessor(properties, connectionResolver, controlPlaneJdbcTemplate);
     }
 
     @Test
     void supportsCorrectEventTypes() {
-        assertThat(processor.supports("TENANT_CREATED")).isTrue();
-        assertThat(processor.supports("TENANT_EXTERNAL_ID_REGISTERED")).isTrue();
-        assertThat(processor.supports("TENANT_PRODUCT_ATTACHED")).isTrue();
+        assertThat(processor.supports("RESOURCE_CREATED")).isTrue();
+        assertThat(processor.supports("TENANT_CREATED")).isFalse();
         assertThat(processor.supports("UNKNOWN_EVENT")).isFalse();
     }
 
@@ -45,7 +46,8 @@ class StoreAiTenantSchemaProvisionerProcessorTest {
     void process_shouldExecuteDynamicPostgresDdlForStoreAiTenant() {
         OutboxEvent event = new OutboxEvent();
         event.setTenantId(UUID.randomUUID());
-        event.setEventType("TENANT_CREATED");
+        event.setEventType("RESOURCE_CREATED");
+        event.setEntityId(UUID.randomUUID());
         event.setPayload(Map.of(
                 "productCode", "STOREAI",
                 "tenantCode", "STORE_NIKE_01",

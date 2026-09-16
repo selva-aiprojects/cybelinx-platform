@@ -61,6 +61,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Universal onboarding orchestration service for all products across the Cybelinx SaaS platform.
@@ -89,6 +94,7 @@ public class GenericProductOnboardingService {
     private final OutboxPublisher outbox;
     private final AuthorizationService authorization;
     private final EmailNotificationService emailNotificationService;
+    private final TransactionTemplate transactionTemplate;
 
     public GenericProductOnboardingService(
             ProductAdapterRegistry adapterRegistry,
@@ -107,7 +113,8 @@ public class GenericProductOnboardingService {
             AuditEventRepository auditEvents,
             OutboxPublisher outbox,
             AuthorizationService authorization,
-            EmailNotificationService emailNotificationService) {
+            EmailNotificationService emailNotificationService,
+            PlatformTransactionManager transactionManager) {
         this.adapterRegistry = adapterRegistry;
         this.tenants = tenants;
         this.products = products;
@@ -125,6 +132,8 @@ public class GenericProductOnboardingService {
         this.outbox = outbox;
         this.authorization = authorization;
         this.emailNotificationService = emailNotificationService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Transactional
@@ -133,8 +142,9 @@ public class GenericProductOnboardingService {
             assertPlatformPermission(principal.user().id(), TenantConstants.PERMISSION_TENANT_WRITE);
         }
 
-        ProductAdapter adapter = adapterRegistry.getRequiredAdapter(request.productCode());
-        adapter.validateCustomFields(request);
+        GenericOnboardRequest normalizedRequest = normalize(request);
+        ProductAdapter adapter = adapterRegistry.getRequiredAdapter(normalizedRequest.productCode());
+        adapter.validateCustomFields(normalizedRequest);
 
         String productCode = adapter.getProductCode();
         Product product = products.findByProductCode(productCode)
@@ -155,7 +165,7 @@ public class GenericProductOnboardingService {
 
         // Step 1: Idempotency check for external identifier
         Optional<TenantExternalIdentifier> existingMapping =
-                externalIds.findByProduct_IdAndProviderAndExternalId(product.getId(), provider, request.externalId());
+                externalIds.findByProduct_IdAndProviderAndExternalId(product.getId(), provider, normalizedRequest.externalId());
 
         if (existingMapping.isPresent()) {
             Tenant existingTenant = existingMapping.get().getTenant();
@@ -167,6 +177,11 @@ public class GenericProductOnboardingService {
                     .map(TenantResource::getSchemaName)
                     .findFirst()
                     .orElse("NONE");
+            String resourceStatus = trs.stream()
+                    .filter(r -> r.getProduct().getId().equals(product.getId()))
+                    .map(r -> r.getStatus().name())
+                    .findFirst()
+                    .orElse("NONE");
 
             return new GenericOnboardResponse(
                     existingTenant.getId().toString(),
@@ -174,42 +189,58 @@ public class GenericProductOnboardingService {
                     existingTenant.getName(),
                     product.getProductCode(),
                     tp != null && tp.getPlan() != null ? tp.getPlan().getPlanCode() : adapter.getDefaultPlanCode(),
-                    request.externalId(),
+                    normalizedRequest.externalId(),
                     provider,
                     "ALREADY_ONBOARDED",
                     existingTenant.getStatus().name(),
-                    "ACTIVE",
+                    resourceStatus,
                     schemaName,
-                    "Tenant with external identifier " + request.externalId() + " is already onboarded into Cybelinx platform",
+                    "Tenant with external identifier " + normalizedRequest.externalId() + " is already onboarded into Cybelinx platform",
                     IsoTime.format(existingMapping.get().getCreatedAt()),
                     List.of("IDEMPOTENT_LOOKUP")
             );
         }
 
+        // Resolve every catalog dependency before changing tenant state. This prevents a bad
+        // plan, region, or resource request from creating a half-onboarded tenant.
+        String planCode = normalizedRequest.planCode() != null
+                ? normalizedRequest.planCode()
+                : adapter.getDefaultPlanCode();
+        Plan plan = plans.findByProductIdAndPlanCode(product.getId(), planCode)
+                .orElseThrow(() -> new ApiError(
+                        ErrorCode.PLAN_NOT_FOUND,
+                        "Plan not found: " + planCode + " for product " + productCode,
+                        Map.of("productCode", productCode, "planCode", planCode)));
+        if (plan.getStatus() != PlanStatus.ACTIVE) {
+            throw new ApiError(ErrorCode.PLAN_NOT_ACTIVE, "Plan " + planCode + " is not active",
+                    Map.of("planCode", planCode, "status", plan.getStatus().name()));
+        }
+
+        Region targetRegion = resolveRegion(normalizedRequest.regionCode());
+        Resource resourceType = resourceCatalog.findByResourceTypeCode(DEFAULT_RESOURCE_TYPE)
+                .orElseThrow(() -> new ApiError(ErrorCode.RESOURCE_NOT_FOUND,
+                        "Required resource type is not registered: " + DEFAULT_RESOURCE_TYPE,
+                        Map.of("resourceTypeCode", DEFAULT_RESOURCE_TYPE)));
+        Environment env = parseEnvironment(normalizedRequest.environment());
+        IsolationMode isolationMode = parseIsolationMode(normalizedRequest.isolationMode());
+        String finalSchemaName = adapter.computeSchemaName(tenantCode(normalizedRequest.tenantCode()), normalizedRequest.schemaName());
+        validateSchemaName(finalSchemaName);
+
         // Step 2: Resolve or create canonical Tenant
         Tenant tenant;
-        Optional<Tenant> tenantOpt = tenants.findByTenantCode(request.tenantCode());
+        Optional<Tenant> tenantOpt = tenants.findByTenantCode(normalizedRequest.tenantCode());
         if (tenantOpt.isPresent()) {
             tenant = tenantOpt.get();
             if (tenant.getStatus() == TenantStatus.DELETED) {
                 throw new ApiError(
                         ErrorCode.TENANT_CODE_TAKEN,
-                        "Tenant code " + request.tenantCode() + " belongs to a deleted tenant",
-                        Map.of("tenantCode", request.tenantCode()));
+                        "Tenant code " + normalizedRequest.tenantCode() + " belongs to a deleted tenant",
+                        Map.of("tenantCode", normalizedRequest.tenantCode()));
             }
         } else {
-            Region targetRegion = null;
-            if (request.regionCode() != null && !request.regionCode().isBlank()) {
-                targetRegion = regions.findByRegionCode(request.regionCode().trim().toUpperCase()).orElse(null);
-            }
-            if (targetRegion == null) {
-                targetRegion = regions.findAll().stream().findFirst()
-                        .orElseThrow(() -> new ApiError(ErrorCode.REGION_NOT_FOUND, "No region found in catalog", Map.of()));
-            }
-
             tenant = new Tenant();
-            tenant.setTenantCode(request.tenantCode());
-            tenant.setName(request.tenantName());
+            tenant.setTenantCode(normalizedRequest.tenantCode());
+            tenant.setName(normalizedRequest.tenantName());
             tenant.setStatus(TenantStatus.ACTIVE);
             tenant.setRegion(targetRegion);
             tenant = tenants.save(tenant);
@@ -223,14 +254,14 @@ public class GenericProductOnboardingService {
         executedSteps.add("VALIDATE_TENANT");
 
         // Step 2b: Auto-provision Tenant Admin Identity & Membership
-        if (request.adminEmail() != null && !request.adminEmail().isBlank()) {
-            String adminEmail = request.adminEmail().trim().toLowerCase();
+        if (normalizedRequest.adminEmail() != null) {
+            String adminEmail = normalizedRequest.adminEmail();
             final String tenantDisplayName = tenant.getName();
             User adminUser = users.findByEmail(adminEmail).orElseGet(() -> {
                 User nu = new User();
                 nu.setEmail(adminEmail);
-                nu.setDisplayName(request.adminName() != null && !request.adminName().isBlank()
-                        ? request.adminName().trim()
+                nu.setDisplayName(normalizedRequest.adminName() != null
+                        ? normalizedRequest.adminName()
                         : (tenantDisplayName + " Admin"));
                 nu.setStatus(com.cybelinx.platform.api.domain.UserStatus.ACTIVE);
                 return users.save(nu);
@@ -263,28 +294,11 @@ public class GenericProductOnboardingService {
         externalIdMapping.setTenant(tenant);
         externalIdMapping.setProduct(product);
         externalIdMapping.setProvider(provider);
-        externalIdMapping.setExternalId(request.externalId());
+        externalIdMapping.setExternalId(normalizedRequest.externalId());
         externalIdMapping = externalIds.save(externalIdMapping);
         executedSteps.add("MAP_EXTERNAL_ID");
 
         // Step 4: Resolve plan & attach product subscription
-        String planCode = (request.planCode() != null && !request.planCode().isBlank())
-                ? request.planCode().trim().toUpperCase()
-                : adapter.getDefaultPlanCode();
-
-        Plan plan = plans.findByProductIdAndPlanCode(product.getId(), planCode)
-                .orElseThrow(() -> new ApiError(
-                        ErrorCode.PLAN_NOT_FOUND,
-                        "Plan not found: " + planCode + " for product " + productCode,
-                        Map.of("productCode", productCode, "planCode", planCode)));
-
-        if (plan.getStatus() != PlanStatus.ACTIVE) {
-            throw new ApiError(
-                    ErrorCode.PLAN_NOT_ACTIVE,
-                    "Plan " + planCode + " is not active",
-                    Map.of("planCode", planCode, "status", plan.getStatus().name()));
-        }
-
         Optional<TenantProduct> existingTp = tenantProducts.findByTenantIdAndProductId(tenant.getId(), product.getId());
         TenantProduct tenantProduct;
         if (existingTp.isPresent()) {
@@ -298,32 +312,14 @@ public class GenericProductOnboardingService {
             tenantProduct.setActivatedAt(LocalDateTime.now(ZoneOffset.UTC));
             tenantProduct = tenantProducts.save(tenantProduct);
 
-            Map<String, Object> productPayload = new HashMap<>(adapter.enrichOutboxPayload(tenant, request));
+            Map<String, Object> productPayload = new HashMap<>(adapter.enrichOutboxPayload(tenant, normalizedRequest));
             productPayload.put("plan_code", plan.getPlanCode());
             outbox.publishProductEvent("PRODUCT_ENABLED", tenant, product, tenantProduct.getId(), productPayload);
         }
         executedSteps.add("ATTACH_SUBSCRIPTION");
 
         // Step 5: Provision resource & Schema Isolation
-        Environment env = Environment.DEVELOPMENT;
-        if (request.environment() != null && !request.environment().isBlank()) {
-            try {
-                env = Environment.valueOf(request.environment().trim().toUpperCase());
-            } catch (IllegalArgumentException ignored) {}
-        }
-
-        IsolationMode isolationMode = IsolationMode.SCHEMA_PER_TENANT;
-        if (request.isolationMode() != null && !request.isolationMode().isBlank()) {
-            try {
-                isolationMode = IsolationMode.valueOf(request.isolationMode().trim().toUpperCase());
-            } catch (IllegalArgumentException ignored) {}
-        }
-
-        Resource resourceType = resourceCatalog.findByResourceTypeCode(DEFAULT_RESOURCE_TYPE)
-                .orElse(resourceCatalog.findAll().stream().findFirst().orElse(null));
-
-        String finalSchemaName = adapter.computeSchemaName(tenant.getTenantCode(), request.schemaName());
-        if (resourceType != null) {
+        {
             boolean resourceExists = tenantResources.existsByTenantIdAndProductIdAndEnvironmentAndResourceId(
                     tenant.getId(), product.getId(), env, resourceType.getId());
 
@@ -335,14 +331,19 @@ public class GenericProductOnboardingService {
                 tr.setEnvironment(env);
                 tr.setIsolationMode(isolationMode);
                 tr.setSchemaName(finalSchemaName);
-                tr.setStatus(TenantResourceStatus.ACTIVE);
+                tr.setTenantProduct(tenantProduct);
+                tr.setStatus(TenantResourceStatus.PROVISIONING);
+                tr.setProvisioningState(com.cybelinx.platform.api.domain.ProvisioningState.PENDING);
                 tr = tenantResources.save(tr);
 
                 outbox.publishResourceEvent("RESOURCE_CREATED", tenant, product, tr.getId(), Map.of(
-                        "resource_type", resourceType.getResourceTypeCode(),
+                        "productCode", product.getProductCode(),
+                        "provider", provider,
+                        "tenantCode", tenant.getTenantCode(),
+                        "resourceType", resourceType.getResourceTypeCode(),
                         "environment", env.name(),
-                        "isolation_mode", isolationMode.name(),
-                        "schema_name", tr.getSchemaName()
+                        "isolationMode", isolationMode.name(),
+                        "schemaResourceName", tr.getSchemaName()
                 ));
             }
         }
@@ -350,15 +351,15 @@ public class GenericProductOnboardingService {
         executedSteps.add("EMIT_OUTBOX_EVENT");
 
         // Step 6: Initial User & Admin membership setup if provided
-        if (request.adminEmail() != null && !request.adminEmail().isBlank()) {
-            setupAdminMembership(tenant, request.adminEmail(), request.adminName());
+        if (normalizedRequest.adminEmail() != null) {
+            setupAdminMembership(tenant, normalizedRequest.adminEmail(), normalizedRequest.adminName());
         }
 
         // Step 7: Audit Event Log
         UUID actorUserId = (principal != null && principal.user() != null) ? principal.user().id() : null;
         writeAuditEvent(actorUserId, tenant, product, "product.tenant.onboarded", Map.of(
                 "product_code", productCode,
-                "external_id", request.externalId(),
+                "external_id", normalizedRequest.externalId(),
                 "provider", provider,
                 "tenant_code", tenant.getTenantCode(),
                 "plan_code", plan.getPlanCode(),
@@ -371,11 +372,11 @@ public class GenericProductOnboardingService {
                 tenant.getName(),
                 product.getProductCode(),
                 plan.getPlanCode(),
-                request.externalId(),
+                normalizedRequest.externalId(),
                 provider,
                 "SUCCESS",
                 tenant.getStatus().name(),
-                "ACTIVE",
+                "PROVISIONING",
                 finalSchemaName,
                 "Tenant successfully onboarded into Cybelinx SaaS platform for " + product.getName(),
                 IsoTime.format(externalIdMapping.getCreatedAt()),
@@ -383,7 +384,7 @@ public class GenericProductOnboardingService {
         );
 
         if (emailNotificationService != null) {
-            emailNotificationService.dispatchOnboardingEmails(request, response);
+            dispatchEmailsAfterCommit(normalizedRequest, response);
         }
 
         return response;
@@ -401,7 +402,7 @@ public class GenericProductOnboardingService {
 
         for (GenericOnboardRequest item : request.items()) {
             try {
-                GenericOnboardResponse resp = onboardTenant(principal, item);
+            GenericOnboardResponse resp = transactionTemplate.execute(status -> onboardTenant(principal, item));
                 results.add(resp);
                 succeeded++;
             } catch (Exception ex) {
@@ -490,6 +491,80 @@ public class GenericProductOnboardingService {
                     Map.of("permission", permission));
         }
     }
+
+    private Region resolveRegion(String requestedRegionCode) {
+        if (requestedRegionCode != null) {
+            return regions.findByRegionCode(requestedRegionCode)
+                    .orElseThrow(() -> new ApiError(ErrorCode.REGION_NOT_FOUND,
+                            "Region not found: " + requestedRegionCode,
+                            Map.of("regionCode", requestedRegionCode)));
+        }
+        return regions.findAll().stream().findFirst()
+                .orElseThrow(() -> new ApiError(ErrorCode.REGION_NOT_FOUND, "No region found in catalog", Map.of()));
+    }
+
+    private void dispatchEmailsAfterCommit(GenericOnboardRequest request, GenericOnboardResponse response) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            emailNotificationService.dispatchOnboardingEmails(request, response);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                emailNotificationService.dispatchOnboardingEmails(request, response);
+            }
+        });
+    }
+
+    private static Environment parseEnvironment(String value) {
+        if (value == null) return Environment.DEVELOPMENT;
+        try { return Environment.valueOf(value); }
+        catch (IllegalArgumentException ex) { throw new ApiError(ErrorCode.VALIDATION_ERROR, "Invalid environment: " + value, Map.of("environment", value)); }
+    }
+
+    private static IsolationMode parseIsolationMode(String value) {
+        if (value == null) return IsolationMode.SCHEMA_PER_TENANT;
+        try { return IsolationMode.valueOf(value); }
+        catch (IllegalArgumentException ex) { throw new ApiError(ErrorCode.VALIDATION_ERROR, "Invalid isolationMode: " + value, Map.of("isolationMode", value)); }
+    }
+
+    private static void validateSchemaName(String value) {
+        if (value == null || !value.matches("^[a-z][a-z0-9_]{0,62}$")) {
+            throw new ApiError(ErrorCode.VALIDATION_ERROR,
+                    "schemaName must start with a lowercase letter and contain only lowercase letters, digits, and underscores (max 63 characters)",
+                    Map.of("schemaName", value == null ? "" : value));
+        }
+    }
+
+    private static GenericOnboardRequest normalize(GenericOnboardRequest request) {
+        return new GenericOnboardRequest(
+                required(request.productCode(), "productCode").toUpperCase(),
+                required(request.externalId(), "externalId"),
+                tenantCode(required(request.tenantCode(), "tenantCode")),
+                required(request.tenantName(), "tenantName"),
+                optionalUpper(request.planCode()), optional(request.domain()), optionalEmail(request.adminEmail()), optional(request.adminName()),
+                optional(request.adminUserId()), optionalUpper(request.isolationMode()), optionalUpper(request.environment()),
+                optional(request.schemaName()), optionalLower(request.regionCode()), request.customFields() == null ? Map.of() : request.customFields());
+    }
+
+    private static String tenantCode(String value) {
+        String normalized = value.trim().toUpperCase();
+        if (!normalized.matches("^[A-Z][A-Z0-9_]{1,63}$")) {
+            throw new ApiError(ErrorCode.VALIDATION_ERROR,
+                    "tenantCode must be 2-64 characters of uppercase letters, digits, or underscores and start with a letter",
+                    Map.of("tenantCode", value));
+        }
+        return normalized;
+    }
+    private static String required(String value, String field) {
+        String normalized = optional(value);
+        if (normalized == null) throw new ApiError(ErrorCode.VALIDATION_ERROR, field + " must not be blank", Map.of("field", field));
+        return normalized;
+    }
+    private static String optional(String value) { return value == null || value.trim().isEmpty() ? null : value.trim(); }
+    private static String optionalUpper(String value) { String normalized = optional(value); return normalized == null ? null : normalized.toUpperCase(); }
+    private static String optionalLower(String value) { String normalized = optional(value); return normalized == null ? null : normalized.toLowerCase(); }
+    private static String optionalEmail(String value) { String normalized = optional(value); return normalized == null ? null : normalized.toLowerCase(); }
 
     private void setupAdminMembership(Tenant tenant, String adminEmail, String adminName) {
         User user = users.findByEmail(adminEmail).orElseGet(() -> {
