@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockStore } from '@/lib/mock-data';
+import { mockStore, MOCK_ONBOARDING_DEFINITIONS } from '@/lib/mock-data';
 import type {
   CreateTenantResponse,
+  IsolationMode,
   PlanView,
   ProductVersionView,
   ProductView,
@@ -204,6 +205,45 @@ export async function GET(req: NextRequest, context: { params: Promise<{ path: s
       planCode: 'HEALTHCARE_TIER',
       domain: 'https://jioplix.com',
       provisionedAt: new Date().toISOString(),
+    });
+  }
+
+  // GET /onboarding/definitions
+  if (p === 'onboarding/definitions') {
+    return json(MOCK_ONBOARDING_DEFINITIONS);
+  }
+
+  // GET /onboarding/definitions/:productCode
+  if (path.length === 3 && path[0] === 'onboarding' && path[1] === 'definitions') {
+    const pCode = path[2].toUpperCase();
+    const def = MOCK_ONBOARDING_DEFINITIONS.find((item) => item.productCode === pCode);
+    if (!def) return error('Product onboarding definition not found', 404, 'NOT_FOUND');
+    return json(def);
+  }
+
+  // GET /onboarding/status/:productCode/:externalId
+  if (path.length === 4 && path[0] === 'onboarding' && path[1] === 'status') {
+    const productCode = path[2].toUpperCase();
+    const externalId = decodeURIComponent(path[3]);
+    const tenant = mockStore.tenants.find(
+      (t) =>
+        t.tenantCode.toUpperCase() === externalId.toUpperCase() ||
+        t.name.toLowerCase().includes(externalId.toLowerCase()),
+    );
+    return json({
+      externalId,
+      provider: `${productCode}_NEXUS`,
+      productCode,
+      tenantId: tenant?.tenantId || 'd0a1b2c3-4444-5555-6666-777788889999',
+      tenantCode: tenant?.tenantCode || externalId.toUpperCase(),
+      tenantName: tenant?.name || externalId,
+      tenantStatus: tenant?.status || 'ACTIVE',
+      subscriptionStatus: 'ACTIVE',
+      planCode: 'ENTERPRISE',
+      resourceStatus: 'SUCCEEDED',
+      schemaName: `${productCode.toLowerCase()}_${externalId.toLowerCase()}`,
+      isolationMode: 'SCHEMA_PER_TENANT',
+      onboardedAt: tenant?.createdAt || new Date().toISOString(),
     });
   }
 
@@ -627,6 +667,139 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
       message: `StoreAI merchant '${merchantName}' self-service signup completed successfully.`,
       timestamp: new Date().toISOString(),
     }, 201);
+  }
+
+  // POST /onboarding/execute
+  if (p === 'onboarding/execute') {
+    const productCode = String(body.productCode || 'GENERIC').toUpperCase();
+    const externalId = String(body.externalId || `EXT_${Date.now()}`);
+    const tenantCode = String(body.tenantCode || `TNT_${Date.now()}`).toUpperCase();
+    const tenantName = String(body.tenantName || 'New Tenant');
+    const planCode = String(body.planCode || 'ENTERPRISE').toUpperCase();
+    const isolationMode = String(body.isolationMode || 'SCHEMA_PER_TENANT');
+    const schemaName = String(
+      body.schemaName || `${productCode.toLowerCase()}_${tenantCode.toLowerCase()}`,
+    );
+    const tenantId = crypto.randomUUID();
+
+    const newTenant: TenantView = {
+      tenantId,
+      tenantCode,
+      name: tenantName,
+      status: 'ACTIVE',
+      regionCode: body.regionCode || 'ap-south-1',
+      country: body.country || 'IN',
+      timezone: body.timezone || 'Asia/Kolkata',
+      createdAt: new Date().toISOString(),
+    };
+    mockStore.tenants.unshift(newTenant);
+
+    if (!mockStore.tenantProducts[tenantId]) mockStore.tenantProducts[tenantId] = [];
+    mockStore.tenantProducts[tenantId].push({
+      tenantProductId: crypto.randomUUID(),
+      tenantId,
+      productCode,
+      planCode,
+      status: 'ACTIVE',
+      activatedAt: new Date().toISOString(),
+      appUrl: `https://${tenantCode.toLowerCase()}.${productCode.toLowerCase()}.com`,
+    });
+
+    if (!mockStore.tenantResources[tenantId]) mockStore.tenantResources[tenantId] = [];
+    mockStore.tenantResources[tenantId].push({
+      tenantResourceId: crypto.randomUUID(),
+      tenantId,
+      productCode,
+      resourceTypeCode: 'POSTGRES_SCHEMA',
+      isolationMode: isolationMode as IsolationMode,
+      environment: body.environment || 'PRODUCTION',
+      status: 'ACTIVE',
+      provisioningState: 'SUCCEEDED',
+    });
+
+    return json(
+      {
+        tenantId,
+        tenantCode,
+        tenantName,
+        productCode,
+        planCode,
+        externalId,
+        provider: `${productCode}_NEXUS`,
+        status: 'SUCCESS',
+        tenantStatus: 'ACTIVE',
+        resourceStatus: 'SUCCEEDED',
+        schemaName,
+        message: `Product '${productCode}' tenant '${tenantName}' successfully onboarded into ${isolationMode} isolation.`,
+        timestamp: new Date().toISOString(),
+        executedSteps: [
+          'VALIDATE_TENANT',
+          'MAP_EXTERNAL_ID',
+          'ATTACH_SUBSCRIPTION',
+          'PROVISION_SCHEMA',
+          'EMIT_OUTBOX_EVENT',
+        ],
+      },
+      201,
+    );
+  }
+
+  // POST /onboarding/batch
+  if (p === 'onboarding/batch') {
+    const requests = Array.isArray(body.requests) ? body.requests : [];
+    const results = requests.map((reqItem: Record<string, unknown>) => {
+      const productCode = String(reqItem.productCode || 'GENERIC').toUpperCase();
+      const externalId = String(reqItem.externalId || `EXT_${Date.now()}`);
+      const tenantCode = String(reqItem.tenantCode || `TNT_${Date.now()}`).toUpperCase();
+      const tenantName = String(reqItem.tenantName || 'Batch Tenant');
+      const planCode = String(reqItem.planCode || 'ENTERPRISE').toUpperCase();
+      const tenantId = crypto.randomUUID();
+
+      const newTenant: TenantView = {
+        tenantId,
+        tenantCode,
+        name: tenantName,
+        status: 'ACTIVE',
+        regionCode: String(reqItem.regionCode || 'ap-south-1'),
+        country: String(reqItem.country || 'IN'),
+        timezone: 'UTC',
+        createdAt: new Date().toISOString(),
+      };
+      mockStore.tenants.unshift(newTenant);
+
+      return {
+        tenantId,
+        tenantCode,
+        tenantName,
+        productCode,
+        planCode,
+        externalId,
+        provider: `${productCode}_NEXUS`,
+        status: 'SUCCESS',
+        tenantStatus: 'ACTIVE',
+        resourceStatus: 'SUCCEEDED',
+        schemaName: `${productCode.toLowerCase()}_${tenantCode.toLowerCase()}`,
+        message: `Product '${productCode}' tenant '${tenantName}' batch onboarded.`,
+        timestamp: new Date().toISOString(),
+        executedSteps: [
+          'VALIDATE_TENANT',
+          'MAP_EXTERNAL_ID',
+          'ATTACH_SUBSCRIPTION',
+          'PROVISION_SCHEMA',
+          'EMIT_OUTBOX_EVENT',
+        ],
+      };
+    });
+
+    return json(
+      {
+        totalProcessed: requests.length,
+        succeeded: requests.length,
+        failed: 0,
+        results,
+      },
+      200,
+    );
   }
 
   return error(`Action not supported: /${p}`, 400);
