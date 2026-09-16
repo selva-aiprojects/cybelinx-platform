@@ -65,6 +65,104 @@ async function tryProxy(req: NextRequest, path: string[]) {
   }
 }
 
+// ── Resend Email Service ──────────────────────────────────────────────────────
+/**
+ * Dispatch onboarding welcome + internal sales notification via Resend.
+ * Uses RESEND_API_KEY / RESEND_FROM / RESEND_TO env vars from Vercel.
+ */
+async function dispatchOnboardingEmails(opts: {
+  tenantCode: string;
+  tenantName: string;
+  productCode: string;
+  planCode: string;
+  schemaName: string;
+  status: string;
+  adminEmail?: string;
+  adminName?: string;
+  externalId?: string;
+}) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || apiKey.startsWith('your_') || apiKey.trim() === '') return;
+
+  const from = process.env.RESEND_FROM ?? 'Cybelinx: Product Onboarding <onboarding@cybelinx.com>';
+  const salesTo = process.env.RESEND_TO ?? 'sales@cybelinx.com';
+
+  const sendEmail = async (to: string, subject: string, html: string) => {
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ from, to: [to], subject, html }),
+      });
+    } catch {
+      // non-blocking — ignore network errors
+    }
+  };
+
+  const contactName = opts.adminName || opts.adminEmail || opts.tenantName;
+
+  // 1. Welcome email to Tenant Contact
+  if (opts.adminEmail) {
+    const subject = `Welcome to Cybelinx! Your ${opts.productCode} Workspace is Active (${opts.tenantName})`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#0f172a;color:#f8fafc;margin:0;padding:24px;}
+      .c{max-width:600px;margin:0 auto;background:#1e293b;border-radius:12px;border:1px solid #334155;padding:32px;}
+      .h{border-bottom:1px solid #334155;padding-bottom:16px;margin-bottom:24px;text-align:center;}
+      .brand{font-size:24px;font-weight:bold;color:#38bdf8;letter-spacing:-0.5px;}
+      .badge{display:inline-block;background:#0284c7;color:#fff;padding:4px 12px;border-radius:9999px;font-size:12px;font-weight:600;text-transform:uppercase;margin-top:8px;}
+      .card{background:#0f172a;border-radius:8px;padding:16px;margin:16px 0;border:1px solid #334155;}
+      .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e293b;font-size:14px;}
+      .lbl{color:#94a3b8;font-weight:500;}.val{color:#f8fafc;font-weight:600;font-family:monospace;}
+      .btn{display:block;width:100%;background:linear-gradient(135deg,#0284c7,#9333ea);color:#fff;text-align:center;padding:14px 0;border-radius:8px;text-decoration:none;font-weight:600;margin-top:24px;}
+      .footer{margin-top:32px;font-size:12px;color:#64748b;text-align:center;border-top:1px solid #334155;padding-top:16px;}
+    </style></head><body><div class="c">
+      <div class="h"><div class="brand">Cybelinx Multi-Tenant Platform</div>
+        <div style="font-size:20px;font-weight:600;color:#f1f5f9;margin-top:8px;">Welcome &amp; Subscription Activation</div>
+        <span class="badge">Product Workspace Active</span></div>
+      <p>Dear <strong>${contactName}</strong>,</p>
+      <p>Congratulations! Your dedicated product workspace <strong>${opts.tenantName}</strong> has been successfully provisioned on the Cybelinx platform.</p>
+      <div class="card">
+        <div class="row"><span class="lbl">Tenant Code</span><span class="val">${opts.tenantCode}</span></div>
+        <div class="row"><span class="lbl">Product Code</span><span class="val">${opts.productCode}</span></div>
+        <div class="row"><span class="lbl">Subscription Plan</span><span class="val">${opts.planCode}</span></div>
+        <div class="row"><span class="lbl">Isolation Mode</span><span class="val">SCHEMA_PER_TENANT</span></div>
+        <div class="row"><span class="lbl">Database Schema</span><span class="val">${opts.schemaName}</span></div>
+        <div class="row"><span class="lbl">Contact Admin Email</span><span class="val">${opts.adminEmail}</span></div>
+        <div class="row" style="border-bottom:none;"><span class="lbl">Onboarding Status</span><span class="val" style="color:#4ade80;">${opts.status}</span></div>
+      </div>
+      <p style="font-size:14px;color:#cbd5e1;">Your tenant admin identity has been granted <strong>TENANT_ADMIN</strong> role permissions with isolated database access.</p>
+      <a href="https://cybelinx-platform-admin-portal.vercel.app" class="btn" target="_blank">Access Your Product Console</a>
+      <div class="footer">This email was automatically dispatched by Cybelinx Control Plane Outbox Engine.<br/>© 2026 Cybelinx Inc. All rights reserved.</div>
+    </div></body></html>`;
+    await sendEmail(opts.adminEmail, subject, html);
+  }
+
+  // 2. Internal sales notification
+  if (salesTo) {
+    const salesSubject = `[Cybelinx Onboarding] New Tenant Provisioned: ${opts.tenantCode} (${opts.productCode})`;
+    const salesHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
+      body{font-family:sans-serif;background:#0f172a;color:#f8fafc;padding:20px;}
+      .c{max-width:600px;margin:0 auto;background:#1e293b;padding:24px;border-radius:8px;}
+      .heading{color:#38bdf8;font-size:18px;margin-bottom:16px;}
+      table{width:100%;border-collapse:collapse;} td{padding:8px;border-bottom:1px solid #334155;font-size:14px;}
+      td.l{color:#94a3b8;font-weight:bold;} td.v{font-family:monospace;color:#f8fafc;}
+    </style></head><body><div class="c">
+      <div class="heading">⚡ New Tenant Provisioned Notification</div>
+      <table>
+        <tr><td class="l">Tenant Code</td><td class="v">${opts.tenantCode}</td></tr>
+        <tr><td class="l">Tenant Name</td><td class="v">${opts.tenantName}</td></tr>
+        <tr><td class="l">Product Code</td><td class="v">${opts.productCode}</td></tr>
+        <tr><td class="l">Plan Code</td><td class="v">${opts.planCode}</td></tr>
+        <tr><td class="l">External ID</td><td class="v">${opts.externalId ?? '—'}</td></tr>
+        <tr><td class="l">Admin Email</td><td class="v">${opts.adminEmail ?? '—'}</td></tr>
+        <tr><td class="l">Schema Name</td><td class="v">${opts.schemaName}</td></tr>
+        <tr><td class="l">Status</td><td class="v">${opts.status}</td></tr>
+      </table>
+    </div></body></html>`;
+    await sendEmail(salesTo, salesSubject, salesHtml);
+  }
+}
+
 export async function GET(req: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const proxied = await tryProxy(req, path);
@@ -963,31 +1061,44 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
       provisioningState: 'SUCCEEDED',
     });
 
-    return json(
-      {
-        tenantId,
-        tenantCode,
-        tenantName,
-        productCode,
-        planCode,
-        externalId,
-        provider: `${productCode}_NEXUS`,
-        status: 'SUCCESS',
-        tenantStatus: 'ACTIVE',
-        resourceStatus: 'SUCCEEDED',
-        schemaName,
-        message: `Product '${productCode}' tenant '${tenantName}' successfully onboarded into ${isolationMode} isolation.`,
-        timestamp: new Date().toISOString(),
-        executedSteps: [
-          'VALIDATE_TENANT',
-          'MAP_EXTERNAL_ID',
-          'ATTACH_SUBSCRIPTION',
-          'PROVISION_SCHEMA',
-          'EMIT_OUTBOX_EVENT',
-        ],
-      },
-      201,
-    );
+    const responsePayload = {
+      tenantId,
+      tenantCode,
+      tenantName,
+      productCode,
+      planCode,
+      externalId,
+      provider: `${productCode}_NEXUS`,
+      status: 'SUCCESS',
+      tenantStatus: 'ACTIVE',
+      resourceStatus: 'SUCCEEDED',
+      schemaName,
+      message: `Product '${productCode}' tenant '${tenantName}' successfully onboarded into ${isolationMode} isolation.`,
+      timestamp: new Date().toISOString(),
+      executedSteps: [
+        'VALIDATE_TENANT',
+        'PROVISION_TENANT_ADMIN',
+        'MAP_EXTERNAL_ID',
+        'ATTACH_SUBSCRIPTION',
+        'PROVISION_SCHEMA',
+        'EMIT_OUTBOX_EVENT',
+      ],
+    };
+
+    // Dispatch welcome email via Resend (non-blocking, server-side)
+    dispatchOnboardingEmails({
+      tenantCode,
+      tenantName,
+      productCode,
+      planCode,
+      schemaName,
+      status: 'SUCCESS',
+      adminEmail: body.adminEmail as string | undefined,
+      adminName: body.adminName as string | undefined,
+      externalId,
+    }).catch(() => {});
+
+    return json(responsePayload, 201);
   }
 
   // POST /onboarding/batch
