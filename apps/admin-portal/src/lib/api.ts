@@ -53,6 +53,9 @@ import type {
   GenericOnboardRequest,
   GenericOnboardResponse,
   GenericOnboardStatusView,
+  TenantMemberView,
+  CreateTenantMemberRequest,
+  UserView,
 } from './types';
 
 const STORAGE_TOKEN_KEY = 'cybelinx_api_token';
@@ -343,6 +346,15 @@ export const api = {
       request<GenericOnboardResponse>('/onboarding/execute', { method: 'POST', body }),
     getStatus: (productCode: string, externalId: string) =>
       request<GenericOnboardStatusView>(`/onboarding/status/${productCode}/${encodeURIComponent(externalId)}`),
+  },
+
+  iam: {
+    listUsers: (params?: ListParams) =>
+      request<{ data: UserView[]; total: number }>(`/iam/users${buildQuery(params)}`),
+    listMembers: (tenantId: string) =>
+      request<{ data: TenantMemberView[] }>(`/iam/tenants/${tenantId}/members`),
+    addMember: (tenantId: string, body: CreateTenantMemberRequest) =>
+      request<TenantMemberView>(`/iam/tenants/${tenantId}/members`, { method: 'POST', body }),
   },
 };
 

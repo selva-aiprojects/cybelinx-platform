@@ -52,4 +52,20 @@ public class IamViews {
     public record GrantRoleRequest(
             @NotBlank(message = "roleCode is required") String roleCode
     ) {}
+
+    public record CreateTenantMemberRequest(
+            @NotBlank(message = "email is required") String email,
+            String displayName,
+            List<String> roleCodes
+    ) {}
+
+    public record UserView(
+            String userId,
+            String email,
+            String displayName,
+            String status,
+            List<String> identities,
+            int tenantCount,
+            String createdAt
+    ) {}
 }

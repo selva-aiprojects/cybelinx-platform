@@ -34,4 +34,5 @@ public interface TenantMembershipRepository extends JpaRepository<TenantMembersh
     List<Object[]> listMembershipPermissions(@Param("userId") UUID userId);
 
     java.util.Optional<TenantMembership> findByTenant_IdAndUser_Id(UUID tenantId, UUID userId);
+    List<TenantMembership> findByUser_Id(UUID userId);
 }

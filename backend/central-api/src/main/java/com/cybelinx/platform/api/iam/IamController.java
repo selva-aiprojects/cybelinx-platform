@@ -68,6 +68,17 @@ public class IamController {
         return service.listTenantMembers(principal, tenantId);
     }
 
+    /** Add/invite a new member to a tenant. */
+    @PostMapping("/tenants/{tenantId}/members")
+    @ResponseStatus(HttpStatus.CREATED)
+    @RequirePermissions(TenantConstants.PERMISSION_TENANT_WRITE)
+    public TenantMemberView addTenantMember(
+            @CurrentPrincipal AuthPrincipal principal,
+            @PathVariable UUID tenantId,
+            @Valid @RequestBody IamViews.CreateTenantMemberRequest request) {
+        return service.addTenantMember(principal, tenantId, request);
+    }
+
     /** Grant an RBAC role to a user within a tenant. */
     @PostMapping("/tenants/{tenantId}/members/{userId}/roles")
     @ResponseStatus(HttpStatus.CREATED)
@@ -78,5 +89,13 @@ public class IamController {
             @PathVariable UUID userId,
             @Valid @RequestBody GrantRoleRequest request) {
         return service.grantRole(principal, tenantId, userId, request);
+    }
+
+    /** List all platform users and identity metadata. */
+    @GetMapping("/users")
+    @RequirePermissions(TenantConstants.PERMISSION_TENANT_READ)
+    public List<IamViews.UserView> listPlatformUsers(
+            @CurrentPrincipal AuthPrincipal principal) {
+        return service.listPlatformUsers(principal);
     }
 }

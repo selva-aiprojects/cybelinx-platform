@@ -484,3 +484,31 @@ export interface GenericOnboardStatusView {
   isolationMode?: string;
   onboardedAt: string;
 }
+
+export interface TenantMemberView {
+  membershipId: string;
+  tenantId?: string;
+  userId: string;
+  email: string;
+  displayName: string;
+  status: string;
+  roles: string[];
+  permissions?: string[];
+  joinedAt: string;
+}
+
+export interface CreateTenantMemberRequest {
+  email: string;
+  displayName?: string;
+  roleCodes?: string[];
+}
+
+export interface UserView {
+  userId: string;
+  email: string;
+  displayName: string;
+  status: string;
+  identities: string[];
+  tenantCount: number;
+  createdAt: string;
+}

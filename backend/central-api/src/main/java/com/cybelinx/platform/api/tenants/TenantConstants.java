@@ -7,6 +7,8 @@ public final class TenantConstants {
     public static final String PERMISSION_TENANT_WRITE = "tenant:write";
 
     public static final String PLATFORM_ADMIN_ROLE = "CYBELINX_PLATFORM_ADMIN";
+    public static final String TENANT_ADMIN_ROLE = "TENANT_ADMIN";
+    public static final String TENANT_USER_ROLE = "TENANT_USER";
 
     /** Product codes from the platform catalog ({@code @cybelinx/types} PRODUCT_CODES). */
     public static final String[] PRODUCT_CODES = {

@@ -195,6 +195,93 @@ public class IamService {
         );
     }
 
+    @Transactional
+    public TenantMemberView addTenantMember(AuthPrincipal principal, UUID tenantId, IamViews.CreateTenantMemberRequest request) {
+        assertCanManageTenant(principal, tenantId, TenantConstants.PERMISSION_TENANT_WRITE);
+        Tenant tenant = requireTenant(tenantId);
+
+        String email = request.email().trim().toLowerCase();
+        User user = users.findByEmail(email).orElseGet(() -> {
+            User newUser = new User();
+            newUser.setEmail(email);
+            newUser.setDisplayName(request.displayName() != null && !request.displayName().isBlank()
+                    ? request.displayName().trim()
+                    : email.split("@")[0]);
+            newUser.setStatus(com.cybelinx.platform.api.domain.UserStatus.ACTIVE);
+            return users.save(newUser);
+        });
+
+        TenantMembership tm = memberships.findByTenant_IdAndUser_Id(tenant.getId(), user.getId()).orElseGet(() -> {
+            TenantMembership m = new TenantMembership();
+            m.setTenant(tenant);
+            m.setUser(user);
+            m.setStatus(MembershipStatus.ACTIVE);
+            return memberships.save(m);
+        });
+
+        List<String> assignedRoleCodes = new ArrayList<>();
+        List<String> targetRoleCodes = (request.roleCodes() != null && !request.roleCodes().isEmpty())
+                ? request.roleCodes()
+                : List.of("TENANT_USER");
+
+        for (String roleCode : targetRoleCodes) {
+            roles.findByCode(roleCode.trim().toUpperCase()).ifPresent(role -> {
+                boolean alreadyAssigned = membershipRoles.findByMembership_Id(tm.getId())
+                        .stream()
+                        .anyMatch(mr -> mr.getRole().getCode().equalsIgnoreCase(role.getCode()));
+                if (!alreadyAssigned) {
+                    MembershipRole mr = new MembershipRole();
+                    mr.setMembership(tm);
+                    mr.setRole(role);
+                    membershipRoles.save(mr);
+                }
+                assignedRoleCodes.add(role.getCode());
+            });
+        }
+
+        writeAuditEvent(principal.user().id(), tenant, "iam.member_added", Map.of(
+                "user_id", user.getId().toString(),
+                "email", user.getEmail(),
+                "assigned_roles", assignedRoleCodes
+        ));
+
+        return new TenantMemberView(
+                tm.getId().toString(),
+                user.getId().toString(),
+                user.getEmail(),
+                user.getDisplayName(),
+                tm.getStatus().name(),
+                assignedRoleCodes,
+                List.of(),
+                IsoTime.format(tm.getCreatedAt())
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<IamViews.UserView> listPlatformUsers(AuthPrincipal principal) {
+        if (principal != null && principal.user() != null) {
+            authorization.listAccess(principal.user().id());
+        }
+
+        List<User> allUsers = users.findAll();
+        List<IamViews.UserView> views = new ArrayList<>();
+
+        for (User u : allUsers) {
+            int tenantCount = memberships.findByUser_Id(u.getId()).size();
+            views.add(new IamViews.UserView(
+                    u.getId().toString(),
+                    u.getEmail(),
+                    u.getDisplayName() != null ? u.getDisplayName() : u.getEmail(),
+                    u.getStatus() != null ? u.getStatus().name() : "ACTIVE",
+                    List.of("generic"),
+                    tenantCount,
+                    IsoTime.format(u.getCreatedAt())
+            ));
+        }
+
+        return views;
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private void assertCanManageTenant(AuthPrincipal principal, UUID tenantId, String permission) {

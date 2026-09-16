@@ -6,4 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 /** Spring Data port of the {@code membershipRole} Prisma queries. */
 public interface MembershipRoleRepository extends JpaRepository<MembershipRole, UUID> {
+    java.util.List<MembershipRole> findByMembership_Id(UUID membershipId);
 }

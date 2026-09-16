@@ -218,6 +218,42 @@ public class GenericProductOnboardingService {
         }
         executedSteps.add("VALIDATE_TENANT");
 
+        // Step 2b: Auto-provision Tenant Admin Identity & Membership
+        if (request.adminEmail() != null && !request.adminEmail().isBlank()) {
+            String adminEmail = request.adminEmail().trim().toLowerCase();
+            final String tenantDisplayName = tenant.getName();
+            User adminUser = users.findByEmail(adminEmail).orElseGet(() -> {
+                User nu = new User();
+                nu.setEmail(adminEmail);
+                nu.setDisplayName(request.adminName() != null && !request.adminName().isBlank()
+                        ? request.adminName().trim()
+                        : (tenantDisplayName + " Admin"));
+                nu.setStatus(com.cybelinx.platform.api.domain.UserStatus.ACTIVE);
+                return users.save(nu);
+            });
+
+            final Tenant finalTenant = tenant;
+            TenantMembership tm = memberships.findByTenant_IdAndUser_Id(tenant.getId(), adminUser.getId()).orElseGet(() -> {
+                TenantMembership m = new TenantMembership();
+                m.setTenant(finalTenant);
+                m.setUser(adminUser);
+                m.setStatus(MembershipStatus.ACTIVE);
+                return memberships.save(m);
+            });
+
+            roles.findByCode(TenantConstants.TENANT_ADMIN_ROLE).ifPresent(r -> {
+                boolean hasRole = membershipRoles.findByMembership_Id(tm.getId()).stream()
+                        .anyMatch(mr -> mr.getRole().getCode().equalsIgnoreCase(TenantConstants.TENANT_ADMIN_ROLE));
+                if (!hasRole) {
+                    MembershipRole mr = new MembershipRole();
+                    mr.setMembership(tm);
+                    mr.setRole(r);
+                    membershipRoles.save(mr);
+                }
+            });
+            executedSteps.add("PROVISION_TENANT_ADMIN");
+        }
+
         // Step 3: Register external identifier mapping
         TenantExternalIdentifier externalIdMapping = new TenantExternalIdentifier();
         externalIdMapping.setTenant(tenant);
