@@ -274,14 +274,163 @@ export async function GET(req: NextRequest, context: { params: Promise<{ path: s
     });
   }
 
-  // GET /broker/status
-  if (p === 'broker/status') {
+  // GET /iam/users
+  if (p === 'iam/users') {
+    const page = Math.max(1, Number(req.nextUrl.searchParams.get('page') || '1'));
+    const limit = Math.max(1, Number(req.nextUrl.searchParams.get('limit') || '20'));
+    const users = [
+      {
+        userId: 'seed-dev-admin-0001',
+        email: 'dev.admin@cybelinx.test',
+        displayName: 'Cybelinx Platform Admin',
+        status: 'ACTIVE',
+        identities: ['supabase-auth', 'jwt-bearer'],
+        tenantCount: 3,
+        createdAt: '2026-09-01T08:00:00Z',
+      },
+      {
+        userId: 'user-acme-admin-001',
+        email: 'admin@acme-hospital.org',
+        displayName: 'ACME Hospital Admin (Dr. John Smith)',
+        status: 'ACTIVE',
+        identities: ['supabase-auth'],
+        tenantCount: 1,
+        createdAt: '2026-09-15T10:15:00Z',
+      },
+      {
+        userId: 'user-nike-admin-002',
+        email: 'merchant@nike-e2e.com',
+        displayName: 'Nike Merchant Lead (Sarah Jenkins)',
+        status: 'ACTIVE',
+        identities: ['supabase-auth'],
+        tenantCount: 1,
+        createdAt: '2026-09-15T11:20:00Z',
+      },
+    ];
+    return json({ data: users, total: users.length, meta: { page, limit, total: users.length, totalPages: 1 } });
+  }
+
+  // GET /iam/tenants/:tenantId/members
+  if (path.length === 4 && path[0] === 'iam' && path[1] === 'tenants' && path[3] === 'members') {
+    const tenantId = path[2].toLowerCase();
+    const mockMembers = tenantId.includes('nike') ? [
+      {
+        membershipId: 'mem-nike-001',
+        tenantId: path[2],
+        userId: 'user-nike-admin-002',
+        email: 'merchant@nike-e2e.com',
+        displayName: 'Sarah Jenkins',
+        status: 'ACTIVE',
+        roleCodes: ['TENANT_ADMIN'],
+        roles: ['TENANT_ADMIN'],
+        permissions: ['TENANT_WRITE', 'PRODUCT_ACCESS', 'USER_MANAGE'],
+        joinedAt: '2026-09-15T11:20:00Z',
+      },
+    ] : [
+      {
+        membershipId: 'mem-acme-001',
+        tenantId: path[2],
+        userId: 'user-acme-admin-001',
+        email: 'admin@acme-hospital.org',
+        displayName: 'Dr. John Smith',
+        status: 'ACTIVE',
+        roleCodes: ['TENANT_ADMIN'],
+        roles: ['TENANT_ADMIN'],
+        permissions: ['TENANT_WRITE', 'PRODUCT_ACCESS', 'USER_MANAGE'],
+        joinedAt: '2026-09-15T10:15:00Z',
+      },
+    ];
+    return json({ data: mockMembers });
+  }
+
+  // GET /audit
+  if (p === 'audit') {
+    const page = Math.max(1, Number(req.nextUrl.searchParams.get('page') || '1'));
+    const limit = Math.max(1, Number(req.nextUrl.searchParams.get('limit') || '20'));
+    const auditData = [
+      {
+        eventId: 'aud-001',
+        eventType: 'TENANT_ONBOARDED',
+        action: 'ONBOARD_TENANT',
+        tenantId: 'acme',
+        actorUserId: 'seed-dev-admin-0001',
+        actorEmail: 'dev.admin@cybelinx.test',
+        details: { tenantCode: 'ACME_HOSPITAL', productCode: 'JIOPLIX', planCode: 'JIOPLIX_ENTERPRISE' },
+        createdAt: '2026-09-15T10:15:00Z',
+      },
+      {
+        eventId: 'aud-002',
+        eventType: 'TENANT_ONBOARDED',
+        action: 'ONBOARD_TENANT',
+        tenantId: 'nike',
+        actorUserId: 'seed-dev-admin-0001',
+        actorEmail: 'dev.admin@cybelinx.test',
+        details: { tenantCode: 'NIKE_STORE', productCode: 'STOREAI', planCode: 'STOREAI_STANDARD' },
+        createdAt: '2026-09-15T11:20:00Z',
+      },
+      {
+        eventId: 'aud-003',
+        eventType: 'IAM_MEMBER_INVITED',
+        action: 'INVITE_TENANT_MEMBER',
+        tenantId: 'acme',
+        actorUserId: 'seed-dev-admin-0001',
+        actorEmail: 'dev.admin@cybelinx.test',
+        details: { invitedEmail: 'admin@acme-hospital.org', role: 'TENANT_ADMIN' },
+        createdAt: '2026-09-15T10:16:00Z',
+      },
+    ];
     return json({
-      status: 'UP',
-      brokerMode: 'IN_MEMORY',
-      activeTopics: ['cybelinx.events.TENANT_CREATED', 'cybelinx.events.SUBSCRIPTION_ATTACHED'],
-      publishedCount: 42,
+      data: auditData,
+      meta: { page, limit, total: auditData.length, totalPages: 1 },
     });
+  }
+
+  // GET /events
+  if (p === 'events') {
+    const page = Math.max(1, Number(req.nextUrl.searchParams.get('page') || '1'));
+    const limit = Math.max(1, Number(req.nextUrl.searchParams.get('limit') || '20'));
+    const eventData = [
+      {
+        eventId: 'evt-outbox-001',
+        aggregateType: 'TENANT',
+        aggregateId: 'acme',
+        eventType: 'TENANT_CREATED',
+        payload: { tenantCode: 'ACME_HOSPITAL', status: 'ACTIVE', region: 'ap-south-1' },
+        status: 'PROCESSED',
+        createdAt: '2026-09-15T10:15:00Z',
+      },
+      {
+        eventId: 'evt-outbox-002',
+        aggregateType: 'SUBSCRIPTION',
+        aggregateId: 'sub-acme-001',
+        eventType: 'SUBSCRIPTION_ATTACHED',
+        payload: { tenantCode: 'ACME_HOSPITAL', productCode: 'JIOPLIX', planCode: 'JIOPLIX_ENTERPRISE' },
+        status: 'PROCESSED',
+        createdAt: '2026-09-15T10:15:05Z',
+      },
+      {
+        eventId: 'evt-outbox-003',
+        aggregateType: 'TENANT',
+        aggregateId: 'nike',
+        eventType: 'TENANT_CREATED',
+        payload: { tenantCode: 'NIKE_STORE', status: 'ACTIVE', region: 'eu-west-1' },
+        status: 'PROCESSED',
+        createdAt: '2026-09-15T11:20:00Z',
+      },
+    ];
+    return json({
+      data: eventData,
+      meta: { page, limit, total: eventData.length, totalPages: 1 },
+    });
+  }
+
+  // GET /regions
+  if (p === 'regions') {
+    return json([
+      { regionId: 'reg-01', regionCode: 'ap-south-1', name: 'Asia Pacific (Mumbai)', isDefault: true },
+      { regionId: 'reg-02', regionCode: 'eu-west-1', name: 'Europe (Ireland)', isDefault: false },
+      { regionId: 'reg-03', regionCode: 'us-east-1', name: 'US East (N. Virginia)', isDefault: false },
+    ]);
   }
 
   return error(`Not found: /${p}`, 404, 'NOT_FOUND');
