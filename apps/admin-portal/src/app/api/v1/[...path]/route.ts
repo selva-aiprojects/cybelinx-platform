@@ -680,6 +680,48 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
     const schemaName = String(
       body.schemaName || `${productCode.toLowerCase()}_${tenantCode.toLowerCase()}`,
     );
+
+    // Check if tenant already exists in store
+    const existingTenant = mockStore.tenants.find(
+      (t) =>
+        t.tenantCode.toUpperCase() === tenantCode.toUpperCase() ||
+        t.name.toLowerCase() === tenantName.toLowerCase(),
+    );
+
+    if (existingTenant) {
+      const tp = (mockStore.tenantProducts[existingTenant.tenantId] || []).find(
+        (p) => p.productCode === productCode,
+      );
+      const tr = (mockStore.tenantResources[existingTenant.tenantId] || []).find(
+        (r) => r.productCode === productCode,
+      );
+
+      return json(
+        {
+          tenantId: existingTenant.tenantId,
+          tenantCode: existingTenant.tenantCode,
+          tenantName: existingTenant.name,
+          productCode,
+          planCode: tp?.planCode || planCode,
+          externalId,
+          provider: `${productCode}_NEXUS`,
+          status: 'ALREADY_ONBOARDED',
+          tenantStatus: existingTenant.status,
+          resourceStatus: tr?.provisioningState || 'SUCCEEDED',
+          schemaName: `${productCode.toLowerCase()}_${existingTenant.tenantCode.toLowerCase()}`,
+          message: `Tenant '${existingTenant.name}' (${existingTenant.tenantCode}) is already onboarded into Cybelinx platform. Derived existing schema resources & subscription status.`,
+          timestamp: existingTenant.createdAt,
+          executedSteps: [
+            'IDEMPOTENT_LOOKUP',
+            'DERIVE_EXISTING_METADATA',
+            'ATTACH_SUBSCRIPTION',
+            'PROVISION_SCHEMA',
+          ],
+        },
+        200,
+      );
+    }
+
     const tenantId = crypto.randomUUID();
 
     const newTenant: TenantView = {

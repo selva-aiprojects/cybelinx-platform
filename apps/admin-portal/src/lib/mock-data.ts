@@ -269,6 +269,16 @@ const INITIAL_TENANTS: TenantView[] = [
     timezone: 'UTC',
     createdAt: '2026-09-14T00:00:00Z',
   },
+  {
+    tenantId: '00000000-0000-0000-0000-000000000014',
+    tenantCode: 'JIOPLIX_APOLLO_01',
+    name: 'Apollo Multispecialty Hospital',
+    status: 'ACTIVE',
+    regionCode: 'ap-south-1',
+    country: 'IN',
+    timezone: 'Asia/Kolkata',
+    createdAt: '2026-09-15T00:00:00Z',
+  },
 ];
 
 const INITIAL_TENANT_PRODUCTS: Record<string, TenantProductView[]> = {
@@ -323,6 +333,17 @@ const INITIAL_TENANT_PRODUCTS: Record<string, TenantProductView[]> = {
       status: 'ACTIVE',
       activatedAt: '2026-09-14T00:00:00Z',
       appUrl: 'https://puma.storeai.cybelinx.com',
+    },
+  ],
+  '00000000-0000-0000-0000-000000000014': [
+    {
+      tenantProductId: '00000000-0000-0000-0000-000000000314',
+      tenantId: '00000000-0000-0000-0000-000000000014',
+      productCode: 'JIOPLIX',
+      planCode: 'JIOPLIX_ENTERPRISE',
+      status: 'ACTIVE',
+      activatedAt: '2026-09-15T00:00:00Z',
+      appUrl: 'https://apollo.jioplix.com',
     },
   ],
 };
@@ -396,12 +417,24 @@ const INITIAL_TENANT_RESOURCES: Record<string, TenantResourceView[]> = {
   ],
   '00000000-0000-0000-0000-000000000013': [
     {
-      tenantResourceId: '00000000-0000-0000-0000-000000000431',
+      tenantResourceId: '00000000-0000-0000-0000-000000000013',
       tenantId: '00000000-0000-0000-0000-000000000013',
       productCode: 'STOREAI',
       resourceTypeCode: 'POSTGRES_SCHEMA',
       isolationMode: 'SCHEMA_PER_TENANT',
       environment: 'DEMO',
+      status: 'ACTIVE',
+      provisioningState: 'SUCCEEDED',
+    },
+  ],
+  '00000000-0000-0000-0000-000000000014': [
+    {
+      tenantResourceId: '00000000-0000-0000-0000-000000000441',
+      tenantId: '00000000-0000-0000-0000-000000000014',
+      productCode: 'JIOPLIX',
+      resourceTypeCode: 'POSTGRES_SCHEMA',
+      isolationMode: 'SCHEMA_PER_TENANT',
+      environment: 'PRODUCTION',
       status: 'ACTIVE',
       provisioningState: 'SUCCEEDED',
     },
