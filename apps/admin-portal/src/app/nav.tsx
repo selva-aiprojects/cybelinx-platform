@@ -12,7 +12,7 @@ const NAV_SECTIONS = [
       { href: '/tenants', label: 'Tenants', icon: '▤' },
       { href: '/products', label: 'Products', icon: '▣' },
       { href: '/onboarding', label: 'Product Onboarding', icon: '🚀' },
-      { href: '/storeai/merchant?tenant=nike', label: 'Nike Store Dashboard', icon: '⚡' },
+      { href: '/storeai/merchant', label: 'Store Merchant Portal', icon: '⚡' },
     ],
   },
   {

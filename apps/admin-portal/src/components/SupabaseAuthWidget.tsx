@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { User, Session } from '@supabase/supabase-js';
 import {
   getSupabaseClient,
@@ -12,6 +13,7 @@ import { parseUserSecurityProfile } from '@/lib/rbac';
 import { Alert } from './ui';
 
 export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: string | null) => void }) {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,12 +82,16 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
             : 'Confirmation email sent! Please verify your inbox.',
         });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
         if (error) throw error;
-        setMsg({ kind: 'success', text: 'Signed in successfully via Supabase Auth!' });
+        setMsg({ kind: 'success', text: 'Signed in successfully via Supabase Auth! Redirecting to dashboard…' });
+        const profile = parseUserSecurityProfile(syncSupabaseToken(data.session), data.user);
+        const userTenantCode = profile?.memberships?.[0]?.tenantCode || 'STOREAI_NIKE_01';
+        const tenantParam = userTenantCode.toLowerCase().replace('storeai_', '').replace('_01', '').replace('store_', '');
+        router.push(`/storeai/merchant?tenant=${tenantParam}`);
       }
     } catch (err: unknown) {
       setMsg({ kind: 'error', text: (err as Error).message || 'Authentication failed' });

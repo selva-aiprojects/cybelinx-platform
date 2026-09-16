@@ -100,6 +100,20 @@ function StoreAiMerchantContent() {
   const profile: UserSecurityProfile | null = parseUserSecurityProfile(token, user);
   const rbac: RbacEvaluationResult = evaluateTenantRbac(profile, tenant.tenantCode);
 
+  // 3. Auto-redirect user to their authorized tenant dashboard on login
+  useEffect(() => {
+    if (!loading && profile) {
+      const paramTenant = searchParams.get('tenant');
+      if (!profile.isPlatformAdmin && profile.memberships.length > 0) {
+        const primaryTenant = profile.memberships[0].tenantCode;
+        const targetParam = primaryTenant.toLowerCase().replace('storeai_', '').replace('_01', '').replace('store_', '');
+        if (!paramTenant || paramTenant.toLowerCase() !== targetParam) {
+          router.push(`/storeai/merchant?tenant=${targetParam}`);
+        }
+      }
+    }
+  }, [loading, profile, searchParams, router]);
+
   return (
     <div className="stack">
       {/* ------------------------------------------------------------- */}
