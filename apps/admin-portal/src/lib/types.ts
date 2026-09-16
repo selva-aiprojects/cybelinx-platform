@@ -115,6 +115,7 @@ export interface TenantView {
   regionCode: string | null;
   country: string | null;
   timezone: string | null;
+  contactEmail?: string | null;
   createdAt: string;
 }
 
@@ -271,6 +272,7 @@ export interface CreateTenantRequest {
   regionCode?: string;
   country?: string;
   timezone?: string;
+  contactEmail?: string;
   products?: TenantProductRequest[];
 }
 
@@ -449,6 +451,8 @@ export interface GenericOnboardRequest {
   environment?: string;
   schemaName?: string;
   regionCode?: string;
+  country?: string;
+  timezone?: string;
   customFields?: Record<string, unknown>;
 }
 

@@ -166,6 +166,7 @@ function TenantCreateModal({ onClose, onCreated }: { onClose: () => void; onCrea
   const [regionCode, setRegionCode] = useState('');
   const [country, setCountry] = useState('');
   const [timezone, setTimezone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   const [productCode, setProductCode] = useState('');
   const [planCode, setPlanCode] = useState('');
   const [attachProduct, setAttachProduct] = useState(false);
@@ -176,18 +177,36 @@ function TenantCreateModal({ onClose, onCreated }: { onClose: () => void; onCrea
     setSubmitting(true);
     setError(null);
     try {
-      const result = await api.tenants.create({
-        tenantCode,
-        name,
-        regionCode: regionCode || undefined,
-        country: country || undefined,
-        timezone: timezone || undefined,
-        products: attachProduct
-          ? [{ productCode, planCode: planCode || undefined }]
-          : undefined,
-      });
-      onCreated();
-      router.push(`/tenants/${result.tenant.tenantId}`);
+      // When attaching a product, use the full onboarding pipeline so email,
+      // audit log, outbox events, and tenant-admin provisioning all fire.
+      if (attachProduct && productCode.trim()) {
+        const resp = await api.onboarding.execute({
+          productCode: productCode.trim().toUpperCase(),
+          externalId: tenantCode.trim().toUpperCase(),
+          tenantCode: tenantCode.trim().toUpperCase(),
+          tenantName: name.trim(),
+          planCode: planCode.trim().toUpperCase() || undefined,
+          regionCode: regionCode || undefined,
+          country: country || undefined,
+          timezone: timezone || undefined,
+          adminEmail: contactEmail.trim() || undefined,
+          isolationMode: 'SCHEMA_PER_TENANT',
+          environment: 'PRODUCTION',
+        });
+        onCreated();
+        router.push(`/tenants/${resp.tenantId}`);
+      } else {
+        const result = await api.tenants.create({
+          tenantCode,
+          name,
+          regionCode: regionCode || undefined,
+          country: country || undefined,
+          timezone: timezone || undefined,
+          contactEmail: contactEmail.trim() || undefined,
+        });
+        onCreated();
+        router.push(`/tenants/${result.tenant.tenantId}`);
+      }
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -269,6 +288,21 @@ function TenantCreateModal({ onClose, onCreated }: { onClose: () => void; onCrea
             placeholder="Asia/Kolkata"
           />
         </div>
+      </div>
+
+      <div className="field">
+        <label className="label" htmlFor="tenant-contact-email">
+          Contact / Admin Email
+        </label>
+        <input
+          id="tenant-contact-email"
+          type="email"
+          className="input"
+          value={contactEmail}
+          onChange={(event) => setContactEmail(event.target.value)}
+          placeholder="admin@hospital.com"
+        />
+        <div className="hint">Used for welcome email and tenant admin provisioning.</div>
       </div>
 
       <div className="field" style={{ marginTop: '0.5rem' }}>

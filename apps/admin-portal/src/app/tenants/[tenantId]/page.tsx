@@ -124,6 +124,12 @@ export default function TenantDetailPage() {
           <div className="kv" style={{ marginTop: '0.4rem' }}>
             <span className="k">Code</span>
             <span className="v mono">{tenant.tenantCode}</span>
+            {tenant.contactEmail && (
+              <>
+                <span className="k">Contact Email</span>
+                <span className="v" style={{ color: '#38bdf8' }}>{tenant.contactEmail}</span>
+              </>
+            )}
             <span className="k">Region</span>
             <span className="v">{tenant.regionCode ?? '—'}</span>
             <span className="k">Country</span>

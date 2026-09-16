@@ -72,11 +72,11 @@ export default function DashboardPage() {
       <div className="stats-grid">
         <div className="stat" style={{ borderLeft: '4px solid #3B82F6' }}>
           <div className="stat-value">{tenantTotal ?? (tenants.loading ? '…' : '—')}</div>
-          <div className="stat-label">Active Tenants (ACME, etc.)</div>
+          <div className="stat-label">Active Tenants</div>
         </div>
         <div className="stat" style={{ borderLeft: '4px solid #10B981' }}>
           <div className="stat-value">{productTotal ?? (products.loading ? '…' : '—')}</div>
-          <div className="stat-label">Products (JIOPLIX, LIMS)</div>
+          <div className="stat-label">SaaS Products</div>
         </div>
         <div className="stat" style={{ borderLeft: '4px solid #8B5CF6' }}>
           <div className="stat-value">Schema-per-Tenant</div>

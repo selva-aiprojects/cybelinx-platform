@@ -670,6 +670,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
 
   // POST /tenants
   if (p === 'tenants') {
+    const contactEmail = body.contactEmail ? String(body.contactEmail).trim() : null;
     const newTenant: TenantView = {
       tenantId: crypto.randomUUID(),
       tenantCode: String(body.tenantCode || '').trim().toLowerCase(),
@@ -678,6 +679,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
       regionCode: body.regionCode || 'eu-west-1',
       country: body.country || null,
       timezone: body.timezone || 'UTC',
+      contactEmail,
       createdAt: new Date().toISOString(),
     };
     mockStore.tenants.unshift(newTenant);
@@ -707,6 +709,19 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
           appUrl: `https://${newTenant.tenantCode}.${prod.productCode.toLowerCase()}.com`,
         });
       });
+    }
+
+    if (contactEmail && Array.isArray(body.products) && body.products.length > 0) {
+      const primaryProduct = body.products[0];
+      dispatchOnboardingEmails({
+        tenantCode: newTenant.tenantCode,
+        tenantName: newTenant.name,
+        productCode: primaryProduct.productCode,
+        planCode: primaryProduct.planCode || 'STARTER',
+        schemaName: `tenant_${newTenant.tenantCode.toLowerCase()}`,
+        status: 'ACTIVE',
+        adminEmail: contactEmail,
+      }).catch(() => {});
     }
 
     const res: CreateTenantResponse = {
@@ -1034,6 +1049,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ path: 
       regionCode: body.regionCode || 'ap-south-1',
       country: body.country || 'IN',
       timezone: body.timezone || 'Asia/Kolkata',
+      contactEmail: (body.adminEmail || body.contactEmail || null) as string | null,
       createdAt: new Date().toISOString(),
     };
     mockStore.tenants.unshift(newTenant);
