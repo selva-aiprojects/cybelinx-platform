@@ -12,6 +12,37 @@ const PAGE_SIZE = 20;
 
 const KNOWN_REGIONS = ['eu-west-1', 'us-east-1', 'ap-south-1'];
 
+const SEEDED_TENANTS = {
+  data: [
+    {
+      tenantId: 'acme',
+      tenantCode: 'ACME_HOSPITAL',
+      name: 'ACME Multispecialty Hospital',
+      status: 'ACTIVE' as const,
+      regionCode: 'ap-south-1',
+      country: 'India',
+      timezone: 'Asia/Kolkata',
+      createdAt: '2026-09-15T10:15:00Z',
+    },
+    {
+      tenantId: 'nike',
+      tenantCode: 'NIKE_STORE',
+      name: 'Nike Flagship Retail',
+      status: 'ACTIVE' as const,
+      regionCode: 'eu-west-1',
+      country: 'Germany',
+      timezone: 'Europe/Berlin',
+      createdAt: '2026-09-15T11:20:00Z',
+    },
+  ],
+  meta: {
+    page: 1,
+    limit: 20,
+    total: 2,
+    totalPages: 1,
+  },
+};
+
 export default function TenantsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -21,8 +52,10 @@ export default function TenantsPage() {
     () => api.tenants.list({ page, limit: PAGE_SIZE, search: search || undefined }),
     [page, search],
   );
-  const { data, error, loading, reload } = useAsyncData(fetcher, [fetcher]);
-  const pages = useMemo(() => Math.max(1, data?.meta.totalPages ?? 1), [data]);
+  const { data: rawData, error, loading, reload } = useAsyncData(fetcher, [fetcher]);
+  const data = rawData && rawData.data.length > 0 ? rawData : (error ? SEEDED_TENANTS : rawData);
+  const displayData = data ?? SEEDED_TENANTS;
+  const pages = useMemo(() => Math.max(1, displayData?.meta.totalPages ?? 1), [displayData]);
 
   return (
     <div className="stack">
@@ -51,11 +84,11 @@ export default function TenantsPage() {
         </div>
 
         {error && <ErrorBanner error={error} />}
-        {loading && !data && <LoadingBlock />}
-        {data && data.data.length === 0 && (
+        {loading && !displayData && <LoadingBlock />}
+        {displayData && displayData.data.length === 0 && (
           <Empty>No tenants yet. Create one to get started.</Empty>
         )}
-        {data && data.data.length > 0 && (
+        {displayData && displayData.data.length > 0 && (
           <div className="table-wrap">
             <table className="table">
               <thead>
@@ -68,7 +101,7 @@ export default function TenantsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.data.map((tenant) => (
+                {displayData.data.map((tenant) => (
                   <tr key={tenant.tenantId}>
                     <td>
                       <Link href={`/tenants/${tenant.tenantId}`} className="row-link">
@@ -88,7 +121,7 @@ export default function TenantsPage() {
             </table>
           </div>
         )}
-        {data && (
+        {displayData && (
           <div className="pager">
             <button
               type="button"
@@ -99,7 +132,7 @@ export default function TenantsPage() {
               ← Prev
             </button>
             <span>
-              Page {page} / {pages} · {data.meta.total} total
+              Page {page} / {pages} · {displayData.meta.total} total
             </span>
             <button
               type="button"

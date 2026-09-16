@@ -86,11 +86,10 @@ export function resolveApiBaseUrl(): string {
   if (typeof window === 'undefined') return DEFAULT_API_BASE_URL;
   const stored = window.localStorage.getItem(STORAGE_BASE_URL_KEY);
   if (stored) {
-    // On HTTPS, browsers block http:// URLs (especially localhost) due to Mixed Content.
-    // Automatically sanitize and reset stale localhost base URLs to the cloud API endpoint.
+    // On HTTPS, browsers block http:// URLs due to Mixed Content.
     if (
       window.location.protocol === 'https:' &&
-      (stored.startsWith('http://localhost') || stored.startsWith('http://127.0.0.1'))
+      (stored.startsWith('http://localhost') || stored.startsWith('http://127.0.0.1') || stored.startsWith('http://'))
     ) {
       window.localStorage.removeItem(STORAGE_BASE_URL_KEY);
       return DEFAULT_API_BASE_URL;
@@ -135,16 +134,30 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const activeToken = token !== undefined ? token : (getStoredToken() ?? DEFAULT_DEV_TOKEN);
   if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
 
+  const currentBase = resolveApiBaseUrl();
   let response: Response;
   try {
-    response = await fetch(`${resolveApiBaseUrl()}${path}`, {
+    response = await fetch(`${currentBase}${path}`, {
       method,
       headers,
       signal,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
-    throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${resolveApiBaseUrl()}`, error);
+    if (typeof window !== 'undefined' && currentBase !== DEFAULT_API_BASE_URL) {
+      try {
+        response = await fetch(`${DEFAULT_API_BASE_URL}${path}`, {
+          method,
+          headers,
+          signal,
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+      } catch {
+        throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${currentBase}`, error);
+      }
+    } else {
+      throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${currentBase}`, error);
+    }
   }
 
   if (!response.ok) {

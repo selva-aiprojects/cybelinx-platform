@@ -36,15 +36,20 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
-            @Value("${CORS_ORIGINS:http://localhost:3000}") String corsOrigins) {
+            @Value("${CORS_ORIGINS:*}") String corsOrigins) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(
-                Arrays.stream(corsOrigins.split(","))
-                        .map(String::trim)
-                        .filter(origin -> !origin.isEmpty())
-                        .toList());
+        if ("*".equals(corsOrigins.trim()) || corsOrigins.contains("*")) {
+            config.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            List<String> origins = Arrays.stream(corsOrigins.split(","))
+                    .map(String::trim)
+                    .filter(origin -> !origin.isEmpty())
+                    .toList();
+            config.setAllowedOriginPatterns(origins);
+        }
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-ID", "X-Total-Count"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

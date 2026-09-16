@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { isApiClientError } from '@/lib/api';
 
 export function useAsyncData<T>(
@@ -12,13 +12,16 @@ export function useAsyncData<T>(
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+
   useEffect(() => {
     let cancelled = false;
     async function run() {
       setLoading(true);
       setError(null);
       try {
-        const result = await fetcher();
+        const result = await fetcherRef.current();
         if (!cancelled) setData(result);
       } catch (err: unknown) {
         if (!cancelled) setError(describeError(err));
@@ -67,12 +70,15 @@ export function Alert({
 
 export function ErrorBanner({ error }: { error: string }) {
   const isLocalhostError =
-    error.includes('localhost:3001') || error.includes('Unable to reach the API');
+    error.includes('localhost') || error.includes('127.0.0.1');
+  const isNetworkError =
+    error.includes('Unable to reach the API') || isLocalhostError;
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
   function resetToCloud() {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('cybelinx_api_base_url');
+      window.localStorage.removeItem('cybelinx_api_token');
       window.location.reload();
     }
   }
@@ -81,16 +87,20 @@ export function ErrorBanner({ error }: { error: string }) {
     <div className="alert alert-error" role="alert">
       <div style={{ flex: 1 }}>
         <div>{error}</div>
-        {isLocalhostError && isHttps && (
+        {isNetworkError && (
           <div style={{ marginTop: '0.6rem' }}>
-            <span className="small">Your browser has a cached <code>localhost:3001</code> endpoint that is blocked over HTTPS. </span>
+            <span className="small">
+              {isLocalhostError && isHttps
+                ? 'Your browser has a cached localhost endpoint that is blocked over HTTPS. '
+                : 'Having trouble reaching the remote API? '}
+            </span>
             <button
               type="button"
               className="btn btn-sm btn-ghost"
               onClick={resetToCloud}
               style={{ fontWeight: 600, textDecoration: 'underline', marginLeft: '0.4rem' }}
             >
-              Click to reset to Cloud API (/api/v1)
+              Reset to Embedded API (/api/v1)
             </button>
           </div>
         )}

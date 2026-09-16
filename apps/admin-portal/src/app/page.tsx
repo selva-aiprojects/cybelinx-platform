@@ -112,7 +112,7 @@ export default function DashboardPage() {
           <div style={{ padding: '12px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '8px' }}>
             <div style={{ color: '#94A3B8', fontSize: '12px', textTransform: 'uppercase' }}>Event Outbox Engine</div>
             <div style={{ fontWeight: '600', color: '#38BDF8', marginTop: '4px' }}>Transactional Outbox Relay</div>
-            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>RabbitMQ / Kafka Ready</div>
+            <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>PostgreSQL Outbox + Event Worker</div>
           </div>
           <div style={{ padding: '12px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '8px' }}>
             <div style={{ color: '#94A3B8', fontSize: '12px', textTransform: 'uppercase' }}>Tenant Adapter</div>

@@ -83,7 +83,7 @@ export function AppNav() {
       <div className="sidebar-footer">
         {APP_NAME}
         <br />
-        v0.1.0 · dev build
+        Cybelinx Platform v1.0
       </div>
     </aside>
   );
