@@ -16,6 +16,7 @@ import com.cybelinx.platform.api.persistence.TenantResourceRepository;
 import com.cybelinx.platform.api.persistence.UserRepository;
 import com.cybelinx.platform.api.persistence.entity.Tenant;
 import com.cybelinx.platform.api.persistence.entity.TenantExternalIdentifier;
+import com.cybelinx.platform.api.persistence.entity.TenantResource;
 import com.cybelinx.platform.api.security.AuthPrincipal;
 import java.util.List;
 import java.util.Optional;
@@ -124,6 +125,16 @@ class StoreAiOnboardingServiceIT {
 
         assertThat(tenantProductRepository.findByTenantIdAndProductId(tenantOpt.get().getId(), mappings.get(0).getProduct().getId())).isPresent();
         assertThat(tenantResourceRepository.listByTenantId(tenantOpt.get().getId())).isNotEmpty();
+        List<TenantResource> resources = tenantResourceRepository.listByTenantId(tenantOpt.get().getId());
+        assertThat(resources).anyMatch(r -> r.getProduct().getId().equals(mappings.get(0).getProduct().getId()));
+
+        com.cybelinx.platform.api.persistence.entity.User merchant =
+                userRepository.findByEmail("merchant@nike.com").orElseThrow();
+        com.cybelinx.platform.api.persistence.entity.TenantMembership membership =
+                membershipRepository.findByTenant_IdAndUser_Id(tenantOpt.get().getId(), merchant.getId()).orElseThrow();
+        assertThat(membershipRoleRepository.findByMembership_Id(membership.getId()))
+                .anyMatch(mr -> mr.getRole().getCode()
+                        .equals(com.cybelinx.platform.api.tenants.TenantConstants.TENANT_ADMIN_ROLE));
     }
 
     @Test

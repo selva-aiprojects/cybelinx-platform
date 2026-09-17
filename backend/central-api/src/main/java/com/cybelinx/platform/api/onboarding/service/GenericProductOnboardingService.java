@@ -141,7 +141,10 @@ public class GenericProductOnboardingService {
         if (principal != null && principal.user() != null) {
             assertPlatformPermission(principal.user().id(), TenantConstants.PERMISSION_TENANT_WRITE);
         }
+        return doOnboardTenant(principal, request);
+    }
 
+    private GenericOnboardResponse doOnboardTenant(AuthPrincipal principal, GenericOnboardRequest request) {
         GenericOnboardRequest normalizedRequest = normalize(request);
         ProductAdapter adapter = adapterRegistry.getRequiredAdapter(normalizedRequest.productCode());
         adapter.validateCustomFields(normalizedRequest);
@@ -402,7 +405,7 @@ public class GenericProductOnboardingService {
 
         for (GenericOnboardRequest item : request.items()) {
             try {
-            GenericOnboardResponse resp = transactionTemplate.execute(status -> onboardTenant(principal, item));
+            GenericOnboardResponse resp = transactionTemplate.execute(status -> doOnboardTenant(principal, item));
                 results.add(resp);
                 succeeded++;
             } catch (Exception ex) {
@@ -581,12 +584,16 @@ public class GenericProductOnboardingService {
             tm.setStatus(MembershipStatus.ACTIVE);
             tm = memberships.save(tm);
 
-            Optional<Role> tenantAdminRole = roles.findByCode(TenantConstants.PLATFORM_ADMIN_ROLE);
+            Optional<Role> tenantAdminRole = roles.findByCode(TenantConstants.TENANT_ADMIN_ROLE);
             if (tenantAdminRole.isPresent()) {
-                MembershipRole mr = new MembershipRole();
-                mr.setMembership(tm);
-                mr.setRole(tenantAdminRole.get());
-                membershipRoles.save(mr);
+                boolean hasRole = membershipRoles.findByMembership_Id(tm.getId()).stream()
+                        .anyMatch(mr -> mr.getRole().getCode().equalsIgnoreCase(TenantConstants.TENANT_ADMIN_ROLE));
+                if (!hasRole) {
+                    MembershipRole mr = new MembershipRole();
+                    mr.setMembership(tm);
+                    mr.setRole(tenantAdminRole.get());
+                    membershipRoles.save(mr);
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cybelinx.platform.api.domain.MembershipStatus;
 import com.cybelinx.platform.api.domain.RoleScope;
+import com.cybelinx.platform.api.domain.TenantResourceStatus;
 import com.cybelinx.platform.api.onboarding.JioplixOnboardingViews.BatchOnboardRequest;
 import com.cybelinx.platform.api.onboarding.JioplixOnboardingViews.BatchOnboardResponse;
 import com.cybelinx.platform.api.onboarding.JioplixOnboardingViews.JioplixOnboardingResponse;
@@ -112,7 +113,7 @@ class JioplixOnboardingServiceIT {
         SingleOnboardRequest request = new SingleOnboardRequest(
                 "jio-hosp-001",
                 "Apollo General Hospital",
-                "apollo-gen-" + UUID.randomUUID().toString().substring(0, 6),
+                "APOLLO_GEN_" + UUID.randomUUID().toString().substring(0, 6),
                 "JIOPLIX_ENTERPRISE",
                 "admin@apollo-hospital.com",
                 "Dr. Apollo Admin",
@@ -141,6 +142,16 @@ class JioplixOnboardingServiceIT {
 
         assertThat(tenantProducts.findByTenantIdAndProductId(tenantId, mapping.getProduct().getId())).isPresent();
         assertThat(tenantResources.listByTenantId(tenantId)).isNotEmpty();
+        assertThat(tenantResources.listByTenantId(tenantId).get(0).getStatus())
+                .isEqualTo(TenantResourceStatus.PROVISIONING);
+
+        com.cybelinx.platform.api.persistence.entity.User adminUser =
+                users.findByEmail("admin@apollo-hospital.com").orElseThrow();
+        com.cybelinx.platform.api.persistence.entity.TenantMembership membership =
+                memberships.findByTenant_IdAndUser_Id(tenantId, adminUser.getId()).orElseThrow();
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
+        assertThat(membershipRoles.findByMembership_Id(membership.getId()))
+                .anyMatch(mr -> mr.getRole().getCode().equals(TenantConstants.TENANT_ADMIN_ROLE));
 
         List<AuditEvent> audit = auditEvents.findByTenant_Id(tenantId);
         assertThat(audit).isNotEmpty();
@@ -150,7 +161,7 @@ class JioplixOnboardingServiceIT {
     @Test
     void onboardExistingTenant_idempotent() {
         String extId = "jio-hosp-dup-" + UUID.randomUUID().toString().substring(0, 6);
-        String code = "hosp-code-" + UUID.randomUUID().toString().substring(0, 6);
+        String code = "HOSP_CODE_" + UUID.randomUUID().toString().substring(0, 6);
         SingleOnboardRequest request = new SingleOnboardRequest(
                 extId,
                 "City Care Hospital",
@@ -173,8 +184,8 @@ class JioplixOnboardingServiceIT {
 
     @Test
     void onboardBatch_success() {
-        String code1 = "b1-" + UUID.randomUUID().toString().substring(0, 6);
-        String code2 = "b2-" + UUID.randomUUID().toString().substring(0, 6);
+        String code1 = "BATCH_TENANT_" + UUID.randomUUID().toString().substring(0, 6);
+        String code2 = "BATCH_MERCY_" + UUID.randomUUID().toString().substring(0, 6);
 
         BatchOnboardRequest batchReq = new BatchOnboardRequest(List.of(
                 new SingleOnboardRequest("ext-batch-1", "St Jude Hospital", code1, "JIOPLIX_ENTERPRISE", "admin@stjude.org", "Admin 1", null, null, null),
@@ -191,7 +202,7 @@ class JioplixOnboardingServiceIT {
 
     @Test
     void signupNewTenant_success() {
-        String code = "new-saas-" + UUID.randomUUID().toString().substring(0, 6);
+        String code = "SUNRISE_MED_" + UUID.randomUUID().toString().substring(0, 6);
         NewSignupRequest signupReq = new NewSignupRequest(
                 "Sunrise Medical Center",
                 code,
@@ -212,7 +223,7 @@ class JioplixOnboardingServiceIT {
     @Test
     void getOnboardingStatus_success() {
         String extId = "status-ext-" + UUID.randomUUID().toString().substring(0, 6);
-        String code = "status-code-" + UUID.randomUUID().toString().substring(0, 6);
+        String code = "STATUS_HOSP_" + UUID.randomUUID().toString().substring(0, 6);
         SingleOnboardRequest request = new SingleOnboardRequest(
                 extId, "Status Hospital", code, "JIOPLIX_ENTERPRISE", "a@b.com", "Admin", null, null, null);
 
@@ -229,7 +240,7 @@ class JioplixOnboardingServiceIT {
     @Test
     void onboardExistingTenant_missingPermission_throws403() {
         SingleOnboardRequest request = new SingleOnboardRequest(
-                "ext-forbidden", "Forbidden Hosp", "forbid-code", "JIOPLIX_ENTERPRISE", null, null, null, null, null);
+                "ext-forbidden", "Forbidden Hosp", "FORBID_CODE", "JIOPLIX_ENTERPRISE", null, null, null, null, null);
 
         assertThatThrownBy(() -> service.onboardExistingTenant(regularUserPrincipal, request))
                 .isInstanceOf(ApiError.class)

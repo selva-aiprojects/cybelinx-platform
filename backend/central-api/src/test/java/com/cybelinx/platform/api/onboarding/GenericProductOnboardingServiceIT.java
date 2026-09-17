@@ -15,6 +15,8 @@ import com.cybelinx.platform.api.onboarding.model.ProductOnboardingDefinition;
 import com.cybelinx.platform.api.onboarding.service.GenericProductOnboardingService;
 import com.cybelinx.platform.api.persistence.AuditEventRepository;
 import com.cybelinx.platform.api.persistence.MembershipRoleRepository;
+import com.cybelinx.platform.api.persistence.PlanRepository;
+import com.cybelinx.platform.api.persistence.ProductRepository;
 import com.cybelinx.platform.api.persistence.RoleRepository;
 import com.cybelinx.platform.api.persistence.TenantExternalIdentifierRepository;
 import com.cybelinx.platform.api.persistence.TenantMembershipRepository;
@@ -54,6 +56,8 @@ class GenericProductOnboardingServiceIT {
     @Autowired private GenericProductOnboardingService genericService;
     @Autowired private ProductAdapterRegistry registry;
     @Autowired private TenantRepository tenants;
+    @Autowired private ProductRepository products;
+    @Autowired private PlanRepository plans;
     @Autowired private TenantExternalIdentifierRepository externalIds;
     @Autowired private TenantProductRepository tenantProducts;
     @Autowired private TenantResourceRepository tenantResources;
@@ -108,7 +112,22 @@ class GenericProductOnboardingServiceIT {
         List<ProductOnboardingDefinition> definitions = registry.getAvailableDefinitions();
         assertThat(definitions).isNotEmpty();
         assertThat(definitions).extracting(ProductOnboardingDefinition::productCode)
-                .contains("JIOPLIX", "STOREAI", "SYNTHALYST");
+                .contains("JIOPLIX", "STOREAI", "SYNTHALYST", "LIMS");
+    }
+
+    @Test
+    void everyAdapterDefaultPlanMustExistInCatalog() {
+        List<ProductOnboardingDefinition> definitions = registry.getAvailableDefinitions();
+        for (ProductOnboardingDefinition def : definitions) {
+            com.cybelinx.platform.api.persistence.entity.Plan plan =
+                    plans.findByProductIdAndPlanCode(
+                                    products.findByProductCode(def.productCode()).orElseThrow().getId(),
+                                    def.subscription().defaultPlanCode())
+                            .orElse(null);
+            assertThat(plan)
+                    .as("Default plan %s for product %s must be registered", def.subscription().defaultPlanCode(), def.productCode())
+                    .isNotNull();
+        }
     }
 
     @Test
@@ -206,5 +225,48 @@ class GenericProductOnboardingServiceIT {
         assertThat(response.provider()).isEqualTo("SYNTHALYST_HRM");
         assertThat(response.schemaName()).startsWith("synthalyst_");
         assertThat(response.resourceStatus()).isEqualTo("PROVISIONING");
+    }
+
+    @Test
+    void shouldOnboardLimsViaGenericFramework() {
+        String extId = "LIMS_GENERIC_" + UUID.randomUUID().toString().substring(0, 8);
+        GenericOnboardRequest request = new GenericOnboardRequest(
+                "LIMS",
+                extId,
+                "TENANT_LIMS_" + UUID.randomUUID().toString().substring(0, 8),
+                "Generic Apollo Diagnostics Lab",
+                "LIMS_STANDARD",
+                "https://lab.apollo-lims.com",
+                "admin@apollo-lab.org",
+                "Lab Director",
+                null,
+                "SCHEMA_PER_TENANT",
+                "DEVELOPMENT",
+                null,
+                null,
+                Map.of("country", "India", "timezone", "Asia/Kolkata")
+        );
+
+        GenericOnboardResponse resp = genericService.onboardTenant(platformAdminPrincipal, request);
+
+        assertThat(resp.status()).isEqualTo("SUCCESS");
+        assertThat(resp.productCode()).isEqualTo("LIMS");
+        assertThat(resp.externalId()).isEqualTo(extId);
+        assertThat(resp.provider()).isEqualTo("LIMS_NEXUS");
+        assertThat(resp.schemaName()).startsWith("lims_");
+        assertThat(resp.executedSteps()).contains("VALIDATE_TENANT", "MAP_EXTERNAL_ID", "ATTACH_SUBSCRIPTION", "PROVISION_SCHEMA", "EMIT_OUTBOX_EVENT");
+
+        GenericOnboardStatusView status = genericService.getOnboardingStatus(platformAdminPrincipal, "LIMS", extId);
+        assertThat(status.externalId()).isEqualTo(extId);
+        assertThat(status.tenantCode()).isEqualTo(request.tenantCode().toUpperCase());
+        assertThat(status.subscriptionStatus()).isEqualTo("ACTIVE");
+        assertThat(status.resourceStatus()).isEqualTo("PROVISIONING");
+
+        com.cybelinx.platform.api.persistence.entity.User adminUser =
+                users.findByEmail("admin@apollo-lab.org").orElseThrow();
+        com.cybelinx.platform.api.persistence.entity.TenantMembership membership =
+                memberships.findByTenant_IdAndUser_Id(UUID.fromString(resp.tenantId()), adminUser.getId()).orElseThrow();
+        assertThat(membershipRoles.findByMembership_Id(membership.getId()))
+                .anyMatch(mr -> mr.getRole().getCode().equals(TenantConstants.TENANT_ADMIN_ROLE));
     }
 }
