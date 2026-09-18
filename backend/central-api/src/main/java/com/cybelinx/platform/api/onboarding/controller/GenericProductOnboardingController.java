@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
  * render product-specific onboarding schemas, provision isolated tenant schemas, and track onboarding state.
  */
 @RestController
-@RequestMapping({"/api/v1/onboarding", "/onboarding"})
+@RequestMapping("/onboarding")
 @Tag(name = "Product Onboarding", description = "Universal definition-driven tenant onboarding engine for all platform products")
 @SecurityRequirement(name = "bearerAuth")
 public class GenericProductOnboardingController {

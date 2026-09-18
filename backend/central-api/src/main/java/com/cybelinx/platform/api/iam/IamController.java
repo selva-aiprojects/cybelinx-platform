@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** REST Controller for IAM (Identity & Access Management) tenant security & role configurations. */
 @RestController
-@RequestMapping("/api/v1/iam")
+@RequestMapping("/iam")
 public class IamController {
 
     private final IamService service;

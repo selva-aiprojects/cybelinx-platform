@@ -234,17 +234,18 @@ Swagger UI: `GET /api/v1/docs`.
 
 ## 8. Jioplix Hospital Management System (https://jioplix.com) SaaS Onboarding
 
-The Cybelinx platform provides formal REST onboarding APIs for migrating existing standalone **Jioplix** hospital/clinic customers and registering new multi-tenant SaaS subscriptions:
+The Cybelinx platform provides canonical REST onboarding APIs for migrating existing standalone **Jioplix** hospital/clinic customers and registering new multi-tenant SaaS subscriptions. All products (Jioplix, StoreAI, Synthalyst, etc.) fulfill the same generic contract — `productCode` selects the adapter, and `externalId` maps to a `TenantExternalIdentifier`:
 
-### REST Endpoints (`/api/v1/onboarding/jioplix`)
+### Generic REST Endpoints (`/api/v1/onboarding`)
 
 | Method | Path | Permission | Description |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/onboarding/jioplix/single` | `tenant:write` | Onboard an existing Jioplix hospital customer (maps legacy external ID `JIOPLIX_NEXUS`, creates tenant, attaches plan, registers isolated database/schema resource). |
-| `POST` | `/api/v1/onboarding/jioplix/batch` | `tenant:write` | Bulk onboard a list of existing Jioplix hospital customers in a single request. |
-| `POST` | `/api/v1/onboarding/jioplix/signup` | `tenant:write` | Self-service signup for a new multi-tenant Jioplix SaaS customer. |
-| `GET` | `/api/v1/onboarding/jioplix/tenants/{externalId}` | `tenant:read` | Query multi-tenant SaaS onboarding and resource status by Jioplix external ID. |
+| `POST` | `/api/v1/onboarding/execute` | `tenant:write` | Execute onboarding for one tenant. Body: `{ productCode, externalId, tenantName, tenantCode, planCode, adminEmail?, customFields? }` (`productCode` required; `planCode` defaults to the product's `defaultPlanCode`). |
+| `POST` | `/api/v1/onboarding/batch` | `tenant:write` | Bulk onboard a list of tenants in a single request. Body: `{ items: GenericOnboardRequest[] }`. |
+| `GET` | `/api/v1/onboarding/status/{productCode}/{externalId}` | `tenant:read` | Query onboarding and resource provisioning status for a product's external ID. |
+| `GET` | `/api/v1/onboarding/definitions` | `tenant:read` | List supported product onboarding definitions (provider, default plan, schema prefix, health-check endpoint, dynamic fields). |
 
 ### Operational Steps for Customer Migration
-1. Issue a `POST /api/v1/onboarding/jioplix/single` payload with legacy `externalId` (e.g. `jio-hosp-101`), `tenantName`, `tenantCode`, `planCode` (default `JIOPLIX_ENTERPRISE`), and optional hospital admin email.
+1. Issue a `POST /api/v1/onboarding/execute` payload with `productCode: "JIOPLIX"`, legacy `externalId` (e.g. `jio-hosp-101`), `tenantName`, `tenantCode`, `planCode` (e.g. `JIOPLIX_ENTERPRISE`), and optional hospital admin email.
 2. The control plane idempotently creates/links the canonical tenant, attaches active subscription, registers `POSTGRES_SCHEMA` resources, assigns `TENANT_ADMIN` role, and emits `TENANT_CREATED` and `PRODUCT_ENABLED` outbox events.
+3. Poll `GET /api/v1/onboarding/status/{productCode}/{externalId}` until `resourceStatus` reaches a terminal state (`SUCCEEDED` / `PROVISIONED` / `ACTIVE`). For async products the onboarding UI polls this endpoint automatically after `execute` returns.

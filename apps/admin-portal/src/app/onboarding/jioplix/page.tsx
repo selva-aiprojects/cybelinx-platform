@@ -1,45 +1,38 @@
 'use client';
 
 import { useState } from 'react';
-import { resolveApiBaseUrl, getStoredToken } from '@/lib/api';
+import { api } from '@/lib/api';
+import type { GenericOnboardRequest, GenericOnboardStatusView, GenericBatchOnboardResponse } from '@/lib/types';
 import { Alert } from '@/components/ui';
 import { StatusBadge } from '@/components/badges';
+import { useProvisioningPolling } from '@/hooks/useProvisioningPolling';
+
+const PRODUCT_CODE = 'JIOPLIX';
+const AVAILABLE_PLANS = ['JIOPLIX_ENTERPRISE', 'HEALTHCARE_TIER', 'CLINIC_STARTER'];
+const DEFAULT_PLAN = 'JIOPLIX_ENTERPRISE';
 
 export default function JioplixOnboardingPage() {
   const [tab, setTab] = useState<'single' | 'batch' | 'signup' | 'lookup'>('single');
 
   // Single Hospital Onboarding State
   const [externalId, setExternalId] = useState('JIOPLIX_NEXUS');
-  const [name, setName] = useState('Jioplix Healthcare Hospital');
+  const [tenantName, setTenantName] = useState('Jioplix Healthcare Hospital');
   const [tenantCode, setTenantCode] = useState('JIOPLIX_APOLLO_01');
   const [domain, setDomain] = useState('https://jioplix.com');
-  const [email, setEmail] = useState('admin@jioplix.com');
+  const [adminEmail, setAdminEmail] = useState('admin@jioplix.com');
+  const [adminName, setAdminName] = useState('');
   const [adminUserId, setAdminUserId] = useState('seed-dev-admin-0001');
-  const [planCode, setPlanCode] = useState('HEALTHCARE_TIER');
-  const [regionCode, setRegionCode] = useState('ap-south-1');
-  const [country, setCountry] = useState('IN');
-  const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [planCode, setPlanCode] = useState(DEFAULT_PLAN);
+  const [schemaName, setSchemaName] = useState('jioplix_apollo_01');
 
-  // Batch 7 Hospitals State
-  const DEFAULT_BATCH_JSON = JSON.stringify({
-    tenants: [
-      { externalId: "NEXUS_HOSP_01", tenantCode: "JIOPLIX_HOSP_01", tenantName: "Apollo Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp1", domain: "https://hosp1.jioplix.com" },
-      { externalId: "NEXUS_HOSP_02", tenantCode: "JIOPLIX_HOSP_02", tenantName: "Max Healthcare", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp2", domain: "https://hosp2.jioplix.com" },
-      { externalId: "NEXUS_HOSP_03", tenantCode: "JIOPLIX_HOSP_03", tenantName: "Fortis Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp3", domain: "https://hosp3.jioplix.com" },
-      { externalId: "NEXUS_HOSP_04", tenantCode: "JIOPLIX_HOSP_04", tenantName: "Manipal Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp4", domain: "https://hosp4.jioplix.com" },
-      { externalId: "NEXUS_HOSP_05", tenantCode: "JIOPLIX_HOSP_05", tenantName: "Narayana Health", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp5", domain: "https://hosp5.jioplix.com" },
-      { externalId: "NEXUS_HOSP_06", tenantCode: "JIOPLIX_HOSP_06", tenantName: "Medanta Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp6", domain: "https://hosp6.jioplix.com" },
-      { externalId: "NEXUS_HOSP_07", tenantCode: "JIOPLIX_HOSP_07", tenantName: "Aster CMI Hospital", planCode: "HEALTHCARE_TIER", schemaName: "jioplix_hosp7", domain: "https://hosp7.jioplix.com" }
-    ]
-  }, null, 2);
-
-  const [batchJson, setBatchJson] = useState(DEFAULT_BATCH_JSON);
+  // Batch Hospitals State
+  const [batchJson, setBatchJson] = useState('');
 
   // New SaaS Signup State
   const [signupCode, setSignupCode] = useState('');
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
-  const [signupPlan, setSignupPlan] = useState('HEALTHCARE_TIER');
+  const [signupPlan, setSignupPlan] = useState(DEFAULT_PLAN);
 
   // Lookup State
   const [lookupId, setLookupId] = useState('JIOPLIX_NEXUS');
@@ -49,6 +42,40 @@ export default function JioplixOnboardingPage() {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const provisioningActive =
+    (result?.status as string) === 'SUCCESS' &&
+    !['SUCCEEDED', 'ACTIVE', 'FAILED', 'DEACTIVATED', 'DELETED', 'PROVISIONED'].includes(
+      String(result?.resourceStatus || '').toUpperCase(),
+    );
+  const { status: polledStatus, pollError: pollStatusError, active: polling } = useProvisioningPolling(
+    provisioningActive,
+    PRODUCT_CODE,
+    result?.externalId as string | undefined,
+  );
+
+  function buildSinglePayload(overrides: Partial<GenericOnboardRequest> = {}): GenericOnboardRequest {
+    return {
+      productCode: PRODUCT_CODE,
+      externalId: externalId.trim(),
+      tenantCode: tenantCode.trim().toUpperCase(),
+      tenantName: tenantName.trim(),
+      planCode,
+      domain: domain.trim(),
+      adminEmail: adminEmail.trim(),
+      adminName: adminName.trim() || undefined,
+      adminUserId: adminUserId.trim(),
+      isolationMode: 'SCHEMA_PER_TENANT',
+      environment: 'PRODUCTION',
+      schemaName: schemaName.trim() || undefined,
+      customFields: {
+        hospitalName: tenantName.trim(),
+        domain: domain.trim(),
+        contactEmail: adminEmail.trim(),
+      },
+      ...overrides,
+    };
+  }
+
   async function submitSingleOnboarding(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -56,30 +83,39 @@ export default function JioplixOnboardingPage() {
     setResult(null);
 
     try {
-      const token = getStoredToken();
-      const res = await fetch(`${resolveApiBaseUrl()}/onboarding/jioplix/single`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          externalId,
-          name,
-          tenantCode,
-          domain,
-          contactEmail: email,
-          adminUserId,
-          planCode,
-          regionCode,
-          country,
-          timezone,
-        }),
-      });
+      const resp = await api.onboarding.execute(buildSinglePayload());
+      setResult(resp as unknown as Record<string, unknown>);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || `Status ${res.status}`);
-      setResult(body);
+  async function submitBatch(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const parsed = JSON.parse(batchJson);
+      const tenants: GenericOnboardRequest[] = Array.isArray(parsed.tenants) ? parsed.tenants.map((t: Record<string, string>) => ({
+        productCode: PRODUCT_CODE,
+        externalId: String(t.externalId || '').trim(),
+        tenantCode: String(t.tenantCode || '').trim().toUpperCase(),
+        tenantName: String(t.tenantName || t.name || '').trim(),
+        planCode: t.planCode || DEFAULT_PLAN,
+        domain: t.domain || undefined,
+        adminEmail: t.adminEmail || t.contactEmail || undefined,
+        isolationMode: 'SCHEMA_PER_TENANT',
+        environment: 'PRODUCTION',
+        schemaName: t.schemaName || undefined,
+      })) : [];
+
+      if (tenants.length === 0) throw new Error('Batch payload must contain a non-empty "tenants" array.');
+      const resp: GenericBatchOnboardResponse = await api.onboarding.batch(tenants);
+      setResult(resp as unknown as Record<string, unknown>);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -94,26 +130,20 @@ export default function JioplixOnboardingPage() {
     setResult(null);
 
     try {
-      const token = getStoredToken();
-      const res = await fetch(`${resolveApiBaseUrl()}/onboarding/jioplix/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          hospitalCode: signupCode.toUpperCase(),
-          hospitalName: signupName,
-          adminEmail: signupEmail,
-          planCode: signupPlan,
-          regionCode: 'ap-south-1',
-          country: 'IN',
-        }),
+      const code = signupCode.trim().toUpperCase();
+      const resp = await api.onboarding.execute({
+        productCode: PRODUCT_CODE,
+        externalId: `jio_auto_${Date.now().toString(36)}`,
+        tenantCode: code,
+        tenantName: signupName.trim(),
+        planCode: signupPlan,
+        adminEmail: signupEmail.trim(),
+        adminName: signupName.trim(),
+        isolationMode: 'SCHEMA_PER_TENANT',
+        environment: 'PRODUCTION',
+        customFields: { hospitalName: signupName.trim(), contactEmail: signupEmail.trim() },
       });
-
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || `Status ${res.status}`);
-      setResult(body);
+      setResult(resp as unknown as Record<string, unknown>);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -129,16 +159,8 @@ export default function JioplixOnboardingPage() {
     setResult(null);
 
     try {
-      const token = getStoredToken();
-      const res = await fetch(`${resolveApiBaseUrl()}/onboarding/jioplix/tenants/${encodeURIComponent(lookupId.trim())}`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || `Status ${res.status}`);
-      setResult(body);
+      const resp: GenericOnboardStatusView = await api.onboarding.getStatus(PRODUCT_CODE, lookupId.trim());
+      setResult(resp as unknown as Record<string, unknown>);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -154,7 +176,7 @@ export default function JioplixOnboardingPage() {
             <span>🏥</span> Jioplix Hospital Management System Onboarding
           </h1>
           <p>
-            Formally onboard hospital customers from <a href="https://jioplix.com" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', color: 'var(--primary)' }}>https://jioplix.com</a> into Cybelinx multi-tenant SaaS.
+            Onboard hospital customers from <a href="https://jioplix.com" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', color: 'var(--primary)' }}>https://jioplix.com</a> into Cybelinx multi-tenant SaaS using the generic onboarding engine.
           </p>
         </div>
       </div>
@@ -166,6 +188,13 @@ export default function JioplixOnboardingPage() {
           onClick={() => { setTab('single'); setResult(null); setError(null); }}
         >
           Onboard Existing Customer
+        </button>
+        <button
+          type="button"
+          className={`btn ${tab === 'batch' ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => { setTab('batch'); setResult(null); setError(null); }}
+        >
+          Batch Onboard Hospitals
         </button>
         <button
           type="button"
@@ -188,7 +217,7 @@ export default function JioplixOnboardingPage() {
       {tab === 'single' && (
         <section className="card card-pad">
           <h2 className="card-title" style={{ marginTop: 0 }}>
-            Formal Customer Onboarding (`JIOPLIX_NEXUS`)
+            Formal Customer Onboarding
           </h2>
           <p className="muted small">
             Registers external identifier mapping, creates platform tenant, provisions isolated database schema, attaches healthcare subscription, and fires outbox events.
@@ -205,7 +234,7 @@ export default function JioplixOnboardingPage() {
                   onChange={(e) => setExternalId(e.target.value)}
                   required
                 />
-                <div className="hint">External ID in legacy Jioplix database (e.g. `JIOPLIX_NEXUS`).</div>
+                <div className="hint">External ID in legacy Jioplix database (e.g. JIOPLIX_NEXUS).</div>
               </div>
 
               <div className="field">
@@ -226,8 +255,8 @@ export default function JioplixOnboardingPage() {
                 <input
                   id="jioplix-name"
                   className="input"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  value={tenantName}
+                  onChange={(e) => setTenantName(e.target.value)}
                   required
                 />
               </div>
@@ -251,9 +280,48 @@ export default function JioplixOnboardingPage() {
                   id="jioplix-email"
                   type="email"
                   className="input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
                   required
+                />
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="jioplix-admin-name">Admin Name</label>
+                <input
+                  id="jioplix-admin-name"
+                  className="input"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  placeholder="Hospital Director"
+                />
+              </div>
+
+              <div className="field">
+                <label className="label" htmlFor="jioplix-plan">Subscription Plan</label>
+                <select
+                  id="jioplix-plan"
+                  className="input"
+                  value={planCode}
+                  onChange={(e) => setPlanCode(e.target.value)}
+                  required
+                >
+                  {AVAILABLE_PLANS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field-row">
+              <div className="field">
+                <label className="label" htmlFor="jioplix-schema">Target DB Schema</label>
+                <input
+                  id="jioplix-schema"
+                  className="input mono"
+                  value={schemaName}
+                  onChange={(e) => setSchemaName(e.target.value)}
+                  placeholder="jioplix_<tenant_code>"
                 />
               </div>
 
@@ -267,54 +335,43 @@ export default function JioplixOnboardingPage() {
                   required
                 />
               </div>
-
-              <div className="field">
-                <label className="label" htmlFor="jioplix-plan">Subscription Plan</label>
-                <input
-                  id="jioplix-plan"
-                  className="input mono"
-                  value={planCode}
-                  onChange={(e) => setPlanCode(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="field-row">
-              <div className="field">
-                <label className="label" htmlFor="jioplix-region">Region</label>
-                <input
-                  id="jioplix-region"
-                  className="input mono"
-                  value={regionCode}
-                  onChange={(e) => setRegionCode(e.target.value)}
-                />
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="jioplix-country">Country</label>
-                <input
-                  id="jioplix-country"
-                  className="input mono"
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                />
-              </div>
-
-              <div className="field">
-                <label className="label" htmlFor="jioplix-timezone">Timezone</label>
-                <input
-                  id="jioplix-timezone"
-                  className="input"
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                />
-              </div>
             </div>
 
             <div className="flex">
               <button type="submit" className="btn btn-primary" disabled={submitting}>
                 {submitting ? 'Provisioning Hospital Tenant…' : '🚀 Formally Onboard Hospital Tenant'}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      {tab === 'batch' && (
+        <section className="card card-pad">
+          <h2 className="card-title" style={{ marginTop: 0 }}>
+            Batch Onboard Hospital Tenants
+          </h2>
+          <p className="muted small">
+            Batch onboard multiple existing hospital schemas into Cybelinx multi-tenant SaaS in a single request.
+          </p>
+
+          <form onSubmit={submitBatch} className="stack" style={{ gap: '1rem', marginTop: '1rem' }}>
+            <div className="field">
+              <label className="label" htmlFor="batch-json">Hospitals Payload (JSON)</label>
+              <textarea
+                id="batch-json"
+                className="textarea mono small"
+                rows={12}
+                value={batchJson}
+                onChange={(e) => setBatchJson(e.target.value)}
+                placeholder='{ "tenants": [ { "externalId": "NEXUS_HOSP_01", "tenantCode": "JIOPLIX_HOSP_01", "tenantName": "Apollo Hospital", "planCode": "JIOPLIX_ENTERPRISE" } ] }'
+                required
+              />
+            </div>
+
+            <div className="flex">
+              <button type="submit" className="btn btn-primary" disabled={submitting}>
+                {submitting ? 'Batch Provisioning…' : '🚀 Batch Onboard All Hospitals'}
               </button>
             </div>
           </form>
@@ -370,12 +427,17 @@ export default function JioplixOnboardingPage() {
 
               <div className="field">
                 <label className="label" htmlFor="signup-plan">Plan Code</label>
-                <input
+                <select
                   id="signup-plan"
-                  className="input mono"
+                  className="input"
                   value={signupPlan}
                   onChange={(e) => setSignupPlan(e.target.value)}
-                />
+                  required
+                >
+                  {AVAILABLE_PLANS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -414,21 +476,52 @@ export default function JioplixOnboardingPage() {
         <section className="card card-pad" style={{ background: '#f8fafc' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>Onboarding Status & Provisioning Record</h3>
-            <StatusBadge value="ACTIVE" />
+            <StatusBadge value={String(result.status ?? result.tenantStatus ?? (result.succeeded !== undefined ? (Number(result.succeeded) > 0 ? 'ACTIVE' : 'FAILED') : 'ACTIVE'))} />
           </div>
-          <pre
-            className="mono small"
-            style={{
-              background: '#0f172a',
-              color: '#38bdf8',
-              padding: '1rem',
-              borderRadius: '8px',
-              overflowX: 'auto',
-              marginTop: '1rem',
-            }}
-          >
-            {JSON.stringify(result, null, 2)}
-          </pre>
+          {provisioningActive && (
+            <div className="flex" style={{ gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}>
+              <span className="badge badge-info">
+                {polling ? '⏳ Provisioning in progress — polling status…' : 'Provisioning check finished'}
+                {polledStatus?.resourceStatus ? ` (resource: ${polledStatus.resourceStatus})` : ''}
+              </span>
+              {pollStatusError && <span className="small" style={{ color: '#b91c1c' }}>{pollStatusError}</span>}
+            </div>
+          )}
+          {result.succeeded !== undefined ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+              <div className="flex" style={{ gap: '1rem', flexWrap: 'wrap' }}>
+                <span><strong>Total:</strong> <code>{String(result.totalProcessed)}</code></span>
+                <span><strong>Succeeded:</strong> <code>{String(result.succeeded)}</code></span>
+                <span><strong>Failed:</strong> <code>{String(result.failed)}</code></span>
+              </div>
+              {Array.isArray(result.results) && (result.results as Record<string, unknown>[]).map((r, i) => (
+                <div key={i} className="card card-pad" style={{ background: '#fff' }}>
+                  <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{String(r.tenantName ?? r.tenantCode ?? 'Tenant')}</strong>
+                    <StatusBadge value={String(r.status ?? r.tenantStatus ?? 'ACTIVE')} />
+                  </div>
+                  <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                    <span><strong>Tenant ID:</strong> <code>{String(r.tenantId ?? '—')}</code></span>
+                    <span><strong>Tenant Code:</strong> <code>{String(r.tenantCode ?? '—')}</code></span>
+                    <span><strong>External ID:</strong> <code>{String(r.externalId ?? '—')}</code></span>
+                    <span><strong>Schema:</strong> <code>{String(r.schemaName ?? '—')}</code></span>
+                    <span><strong>Plan:</strong> <code>{String(r.planCode ?? '—')}</code></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginTop: '1rem', fontSize: '0.85rem' }}>
+              <span><strong>Tenant ID:</strong> <code>{String(result.tenantId ?? '—')}</code></span>
+              <span><strong>Tenant Code:</strong> <code>{String(result.tenantCode ?? '—')}</code></span>
+              <span><strong>External ID:</strong> <code>{String(result.externalId ?? '—')}</code></span>
+              <span><strong>Schema:</strong> <code>{String(result.schemaName ?? '—')}</code></span>
+              <span><strong>Plan:</strong> <code>{String(result.planCode ?? '—')}</code></span>
+              <span><strong>Provider:</strong> <code>{String(result.provider ?? result.providerCode ?? '—')}</code></span>
+              <span><strong>Message:</strong> <span>{String(result.message ?? '—')}</span></span>
+              <span><strong>Timestamp:</strong> <span>{String(result.timestamp ?? '—')}</span></span>
+            </div>
+          )}
         </section>
       )}
     </div>

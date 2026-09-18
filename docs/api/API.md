@@ -139,6 +139,35 @@ RESOURCE_NOT_FOUND`; registered but not yet usable (e.g. `PROVISIONING` /
 details; unknown product → `404 PRODUCT_NOT_FOUND`; missing `tenant:read` →
 `403 TENANT_ACCESS_DENIED`.
 
+## Onboarding
+
+Base `/api/v1/onboarding` — canonical adapter-driven onboarding for all products
+(Jioplix, StoreAI, Synthalyst, …). `productCode` selects the product adapter and
+`externalId` maps to a `TenantExternalIdentifier`. All endpoints require the bearer
+token and the listed permission.
+
+| Method | Path | Permission | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/onboarding/execute` | `tenant:write` | Execute onboarding for one tenant (`GenericOnboardRequest`); idempotent per `(productCode, externalId)` |
+| `POST` | `/api/v1/onboarding/batch` | `tenant:write` | Bulk onboard a list of tenants — body `{ "items": GenericOnboardRequest[] }`; per-item `SUCCESS`/`FAILURE` |
+| `GET` | `/api/v1/onboarding/status/{productCode}/{externalId}` | `tenant:read` | Onboarding + resource provisioning status for a product's external ID |
+| `GET` | `/api/v1/onboarding/definitions` | `tenant:read` | Product onboarding definitions (provider, default plan, schema prefix, health-check endpoint, dynamic fields) |
+
+`GenericOnboardRequest` fields: `productCode` (required, must be in the onboarding
+catalog / `TenantProductRequest` whitelist), `externalId`, `tenantName`,
+`tenantCode`, `planCode` (optional → product's `defaultPlanCode`), `adminEmail`
+(optional), `customFields` (optional map).
+
+`GET /onboarding/status/{productCode}/{externalId}` returns the canonical
+`TenantExternalIdentifier` with `resourceStatus` and provisioning state. Fresh
+onboarding leaves the resource as `PROVISIONING`; the provisioning pipeline
+transitions it to a terminal state (`SUCCEEDED`/`PROVISIONED`/`ACTIVE` or
+`FAILED`). Clients poll this endpoint (the Admin Portal does automatically, ~3s
+interval) until the resource status is terminal.
+
+Validation failures use the codes above (e.g. `400 PRODUCT_CODE_UNSUPPORTED` for a
+`productCode` outside the whitelist).
+
 ## Event worker
 
 `backend/event-worker` is a separate deployable sharing the control-plane PostgreSQL
@@ -340,8 +369,8 @@ SQL errors, stack traces and credentials are never exposed.
 - The prefix `v1` version-locks the first public surface.
 - Breaking changes target a new prefix (`/api/v2/…`) while `v1` is retained.
 - Business modules beyond tenants (products, plans, entitlements, memberships,
-  resources, provisioning, audit, events, usage) are the active implementation
-  roadmap and are documented on Swagger as they land.
+  resources, provisioning, onboarding, audit, events, usage) are the active
+  implementation roadmap and are documented on Swagger as they land.
 
 ## Conventions
 

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** REST controller for inspecting and Interacting with the Message Broker pipeline. */
 @RestController
-@RequestMapping("/api/v1/broker")
+@RequestMapping("/broker")
 public class MessageBrokerController {
 
     private final MessageBroker messageBroker;

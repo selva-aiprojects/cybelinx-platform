@@ -489,6 +489,13 @@ export interface GenericOnboardStatusView {
   onboardedAt: string;
 }
 
+export interface GenericBatchOnboardResponse {
+  totalProcessed: number;
+  succeeded: number;
+  failed: number;
+  results: GenericOnboardResponse[];
+}
+
 export interface TenantMemberView {
   membershipId: string;
   tenantId?: string;

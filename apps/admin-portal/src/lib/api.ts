@@ -1,6 +1,5 @@
 import type {
   AccessView,
-  AuditEventView,
   AuditListResponse,
   AttachTenantProductRequest,
   CreateEntitlementRequest,
@@ -53,6 +52,7 @@ import type {
   GenericOnboardRequest,
   GenericOnboardResponse,
   GenericOnboardStatusView,
+  GenericBatchOnboardResponse,
   TenantMemberView,
   CreateTenantMemberRequest,
   UserView,
@@ -62,7 +62,9 @@ const STORAGE_TOKEN_KEY = 'cybelinx_api_token';
 const STORAGE_BASE_URL_KEY = 'cybelinx_api_base_url';
 
 export const DEFAULT_DEV_TOKEN =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzZWVkLWRldi1hZG1pbi0wMDAxIiwiZW1haWwiOiJkZXYuYWRtaW5AY3liZWxpbngudGVzdCIsInJvbGVzIjpbIkNZQkVMSU5YX1BMQVRGT1JNX0FETUlOIl19.dev-demo-token';
+  process.env.NODE_ENV === 'production'
+    ? null
+    : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzZWVkLWRldi1hZG1pbi0wMDAxIiwiZW1haWwiOiJkZXYuYWRtaW5AY3liZWxpbngudGVzdCIsInJvbGVzIjpbIkNZQkVMSU5YX1BMQVRGT1JNX0FETUlOIl19.dev-demo-token';
 
 export const DEFAULT_API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api/v1';
@@ -131,7 +133,7 @@ const jsonHeaders = (): Record<string, string> => ({ 'Content-Type': 'applicatio
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, token, signal } = options;
   const headers = jsonHeaders();
-  const activeToken = token !== undefined ? token : (getStoredToken() ?? DEFAULT_DEV_TOKEN);
+  const activeToken = token !== undefined ? token : getStoredToken();
   if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
 
   const currentBase = resolveApiBaseUrl();
@@ -357,6 +359,11 @@ export const api = {
       request<ProductOnboardingDefinition>(`/onboarding/definitions/${productCode}`),
     execute: (body: GenericOnboardRequest) =>
       request<GenericOnboardResponse>('/onboarding/execute', { method: 'POST', body }),
+    batch: (items: GenericOnboardRequest[]) =>
+      request<GenericBatchOnboardResponse>('/onboarding/batch', {
+        method: 'POST',
+        body: { items },
+      }),
     getStatus: (productCode: string, externalId: string) =>
       request<GenericOnboardStatusView>(`/onboarding/status/${productCode}/${encodeURIComponent(externalId)}`),
   },

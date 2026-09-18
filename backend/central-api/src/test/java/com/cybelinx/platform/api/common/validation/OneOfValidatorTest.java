@@ -33,7 +33,7 @@ class OneOfValidatorTest {
             assertThat(violation.getPropertyPath().toString()).isEqualTo("productCode");
             assertThat(violation.getMessage()).isEqualTo(
                     "productCode must be one of the following values: "
-                            + "JIOPLIX, JIOPLIX_SMART, LIMS, STOREAI, SYNTHALYST_HRM");
+                            + "JIOPLIX, JIOPLIX_SMART, LIMS, STOREAI, SYNTHALYST");
         });
     }
 

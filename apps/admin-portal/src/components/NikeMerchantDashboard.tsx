@@ -153,11 +153,11 @@ export function NikeMerchantDashboard({ tenant, profile, rbac, onSignOut, onSwit
             </button>
             <button
               type="button"
-              className={`btn btn-sm ${tenant.tenantCode === 'STORE_PUMA_01' ? 'btn-primary' : 'btn-ghost'}`}
+              className={`btn btn-sm ${tenant.tenantCode === 'STOREAI_PUMA_01' ? 'btn-primary' : 'btn-ghost'}`}
               style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-              onClick={() => onSwitchTenant('STORE_PUMA_01')}
+              onClick={() => onSwitchTenant('STOREAI_PUMA_01')}
             >
-              Puma Store (`STORE_PUMA_01`)
+              Puma Store (`STOREAI_PUMA_01`)
             </button>
           </div>
         </div>

@@ -86,7 +86,7 @@ const INITIAL_PRODUCTS: ProductView[] = [
   },
   {
     productId: '00000000-0000-0000-0000-000000000050',
-    productCode: 'SYNTHALYST_HRM',
+    productCode: 'SYNTHALYST',
     name: 'Synthalyst HRM',
     description: 'Human Resource Management for healthcare institutions',
     baseUrl: 'https://synthalyst.com',
@@ -271,7 +271,7 @@ const INITIAL_TENANTS: TenantView[] = [
   },
   {
     tenantId: '00000000-0000-0000-0000-000000000013',
-    tenantCode: 'STORE_PUMA_01',
+    tenantCode: 'STOREAI_PUMA_01',
     name: 'Puma Retail Store',
     status: 'ACTIVE',
     regionCode: 'eu-west-1',

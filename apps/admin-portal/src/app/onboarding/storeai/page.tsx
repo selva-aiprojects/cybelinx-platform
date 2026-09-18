@@ -1,12 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { resolveApiBaseUrl, getStoredToken } from '@/lib/api';
+import { api } from '@/lib/api';
+import type { GenericOnboardRequest, GenericOnboardStatusView, GenericBatchOnboardResponse } from '@/lib/types';
 import { Alert } from '@/components/ui';
 import { StatusBadge } from '@/components/badges';
+import { useProvisioningPolling } from '@/hooks/useProvisioningPolling';
+
+const PRODUCT_CODE = 'STOREAI';
+const AVAILABLE_PLANS = ['STOREAI_ENTERPRISE', 'STOREAI_GROWTH', 'STOREAI_STARTER'];
+const DEFAULT_PLAN = 'STOREAI_ENTERPRISE';
 
 export default function StoreAiOnboardingPage() {
   const [tab, setTab] = useState<'single' | 'batch' | 'signup' | 'lookup'>('single');
+
+  // Lookup State (declared first: referenced by host detection effect below)
+  const [lookupId, setLookupId] = useState('STOREAI_NEXUS_RETAIL_01');
 
   // Single Merchant Onboarding State
   const [externalId, setExternalId] = useState('STOREAI_NEXUS_RETAIL_01');
@@ -14,8 +23,8 @@ export default function StoreAiOnboardingPage() {
   const [tenantCode, setTenantCode] = useState('STOREAI_NIKE_01');
   const [storeDomain, setStoreDomain] = useState('https://nike.storeai.com');
   const [merchantEmail, setMerchantEmail] = useState('merchant@nike.com');
-  const [adminUserId, setAdminUserId] = useState('seed-dev-admin-0001');
-  const [planCode, setPlanCode] = useState('STOREAI_ENTERPRISE');
+  const adminUserId = 'seed-dev-admin-0001';
+  const [planCode, setPlanCode] = useState(DEFAULT_PLAN);
   const [schemaName, setSchemaName] = useState('storeai_nike_01');
 
   useEffect(() => {
@@ -30,7 +39,7 @@ export default function StoreAiOnboardingPage() {
         setSchemaName('storeai_adidas_db');
         setLookupId('STOREAI_NEXUS_02');
       } else if (host.includes('puma')) {
-        setTenantCode('STORE_PUMA_01');
+        setTenantCode('STOREAI_PUMA_01');
         setStoreName('Puma Retail Store');
         setExternalId('STOREAI_NEXUS_03');
         setStoreDomain('https://puma.storeai.cybelinx.com');
@@ -50,29 +59,52 @@ export default function StoreAiOnboardingPage() {
   }, []);
 
   // Batch Merchants State
-  const DEFAULT_BATCH_JSON = JSON.stringify({
-    stores: [
-      { externalId: "STOREAI_NEXUS_01", tenantCode: "STOREAI_NIKE_01", storeName: "Nike Retail Flagship", planCode: "STOREAI_ENTERPRISE", schemaName: "storeai_nike_db", storeDomain: "https://nike.storeai.com" },
-      { externalId: "STOREAI_NEXUS_02", tenantCode: "STOREAI_ADIDAS_01", storeName: "Adidas Sportswear Store", planCode: "STOREAI_ENTERPRISE", schemaName: "storeai_adidas_db", storeDomain: "https://adidas.storeai.com" },
-      { externalId: "STOREAI_NEXUS_03", tenantCode: "STOREAI_PUMA_01", storeName: "Puma Omni-Channel Store", planCode: "STOREAI_ENTERPRISE", schemaName: "storeai_puma_db", storeDomain: "https://puma.storeai.com" }
-    ]
-  }, null, 2);
-
-  const [batchJson, setBatchJson] = useState(DEFAULT_BATCH_JSON);
+  const [batchJson, setBatchJson] = useState('');
 
   // New Merchant Signup State
   const [signupCode, setSignupCode] = useState('');
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
-  const [signupPlan, setSignupPlan] = useState('STOREAI_ENTERPRISE');
-
-  // Lookup State
-  const [lookupId, setLookupId] = useState('STOREAI_NEXUS_RETAIL_01');
+  const [signupPlan, setSignupPlan] = useState(DEFAULT_PLAN);
 
   // Response & Status State
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const provisioningActive =
+    (result?.status as string) === 'SUCCESS' &&
+    !['SUCCEEDED', 'ACTIVE', 'FAILED', 'DEACTIVATED', 'DELETED', 'PROVISIONED'].includes(
+      String(result?.resourceStatus || '').toUpperCase(),
+    );
+  const { status: polledStatus, pollError: pollStatusError, active: polling } = useProvisioningPolling(
+    provisioningActive,
+    PRODUCT_CODE,
+    result?.externalId as string | undefined,
+  );
+
+  function buildSinglePayload(overrides: Partial<GenericOnboardRequest> = {}): GenericOnboardRequest {
+    return {
+      productCode: PRODUCT_CODE,
+      externalId: externalId.trim(),
+      tenantCode: tenantCode.trim().toUpperCase(),
+      tenantName: storeName.trim(),
+      planCode,
+      domain: storeDomain.trim(),
+      adminEmail: merchantEmail.trim(),
+      adminUserId: adminUserId.trim(),
+      isolationMode: 'SCHEMA_PER_TENANT',
+      environment: 'PRODUCTION',
+      schemaName: schemaName.trim() || undefined,
+      customFields: {
+        storeName: storeName.trim(),
+        storeDomain: storeDomain.trim(),
+        merchantEmail: merchantEmail.trim(),
+        adminUserId: adminUserId.trim(),
+      },
+      ...overrides,
+    };
+  }
 
   async function submitSingleOnboarding(e: React.FormEvent) {
     e.preventDefault();
@@ -81,30 +113,8 @@ export default function StoreAiOnboardingPage() {
     setResult(null);
 
     try {
-      const token = getStoredToken();
-      const res = await fetch(`${resolveApiBaseUrl()}/onboarding/storeai/single`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          externalId,
-          storeName,
-          tenantCode,
-          storeDomain,
-          merchantEmail,
-          adminUserId,
-          planCode,
-          schemaName,
-          isolationMode: 'SCHEMA_PER_TENANT',
-          environment: 'PRODUCTION',
-        }),
-      });
-
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || `Status ${res.status}`);
-      setResult(body);
+      const resp = await api.onboarding.execute(buildSinglePayload());
+      setResult(resp as unknown as Record<string, unknown>);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -112,7 +122,7 @@ export default function StoreAiOnboardingPage() {
     }
   }
 
-  async function submitBatchOnboarding(e: React.FormEvent) {
+  async function submitBatch(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -120,19 +130,22 @@ export default function StoreAiOnboardingPage() {
 
     try {
       const parsed = JSON.parse(batchJson);
-      const token = getStoredToken();
-      const res = await fetch(`${resolveApiBaseUrl()}/onboarding/storeai/batch`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(parsed),
-      });
+      const stores: GenericOnboardRequest[] = Array.isArray(parsed.stores) ? parsed.stores.map((s: Record<string, string>) => ({
+        productCode: PRODUCT_CODE,
+        externalId: String(s.externalId || '').trim(),
+        tenantCode: String(s.tenantCode || '').trim().toUpperCase(),
+        tenantName: String(s.storeName || s.tenantName || '').trim(),
+        planCode: s.planCode || DEFAULT_PLAN,
+        domain: s.storeDomain || s.domain || undefined,
+        adminEmail: s.merchantEmail || s.adminEmail || undefined,
+        isolationMode: 'SCHEMA_PER_TENANT',
+        environment: 'PRODUCTION',
+        schemaName: s.schemaName || undefined,
+      })) : [];
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || `Status ${res.status}`);
-      setResult(body);
+      if (stores.length === 0) throw new Error('Batch payload must contain a non-empty "stores" array.');
+      const resp: GenericBatchOnboardResponse = await api.onboarding.batch(stores);
+      setResult(resp as unknown as Record<string, unknown>);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -147,26 +160,20 @@ export default function StoreAiOnboardingPage() {
     setResult(null);
 
     try {
-      const token = getStoredToken();
-      const res = await fetch(`${resolveApiBaseUrl()}/onboarding/storeai/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          merchantCode: signupCode.toUpperCase(),
-          merchantName: signupName,
-          merchantEmail: signupEmail,
-          planCode: signupPlan,
-          regionCode: 'ap-south-1',
-          country: 'IN',
-        }),
+      const code = signupCode.trim().toUpperCase();
+      const resp = await api.onboarding.execute({
+        productCode: PRODUCT_CODE,
+        externalId: `storeai_auto_${Date.now().toString(36)}`,
+        tenantCode: code,
+        tenantName: signupName.trim(),
+        planCode: signupPlan,
+        adminEmail: signupEmail.trim(),
+        adminName: signupName.trim(),
+        isolationMode: 'SCHEMA_PER_TENANT',
+        environment: 'PRODUCTION',
+        customFields: { storeName: signupName.trim(), merchantEmail: signupEmail.trim() },
       });
-
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || `Status ${res.status}`);
-      setResult(body);
+      setResult(resp as unknown as Record<string, unknown>);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -182,16 +189,8 @@ export default function StoreAiOnboardingPage() {
     setResult(null);
 
     try {
-      const token = getStoredToken();
-      const res = await fetch(`${resolveApiBaseUrl()}/onboarding/storeai/tenants/${encodeURIComponent(lookupId.trim())}`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message || `Status ${res.status}`);
-      setResult(body);
+      const resp: GenericOnboardStatusView = await api.onboarding.getStatus(PRODUCT_CODE, lookupId.trim());
+      setResult(resp as unknown as Record<string, unknown>);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -207,7 +206,7 @@ export default function StoreAiOnboardingPage() {
             <span>🛍️</span> StoreAI Composable Commerce Onboarding
           </h1>
           <p>
-            Formally onboard retail merchant accounts from <a href="https://cybelinx.com/products/cybecommerce" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', color: 'var(--primary)' }}>CybeCommerce / StoreAI</a> into Cybelinx multi-tenant SaaS.
+            Onboard retail merchant accounts from <a href="https://cybelinx.com/products/cybecommerce" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline', color: 'var(--primary)' }}>CybeCommerce / StoreAI</a> into Cybelinx multi-tenant SaaS using the generic onboarding engine.
           </p>
         </div>
       </div>
@@ -248,7 +247,7 @@ export default function StoreAiOnboardingPage() {
       {tab === 'single' && (
         <section className="card card-pad">
           <h2 className="card-title" style={{ marginTop: 0 }}>
-            Formal Retail Merchant Onboarding (`STOREAI_NEXUS`)
+            Formal Retail Merchant Onboarding
           </h2>
           <p className="muted small">
             Registers external retail identifier mapping, creates platform tenant, provisions isolated database schema, attaches store subscription, and fires outbox events.
@@ -318,13 +317,17 @@ export default function StoreAiOnboardingPage() {
 
               <div className="field">
                 <label className="label" htmlFor="storeai-plan">Subscription Plan</label>
-                <input
+                <select
                   id="storeai-plan"
-                  className="input mono"
+                  className="input"
                   value={planCode}
                   onChange={(e) => setPlanCode(e.target.value)}
                   required
-                />
+                >
+                  {AVAILABLE_PLANS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="field">
@@ -357,7 +360,7 @@ export default function StoreAiOnboardingPage() {
             Batch onboard multiple existing retail merchant schemas into Cybelinx multi-tenant SaaS in a single request.
           </p>
 
-          <form onSubmit={submitBatchOnboarding} className="stack" style={{ gap: '1rem', marginTop: '1rem' }}>
+          <form onSubmit={submitBatch} className="stack" style={{ gap: '1rem', marginTop: '1rem' }}>
             <div className="field">
               <label className="label" htmlFor="batch-json">Stores Payload (JSON)</label>
               <textarea
@@ -366,6 +369,7 @@ export default function StoreAiOnboardingPage() {
                 rows={12}
                 value={batchJson}
                 onChange={(e) => setBatchJson(e.target.value)}
+                placeholder='{ "stores": [ { "externalId": "STOREAI_NEXUS_01", "tenantCode": "STOREAI_NIKE_01", "storeName": "Nike Retail Flagship", "planCode": "STOREAI_ENTERPRISE" } ] }'
                 required
               />
             </div>
@@ -428,12 +432,17 @@ export default function StoreAiOnboardingPage() {
 
               <div className="field">
                 <label className="label" htmlFor="signup-plan">Plan Code</label>
-                <input
+                <select
                   id="signup-plan"
-                  className="input mono"
+                  className="input"
                   value={signupPlan}
                   onChange={(e) => setSignupPlan(e.target.value)}
-                />
+                  required
+                >
+                  {AVAILABLE_PLANS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -472,21 +481,52 @@ export default function StoreAiOnboardingPage() {
         <section className="card card-pad" style={{ background: '#f8fafc' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>StoreAI Provisioning Record</h3>
-            <StatusBadge value="ACTIVE" />
+            <StatusBadge value={String(result.status ?? result.tenantStatus ?? (result.succeeded !== undefined ? (Number(result.succeeded) > 0 ? 'ACTIVE' : 'FAILED') : 'ACTIVE'))} />
           </div>
-          <pre
-            className="mono small"
-            style={{
-              background: '#0f172a',
-              color: '#38bdf8',
-              padding: '1rem',
-              borderRadius: '8px',
-              overflowX: 'auto',
-              marginTop: '1rem',
-            }}
-          >
-            {JSON.stringify(result, null, 2)}
-          </pre>
+          {provisioningActive && (
+            <div className="flex" style={{ gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}>
+              <span className="badge badge-info">
+                {polling ? '⏳ Provisioning in progress — polling status…' : 'Provisioning check finished'}
+                {polledStatus?.resourceStatus ? ` (resource: ${polledStatus.resourceStatus})` : ''}
+              </span>
+              {pollStatusError && <span className="small" style={{ color: '#b91c1c' }}>{pollStatusError}</span>}
+            </div>
+          )}
+          {result.succeeded !== undefined ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+              <div className="flex" style={{ gap: '1rem', flexWrap: 'wrap' }}>
+                <span><strong>Total:</strong> <code>{String(result.totalProcessed)}</code></span>
+                <span><strong>Succeeded:</strong> <code>{String(result.succeeded)}</code></span>
+                <span><strong>Failed:</strong> <code>{String(result.failed)}</code></span>
+              </div>
+              {Array.isArray(result.results) && (result.results as Record<string, unknown>[]).map((r, i) => (
+                <div key={i} className="card card-pad" style={{ background: '#fff' }}>
+                  <div className="flex" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{String(r.tenantName ?? r.storeName ?? r.tenantCode ?? 'Store')}</strong>
+                    <StatusBadge value={String(r.status ?? r.tenantStatus ?? 'ACTIVE')} />
+                  </div>
+                  <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.5rem', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                    <span><strong>Tenant ID:</strong> <code>{String(r.tenantId ?? '—')}</code></span>
+                    <span><strong>Tenant Code:</strong> <code>{String(r.tenantCode ?? '—')}</code></span>
+                    <span><strong>External ID:</strong> <code>{String(r.externalId ?? '—')}</code></span>
+                    <span><strong>Schema:</strong> <code>{String(r.schemaName ?? '—')}</code></span>
+                    <span><strong>Plan:</strong> <code>{String(r.planCode ?? '—')}</code></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginTop: '1rem', fontSize: '0.85rem' }}>
+              <span><strong>Tenant ID:</strong> <code>{String(result.tenantId ?? '—')}</code></span>
+              <span><strong>Tenant Code:</strong> <code>{String(result.tenantCode ?? '—')}</code></span>
+              <span><strong>External ID:</strong> <code>{String(result.externalId ?? '—')}</code></span>
+              <span><strong>Schema:</strong> <code>{String(result.schemaName ?? '—')}</code></span>
+              <span><strong>Plan:</strong> <code>{String(result.planCode ?? '—')}</code></span>
+              <span><strong>Provider:</strong> <code>{String(result.provider ?? result.providerCode ?? '—')}</code></span>
+              <span><strong>Message:</strong> <span>{String(result.message ?? '—')}</span></span>
+              <span><strong>Timestamp:</strong> <span>{String(result.timestamp ?? '—')}</span></span>
+            </div>
+          )}
         </section>
       )}
     </div>

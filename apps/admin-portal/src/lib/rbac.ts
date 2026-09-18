@@ -32,8 +32,8 @@ export const STOREAI_TENANTS: Record<string, TenantContext> = {
     prodSchema: 'tenant_prod_storeai_adidas_db',
     adminEmail: 'demo.adidas@cybelinx.com',
   },
-  STORE_PUMA_01: {
-    tenantCode: 'STORE_PUMA_01',
+  STOREAI_PUMA_01: {
+    tenantCode: 'STOREAI_PUMA_01',
     tenantId: '00000000-0000-0000-0000-000000000c13',
     name: 'Puma Retail Store',
     storeDomain: 'https://puma.storeai.cybelinx.com',
@@ -78,12 +78,12 @@ export function resolveTenantFromHostOrQuery(
     if (STOREAI_TENANTS[normParam]) return STOREAI_TENANTS[normParam];
     if (normParam.includes('NIKE')) return STOREAI_TENANTS.STOREAI_NIKE_01;
     if (normParam.includes('ADIDAS')) return STOREAI_TENANTS.STOREAI_ADIDAS_01;
-    if (normParam.includes('PUMA')) return STOREAI_TENANTS.STORE_PUMA_01;
+    if (normParam.includes('PUMA')) return STOREAI_TENANTS.STOREAI_PUMA_01;
   }
 
   const hostLower = (hostname || '').toLowerCase();
   if (hostLower.includes('adidas')) return STOREAI_TENANTS.STOREAI_ADIDAS_01;
-  if (hostLower.includes('puma')) return STOREAI_TENANTS.STORE_PUMA_01;
+  if (hostLower.includes('puma')) return STOREAI_TENANTS.STOREAI_PUMA_01;
   
   // Default to Nike Flagship Store for nike.storeai.* or default merchant view
   return STOREAI_TENANTS.STOREAI_NIKE_01;
@@ -157,7 +157,7 @@ export function parseUserSecurityProfile(
       memberships: [
         { tenantCode: 'STOREAI_NIKE_01', role: 'TENANT_ADMIN' },
         { tenantCode: 'STOREAI_ADIDAS_01', role: 'TENANT_ADMIN' },
-        { tenantCode: 'STORE_PUMA_01', role: 'TENANT_ADMIN' },
+        { tenantCode: 'STOREAI_PUMA_01', role: 'TENANT_ADMIN' },
       ],
     };
   }
@@ -187,14 +187,14 @@ export function parseUserSecurityProfile(
   }
 
   // 4. Puma Merchant Admin User (from V16 migration)
-  if (emailLower === 'demo.puma@cybelinx.com' || claimsTenantCode === 'STORE_PUMA_01') {
+  if (emailLower === 'demo.puma@cybelinx.com' || claimsTenantCode === 'STOREAI_PUMA_01') {
     return {
       userId: userId || '00000000-0000-0000-0000-000000000a13',
       email: email || 'demo.puma@cybelinx.com',
       displayName: 'Puma Store Merchant Admin',
       isPlatformAdmin: false,
       globalRoles: ['TENANT_ADMIN'],
-      memberships: [{ tenantCode: 'STORE_PUMA_01', role: 'TENANT_ADMIN' }],
+      memberships: [{ tenantCode: 'STOREAI_PUMA_01', role: 'TENANT_ADMIN' }],
     };
   }
 

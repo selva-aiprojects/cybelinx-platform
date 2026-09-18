@@ -10,9 +10,9 @@ import jakarta.validation.constraints.Size;
 public class TenantProductRequest {
 
     @OneOf(
-            value = {"JIOPLIX", "JIOPLIX_SMART", "LIMS", "STOREAI", "SYNTHALYST_HRM"},
+            value = {"JIOPLIX", "JIOPLIX_SMART", "LIMS", "STOREAI", "SYNTHALYST"},
             message = "productCode must be one of the following values: "
-                    + "JIOPLIX, JIOPLIX_SMART, LIMS, STOREAI, SYNTHALYST_HRM")
+                    + "JIOPLIX, JIOPLIX_SMART, LIMS, STOREAI, SYNTHALYST")
     private String productCode;
 
     @Size(max = 64, message = "planCode must not exceed 64 characters")

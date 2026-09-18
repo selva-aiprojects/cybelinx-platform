@@ -90,7 +90,7 @@ The platform provides pre-seeded demo user identity mappings (`V16__seed_storeai
 | **StoreAI Platform Admin** | `storeai.admin@cybelinx.com` | Central Platform Control Plane | `cybelinx.com` |
 | **Nike Merchant Admin** | `demo.nike@cybelinx.com` | `STOREAI_NIKE_01` | `nike.storeai.cybelinx.com` |
 | **Adidas Merchant Admin** | `demo.adidas@cybelinx.com` | `STOREAI_ADIDAS_01` | `adidas.storeai.cybelinx.com` |
-| **Puma Merchant Admin** | `demo.puma@cybelinx.com` | `STORE_PUMA_01` | `puma.storeai.cybelinx.com` |
+| **Puma Merchant Admin** | `demo.puma@cybelinx.com` | `STOREAI_PUMA_01` | `puma.storeai.cybelinx.com` |
 
 ### Environment Segregation (`DEMO` vs `PRODUCTION`)
 Each tenant's schema database resources are cleanly segregated by environment:

@@ -35,6 +35,7 @@ import com.cybelinx.platform.api.persistence.entity.User;
 import com.cybelinx.platform.api.security.AuthPrincipal;
 import com.cybelinx.platform.api.tenants.TenantConstants;
 import com.cybelinx.platform.shared.ApiError;
+import com.cybelinx.platform.shared.ErrorCode;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,6 +69,7 @@ class GenericProductOnboardingServiceIT {
     @Autowired private AuditEventRepository auditEvents;
 
     private AuthPrincipal platformAdminPrincipal;
+    private AuthPrincipal regularUserPrincipal;
 
     @BeforeEach
     void setUp() {
@@ -105,6 +107,17 @@ class GenericProductOnboardingServiceIT {
         AuthPrincipal.AuthIdentity authAdminIdent = new AuthPrincipal.AuthIdentity(
                 "generic", "sub-admin-" + adminUser.getId(), adminUser.getEmail(), adminUser.getDisplayName());
         platformAdminPrincipal = new AuthPrincipal(authAdminUser, authAdminIdent);
+
+        User regularUser = new User();
+        regularUser.setEmail("user-" + UUID.randomUUID() + "@customer.com");
+        regularUser.setDisplayName("Regular Customer User");
+        regularUser = users.save(regularUser);
+
+        AuthPrincipal.AuthUser authRegUser = new AuthPrincipal.AuthUser(
+                regularUser.getId(), regularUser.getEmail(), regularUser.getDisplayName(), "ACTIVE", "en", "UTC");
+        AuthPrincipal.AuthIdentity authRegIdent = new AuthPrincipal.AuthIdentity(
+                "generic", "sub-user-" + regularUser.getId(), regularUser.getEmail(), regularUser.getDisplayName());
+        regularUserPrincipal = new AuthPrincipal(authRegUser, authRegIdent);
     }
 
     @Test
@@ -212,6 +225,31 @@ class GenericProductOnboardingServiceIT {
     }
 
     @Test
+    void shouldRejectOnboardingForUserWithoutTenantWritePermission() {
+        GenericOnboardRequest request = new GenericOnboardRequest(
+                "JIOPLIX",
+                "ext-forbidden",
+                "FORBID_CODE",
+                "Forbidden Hosp",
+                "JIOPLIX_ENTERPRISE",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Map.of()
+        );
+
+        assertThatThrownBy(() -> genericService.onboardTenant(regularUserPrincipal, request))
+                .isInstanceOf(ApiError.class)
+                .extracting(e -> ((ApiError) e).getCode())
+                .isEqualTo(ErrorCode.TENANT_ACCESS_DENIED);
+    }
+
+    @Test
     void shouldOnboardSynthalystViaGenericFramework() {
         String externalId = "SYNTH_SMOKE_" + UUID.randomUUID().toString().substring(0, 8);
         GenericOnboardResponse response = genericService.onboardTenant(platformAdminPrincipal, new GenericOnboardRequest(
@@ -225,6 +263,35 @@ class GenericProductOnboardingServiceIT {
         assertThat(response.provider()).isEqualTo("SYNTHALYST_HRM");
         assertThat(response.schemaName()).startsWith("synthalyst_");
         assertThat(response.resourceStatus()).isEqualTo("PROVISIONING");
+    }
+
+    @Test
+    void shouldBatchOnboardMultipleTenantsAcrossProducts() {
+        String jioCode = "BATCH_JIO_" + UUID.randomUUID().toString().substring(0, 8);
+        String storeCode = "BATCH_STORE_" + UUID.randomUUID().toString().substring(0, 8);
+        String limsCode = "BATCH_LIMS_" + UUID.randomUUID().toString().substring(0, 8);
+
+        GenericBatchOnboardRequest batchReq = new GenericBatchOnboardRequest(List.of(
+                new GenericOnboardRequest(
+                        "JIOPLIX", "ext-batch-1", jioCode, "St Jude Hospital",
+                        "JIOPLIX_ENTERPRISE", null, "admin@stjude.org", "Admin 1", null,
+                        null, null, null, null, Map.of()),
+                new GenericOnboardRequest(
+                        "STOREAI", "ext-batch-2", storeCode, "Mercy Store",
+                        "STOREAI_ENTERPRISE", null, "merchant@mercy.org", "Admin 2", null,
+                        "SCHEMA_PER_TENANT", "DEVELOPMENT", null, null, Map.of()),
+                new GenericOnboardRequest(
+                        "LIMS", "ext-batch-3", limsCode, "Metropolis Lab",
+                        "LIMS_STANDARD", null, "admin@metropolis.org", "Admin 3", null,
+                        null, null, null, null, Map.of())
+        ));
+
+        GenericBatchOnboardResponse batch = genericService.batchOnboard(platformAdminPrincipal, batchReq);
+
+        assertThat(batch.totalProcessed()).isEqualTo(3);
+        assertThat(batch.succeeded()).isEqualTo(3);
+        assertThat(batch.failed()).isZero();
+        assertThat(batch.results()).hasSize(3);
     }
 
     @Test

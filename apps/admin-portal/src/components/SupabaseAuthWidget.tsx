@@ -119,7 +119,7 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
     const tenantLabel =
       userTenantCode === 'STOREAI_ADIDAS_01'
         ? 'Adidas Merchant Dashboard'
-        : userTenantCode === 'STORE_PUMA_01'
+        : userTenantCode === 'STOREAI_PUMA_01'
         ? 'Puma Merchant Dashboard'
         : 'Nike Merchant Dashboard';
     const dashboardUrl = `/storeai/merchant?tenant=${tenantParam}`;

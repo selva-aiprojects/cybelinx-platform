@@ -12,7 +12,7 @@ public final class TenantConstants {
 
     /** Product codes from the platform catalog ({@code @cybelinx/types} PRODUCT_CODES). */
     public static final String[] PRODUCT_CODES = {
-        "JIOPLIX", "JIOPLIX_SMART", "LIMS", "STOREAI", "SYNTHALYST_HRM"
+        "JIOPLIX", "JIOPLIX_SMART", "LIMS", "STOREAI", "SYNTHALYST"
     };
 
     /** Isolation modes ({@code @cybelinx/types} ISOLATION_MODES). */

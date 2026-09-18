@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { api, resolveApiBaseUrl } from '@/lib/api';
+import { api } from '@/lib/api';
 import {
   ProductOnboardingDefinition,
   GenericOnboardRequest,
@@ -10,6 +10,7 @@ import {
   GenericOnboardStatusView,
 } from '@/lib/types';
 import { MOCK_ONBOARDING_DEFINITIONS } from '@/lib/mock-data';
+import { useProvisioningPolling } from '@/hooks/useProvisioningPolling';
 
 export default function UnifiedOnboardingPage() {
   const [definitions, setDefinitions] = useState<ProductOnboardingDefinition[]>(MOCK_ONBOARDING_DEFINITIONS);
@@ -24,7 +25,7 @@ export default function UnifiedOnboardingPage() {
   const [environment, setEnvironment] = useState<string>('DEVELOPMENT');
   const [isolationMode, setIsolationMode] = useState<string>('SCHEMA_PER_TENANT');
   const [schemaName, setSchemaName] = useState<string>('jioplix_apollo_01');
-  const [regionCode, setRegionCode] = useState<string>('us-east-1');
+  const [regionCode] = useState<string>('us-east-1');
   
   // Dynamic custom fields keyed by field.key
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({
@@ -39,6 +40,19 @@ export default function UnifiedOnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [provisionResponse, setProvisionResponse] = useState<GenericOnboardResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Poll provisioning status after an async execute that leaves the resource non-terminal.
+  const provisioningActive =
+    provisionResponse != null &&
+    provisionResponse.status === 'SUCCESS' &&
+    !['SUCCEEDED', 'ACTIVE', 'FAILED', 'DEACTIVATED', 'DELETED', 'PROVISIONED'].includes(
+      String(provisionResponse.resourceStatus || '').toUpperCase(),
+    );
+  const { status: polledStatus, pollError: pollStatusError, active: polling } = useProvisioningPolling(
+    provisioningActive,
+    provisionResponse?.productCode,
+    provisionResponse?.externalId,
+  );
 
   // Status Lookup State
   const [lookupProductCode, setLookupProductCode] = useState<string>('JIOPLIX');
@@ -145,29 +159,8 @@ export default function UnifiedOnboardingPage() {
       const resp = await api.onboarding.execute(payload);
       setProvisionResponse(resp);
     } catch (err: unknown) {
-      // If offline or network error, synthesize simulated response to demonstrate workflow
       const errorStr = err instanceof Error ? err.message : String(err);
-      if (errorStr.includes('Failed to fetch') || errorStr.includes('NetworkError') || errorStr.includes('401')) {
-        const simulated: GenericOnboardResponse = {
-          tenantId: 'sim-' + Math.random().toString(36).substring(2, 10),
-          tenantCode: payload.tenantCode,
-          tenantName: payload.tenantName,
-          productCode: payload.productCode,
-          planCode: payload.planCode || activeDefinition.subscription.defaultPlanCode,
-          externalId: payload.externalId,
-          provider: activeDefinition.provider,
-          status: 'SUCCESS',
-          tenantStatus: 'ACTIVE',
-          resourceStatus: 'ACTIVE',
-          schemaName: payload.schemaName || `${activeDefinition.resource.schemaPrefix}${payload.tenantCode.toLowerCase()}`,
-          message: `[Client Simulation] Tenant ${payload.externalId} successfully onboarded via Generic Product Framework`,
-          timestamp: new Date().toISOString(),
-          executedSteps: activeDefinition.provisioningSteps,
-        };
-        setProvisionResponse(simulated);
-      } else {
-        setErrorMessage(errorStr);
-      }
+      setErrorMessage(errorStr);
     } finally {
       setIsSubmitting(false);
     }
@@ -186,26 +179,7 @@ export default function UnifiedOnboardingPage() {
       setLookupResult(res);
     } catch (err: unknown) {
       const errorStr = err instanceof Error ? err.message : String(err);
-      if (errorStr.includes('Failed to fetch') || errorStr.includes('NetworkError') || errorStr.includes('401')) {
-        // Simulated lookup for demo purposes
-        setLookupResult({
-          externalId: lookupExternalId.trim(),
-          provider: `${lookupProductCode}_NEXUS`,
-          productCode: lookupProductCode,
-          tenantId: 'mock-ten-001',
-          tenantCode: `${lookupProductCode}_SAMPLE_01`,
-          tenantName: `Sample ${lookupProductCode} Tenant`,
-          tenantStatus: 'ACTIVE',
-          subscriptionStatus: 'ACTIVE',
-          planCode: `${lookupProductCode}_ENTERPRISE`,
-          resourceStatus: 'ACTIVE',
-          schemaName: `${lookupProductCode.toLowerCase()}_sample_01`,
-          isolationMode: 'SCHEMA_PER_TENANT',
-          onboardedAt: new Date().toISOString(),
-        });
-      } else {
-        setLookupError(errorStr);
-      }
+      setLookupError(errorStr);
     } finally {
       setIsLookingUp(false);
     }
@@ -558,6 +532,29 @@ export default function UnifiedOnboardingPage() {
                 <p style={{ color: '#15803d', fontSize: '0.9rem', margin: '0 0 16px 0' }}>
                   {provisionResponse.message}
                 </p>
+
+                {provisioningActive && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      marginBottom: '16px',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    <span style={{ color: '#1e40af', fontWeight: 600 }}>
+                      {polling ? '⏳ Provisioning in progress — polling status…' : 'Provisioning check finished'}
+                      {polledStatus?.resourceStatus ? ` (resource: ${polledStatus.resourceStatus})` : ''}
+                    </span>
+                    {pollStatusError && <span style={{ color: '#b91c1c' }}>{pollStatusError}</span>}
+                  </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', background: '#fff', padding: '14px', borderRadius: '8px', border: '1px solid #dcfce7', marginBottom: '16px', fontSize: '0.85rem' }}>
                   <div><strong>Tenant ID:</strong> <code>{provisionResponse.tenantId || 'N/A'}</code></div>

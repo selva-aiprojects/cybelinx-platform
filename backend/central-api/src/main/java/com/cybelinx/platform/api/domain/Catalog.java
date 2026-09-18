@@ -16,7 +16,7 @@ public final class Catalog {
     };
 
     public static final String[] PRODUCT_CODES = {
-        "JIOPLIX", "JIOPLIX_SMART", "LIMS", "STOREAI", "SYNTHALYST_HRM"
+        "JIOPLIX", "JIOPLIX_SMART", "LIMS", "STOREAI", "SYNTHALYST"
     };
 
     private Catalog() {
