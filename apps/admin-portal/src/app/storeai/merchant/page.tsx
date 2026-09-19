@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { User, Session } from '@supabase/supabase-js';
 import { getCurrentSupabaseUser, getSupabaseClient, signOutSupabase, syncSupabaseToken } from '@/lib/supabase';
-import { getStoredToken } from '@/lib/api';
 import {
   resolveTenantFromHostOrQuery,
   parseUserSecurityProfile,
@@ -25,10 +24,12 @@ function StoreAiMerchantContent() {
   const [tenant, setTenant] = useState<TenantContext>(STOREAI_TENANTS.STOREAI_NIKE_01);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 1. Resolve Tenant Context from Host or Query Params
+  // 1. Resolve Tenant Context from Host or Query Params (one-shot mount hydration;
+  //    derives from window.location which is unavailable during initial render)
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const paramTenant = searchParams.get('tenant');
@@ -36,6 +37,7 @@ function StoreAiMerchantContent() {
       setTenant(resolved);
     }
   }, [searchParams]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // 2. Initialize Supabase Auth & JWT state
   useEffect(() => {
@@ -88,14 +90,6 @@ function StoreAiMerchantContent() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="card card-pad" style={{ textAlign: 'center', padding: '3rem' }}>
-        <div style={{ fontSize: '1.2rem', color: '#60a5fa' }}>🔒 Loading StoreAI Merchant Security Context…</div>
-      </div>
-    );
-  }
-
   // Parse security profile and evaluate RBAC
   const profile: UserSecurityProfile | null = parseUserSecurityProfile(token, user);
   const rbac: RbacEvaluationResult = evaluateTenantRbac(profile, tenant.tenantCode);
@@ -113,6 +107,14 @@ function StoreAiMerchantContent() {
       }
     }
   }, [loading, profile, searchParams, router]);
+
+  if (loading) {
+    return (
+      <div className="card card-pad" style={{ textAlign: 'center', padding: '3rem' }}>
+        <div style={{ fontSize: '1.2rem', color: '#60a5fa' }}>🔒 Loading StoreAI Merchant Security Context…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="stack">

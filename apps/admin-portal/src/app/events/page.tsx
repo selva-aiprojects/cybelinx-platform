@@ -1,158 +1,138 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/api';
-import type { PageMeta, PlatformEventView } from '@/lib/types';
-import { StatusBadge } from '@/components/badges';
+import { useAsyncData, ErrorBanner, LoadingBlock, Empty } from '@/components/ui';
+import type { PlatformEventView } from '@/lib/types';
+import { StatusBadge, formatDate } from '@/components/badges';
+
+const PAGE_SIZE = 20;
+
+const PAYLOAD_STYLE: React.CSSProperties = {
+  maxWidth: '280px',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
 
 export default function PlatformEventsPage() {
-  const [events, setEvents] = useState<PlatformEventView[]>([]);
-  const [meta, setMeta] = useState<PageMeta>({ page: 1, limit: 20, total: 0, totalPages: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [aggregateType, setAggregateType] = useState('');
   const [eventType, setEventType] = useState('');
-
-  const loadEvents = async (page = 1) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await api.events.list({
+  const [page, setPage] = useState(1);
+  const { data, error, loading } = useAsyncData(
+    () =>
+      api.events.list({
         page,
-        limit: 20,
+        limit: PAGE_SIZE,
         aggregateType: aggregateType.trim() || undefined,
         eventType: eventType.trim() || undefined,
-      });
-      setEvents(res.data);
-      setMeta(res.meta);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load platform events');
-    } finally {
-      setLoading(false);
-    }
-  };
+      }),
+    [page, aggregateType, eventType],
+  );
 
-  useEffect(() => {
-    loadEvents(1);
-  }, []);
+  const rows = data?.data ?? [];
+  const pages = data?.meta.totalPages ?? 1;
 
   const handleFilter = (e: React.FormEvent) => {
     e.preventDefault();
-    loadEvents(1);
+    setPage(1);
   };
 
   return (
     <div className="stack">
       <div className="page-header">
         <div>
-          <h1 style={{ margin: 0 }}>Platform Outbox Events</h1>
-          <div className="muted" style={{ marginTop: '0.4rem' }}>
+          <h1>Platform Outbox Events</h1>
+          <p>
             Transactional outbox events emitted by the central domain model for asynchronous delivery.
-          </div>
+          </p>
         </div>
       </div>
 
-      <div className="card mb-6">
-        <form onSubmit={handleFilter} className="flex gap-4 items-end">
-          <div style={{ flex: 1 }}>
-            <label className="label">Aggregate Type</label>
-            <input
-              type="text"
-              placeholder="e.g. TENANT, PRODUCT, PROVISIONING_JOB"
-              className="input"
-              value={aggregateType}
-              onChange={(e) => setAggregateType(e.target.value)}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label className="label">Event Type</label>
-            <input
-              type="text"
-              placeholder="e.g. tenant.created, product.published"
-              className="input"
-              value={eventType}
-              onChange={(e) => setEventType(e.target.value)}
-            />
-          </div>
+      {error && <ErrorBanner error={error} />}
+
+      <section className="card">
+        <form onSubmit={handleFilter} className="card-pad search-row">
+          <input
+            className="input"
+            style={{ flex: 1, minWidth: '200px' }}
+            placeholder="e.g. TENANT, PRODUCT, PROVISIONING_JOB"
+            value={aggregateType}
+            onChange={(e) => {
+              setAggregateType(e.target.value);
+              setPage(1);
+            }}
+          />
+          <input
+            className="input"
+            style={{ flex: 1, minWidth: '200px' }}
+            placeholder="e.g. tenant.created, product.published"
+            value={eventType}
+            onChange={(e) => {
+              setEventType(e.target.value);
+              setPage(1);
+            }}
+          />
           <button type="submit" className="btn btn-primary">
             Filter
           </button>
         </form>
-      </div>
 
-      {error && (
-        <div className="alert alert-error mb-6">
-          {error}
-        </div>
-      )}
-
-      <div className="card">
-        {loading ? (
-          <div className="p-8 text-center text-slate-400">Loading events outbox...</div>
-        ) : events.length === 0 ? (
-          <div className="p-8 text-center text-slate-400">No platform events found.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+        {loading && !data && <LoadingBlock />}
+        {!loading && rows.length === 0 && <Empty>No platform events found.</Empty>}
+        {rows.length > 0 && (
+          <div className="table-wrap">
+            <table className="table">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400">
-                  <th className="py-3 px-4">Timestamp</th>
-                  <th className="py-3 px-4">Event Type</th>
-                  <th className="py-3 px-4">Aggregate Type</th>
-                  <th className="py-3 px-4">Aggregate ID</th>
-                  <th className="py-3 px-4">Tenant ID</th>
-                  <th className="py-3 px-4">Payload</th>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Event Type</th>
+                  <th>Aggregate Type</th>
+                  <th>Aggregate ID</th>
+                  <th>Tenant ID</th>
+                  <th>Payload</th>
                 </tr>
               </thead>
               <tbody>
-                {events.map((evt) => (
-                  <tr key={evt.eventId} className="border-b border-slate-800/50 hover:bg-slate-900/40">
-                    <td className="py-3 px-4 font-mono text-xs text-slate-400">
-                      {new Date(evt.createdAt).toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 font-medium text-sky-400">{evt.eventType}</td>
-                    <td className="py-3 px-4">
+                {rows.map((evt: PlatformEventView) => (
+                  <tr key={evt.eventId}>
+                    <td className="mono small muted">{formatDate(evt.createdAt)}</td>
+                    <td className="small">{evt.eventType}</td>
+                    <td>
                       <StatusBadge value={evt.aggregateType} />
                     </td>
-                    <td className="py-3 px-4 font-mono text-xs text-slate-300">
-                      {evt.aggregateId}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs text-slate-400">
-                      {evt.tenantId || '—'}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs text-slate-400 max-w-xs truncate">
+                    <td className="mono small">{evt.aggregateId}</td>
+                    <td className="mono small muted">{evt.tenantId || '—'}</td>
+                    <td className="mono small muted" style={PAYLOAD_STYLE}>
                       {JSON.stringify(evt.payload)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-800 text-xs text-slate-400">
-              <div>
-                Showing page {meta.page} of {meta.totalPages || 1} ({meta.total} total events)
-              </div>
-              <div className="flex gap-2">
-                <button
-                  disabled={meta.page <= 1}
-                  onClick={() => loadEvents(meta.page - 1)}
-                  className="btn btn-secondary text-xs px-3 py-1 disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={meta.page >= meta.totalPages}
-                  onClick={() => loadEvents(meta.page + 1)}
-                  className="btn btn-secondary text-xs px-3 py-1 disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
           </div>
         )}
-      </div>
+
+        <div className="card-pad pager">
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={page <= 1}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          >
+            ← Prev
+          </button>
+          <span className="muted small">
+            Page {page} / {pages} · {data?.meta.total ?? 0} total
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={page >= pages}
+            onClick={() => setPage((prev) => prev + 1)}
+          >
+            Next →
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

@@ -41,6 +41,11 @@ public class ApiHttpException extends RuntimeException {
         return new ApiHttpException(400, body(400, "Bad Request", message), message);
     }
 
+    /** Builds a NestJS {@code InternalServerErrorException} body. */
+    public static ApiHttpException serverError(String message) {
+        return new ApiHttpException(500, body(500, "Internal Server Error", message), message);
+    }
+
     private static java.util.LinkedHashMap<String, Object> body(int status, String error, String message) {
         java.util.LinkedHashMap<String, Object> map = new java.util.LinkedHashMap<>();
         map.put("statusCode", status);

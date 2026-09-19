@@ -13,7 +13,9 @@ export function useAsyncData<T>(
   const [tick, setTick] = useState(0);
 
   const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
+  useEffect(() => {
+    fetcherRef.current = fetcher;
+  });
 
   useEffect(() => {
     let cancelled = false;

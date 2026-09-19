@@ -12,37 +12,6 @@ const PAGE_SIZE = 20;
 
 const KNOWN_REGIONS = ['eu-west-1', 'us-east-1', 'ap-south-1'];
 
-const SEEDED_TENANTS = {
-  data: [
-    {
-      tenantId: 'acme',
-      tenantCode: 'ACME_HOSPITAL',
-      name: 'ACME Multispecialty Hospital',
-      status: 'ACTIVE' as const,
-      regionCode: 'ap-south-1',
-      country: 'India',
-      timezone: 'Asia/Kolkata',
-      createdAt: '2026-09-15T10:15:00Z',
-    },
-    {
-      tenantId: 'nike',
-      tenantCode: 'NIKE_STORE',
-      name: 'Nike Flagship Retail',
-      status: 'ACTIVE' as const,
-      regionCode: 'eu-west-1',
-      country: 'Germany',
-      timezone: 'Europe/Berlin',
-      createdAt: '2026-09-15T11:20:00Z',
-    },
-  ],
-  meta: {
-    page: 1,
-    limit: 20,
-    total: 2,
-    totalPages: 1,
-  },
-};
-
 export default function TenantsPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -53,8 +22,8 @@ export default function TenantsPage() {
     [page, search],
   );
   const { data: rawData, error, loading, reload } = useAsyncData(fetcher, [fetcher]);
-  const data = rawData && rawData.data.length > 0 ? rawData : (error ? SEEDED_TENANTS : rawData);
-  const displayData = data ?? SEEDED_TENANTS;
+  const data = rawData;
+  const displayData = data;
   const pages = useMemo(() => Math.max(1, displayData?.meta.totalPages ?? 1), [displayData]);
 
   return (

@@ -134,6 +134,32 @@ export interface TenantProductView {
   appUrl: string | null;
 }
 
+export interface SubscriptionMasterView extends TenantProductView {
+  tenant: TenantView;
+}
+
+export interface SubscriptionMasterListResponse {
+  data: SubscriptionMasterView[];
+}
+
+export interface CreateSubscriptionRequest {
+  tenantId: string;
+  productCode: string;
+  planCode?: string;
+  appUrl?: string;
+}
+
+export interface CreateSubscriptionResponse {
+  subscription: SubscriptionMasterView;
+}
+
+export interface SubscriptionActionResponse {
+  tenantProductId: string;
+  productCode: string;
+  tenantCode: string;
+  status: TenantProductStatus;
+}
+
 export interface TenantProductListResponse {
   data: TenantProductView[];
 }
@@ -522,4 +548,64 @@ export interface UserView {
   identities: string[];
   tenantCount: number;
   createdAt: string;
+}
+
+export interface ProductRepositoryView {
+  repositoryId: string;
+  productId: string;
+  productCode: string;
+  domain: string | null;
+  databaseLocation: string | null;
+  databaseConnectionString: string | null;
+  configurationLocation: string | null;
+  updatedAt: string;
+}
+
+export interface ProductRepositoryCustomerView {
+  tenantId: string;
+  tenantCode: string;
+  tenantName: string;
+  productCode: string;
+  tenantSchema: string | null;
+  databaseName: string | null;
+  contactPerson: string | null;
+  contactEmail: string | null;
+}
+
+export interface ProductRepositoryDetail extends ProductRepositoryView {
+  customers: ProductRepositoryCustomerView[];
+  subscriptions: SubscriptionMasterView[];
+}
+
+export interface ProductRepositoryListResponse {
+  data: ProductRepositoryView[];
+  meta: PageMeta;
+}
+
+export interface UpdateProductRepositoryRequest {
+  domain?: string | null;
+  databaseLocation?: string | null;
+  databaseConnectionString?: string | null;
+  configurationLocation?: string | null;
+}
+
+export interface UpdateProductRepositoryCustomerRequest {
+  tenantSchema?: string | null;
+  databaseName?: string | null;
+  contactPerson?: string | null;
+  contactEmail?: string | null;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  sub: string;
+  email: string;
+  roles: string[];
+  expiresAt: string;
+  isProductionSecret: boolean;
 }

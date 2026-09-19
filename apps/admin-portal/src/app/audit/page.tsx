@@ -1,158 +1,129 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/api';
-import type { AuditEventView, PageMeta } from '@/lib/types';
-import { StatusBadge } from '@/components/badges';
+import { useAsyncData, ErrorBanner, LoadingBlock, Empty } from '@/components/ui';
+import type { AuditEventView } from '@/lib/types';
+import { StatusBadge, formatDate } from '@/components/badges';
+
+const PAGE_SIZE = 20;
 
 export default function AuditLogPage() {
-  const [events, setEvents] = useState<AuditEventView[]>([]);
-  const [meta, setMeta] = useState<PageMeta>({ page: 1, limit: 20, total: 0, totalPages: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [entityType, setEntityType] = useState('');
   const [tenantId, setTenantId] = useState('');
-
-  const loadAuditEvents = async (page = 1) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await api.audit.list({
+  const [page, setPage] = useState(1);
+  const { data, error, loading } = useAsyncData(
+    () =>
+      api.audit.list({
         page,
-        limit: 20,
+        limit: PAGE_SIZE,
         entityType: entityType.trim() || undefined,
         tenantId: tenantId.trim() || undefined,
-      });
-      setEvents(res.data);
-      setMeta(res.meta);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to load audit events');
-    } finally {
-      setLoading(false);
-    }
-  };
+      }),
+    [page, entityType, tenantId],
+  );
 
-  useEffect(() => {
-    loadAuditEvents(1);
-  }, []);
+  const rows = data?.data ?? [];
+  const pages = data?.meta.totalPages ?? 1;
 
   const handleFilter = (e: React.FormEvent) => {
     e.preventDefault();
-    loadAuditEvents(1);
+    setPage(1);
   };
 
   return (
     <div className="stack">
       <div className="page-header">
         <div>
-          <h1 style={{ margin: 0 }}>Platform Audit Log</h1>
-          <div className="muted" style={{ marginTop: '0.4rem' }}>
+          <h1>Platform Audit Log</h1>
+          <p>
             Immutable audit trail of administrative and lifecycle operations across the Cybelinx platform.
-          </div>
+          </p>
         </div>
       </div>
 
-      <div className="card mb-6">
-        <form onSubmit={handleFilter} className="flex gap-4 items-end">
-          <div style={{ flex: 1 }}>
-            <label className="label">Entity Type</label>
-            <input
-              type="text"
-              placeholder="e.g. tenant, product, entitlement"
-              className="input"
-              value={entityType}
-              onChange={(e) => setEntityType(e.target.value)}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label className="label">Tenant ID</label>
-            <input
-              type="text"
-              placeholder="UUID"
-              className="input"
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
-            />
-          </div>
+      {error && <ErrorBanner error={error} />}
+
+      <section className="card">
+        <form onSubmit={handleFilter} className="card-pad search-row">
+          <input
+            className="input"
+            style={{ flex: 1, minWidth: '200px' }}
+            placeholder="e.g. tenant, product, entitlement"
+            value={entityType}
+            onChange={(e) => {
+              setEntityType(e.target.value);
+              setPage(1);
+            }}
+          />
+          <input
+            className="input"
+            style={{ flex: 1, minWidth: '200px' }}
+            placeholder="Tenant ID (UUID)"
+            value={tenantId}
+            onChange={(e) => {
+              setTenantId(e.target.value);
+              setPage(1);
+            }}
+          />
           <button type="submit" className="btn btn-primary">
             Filter
           </button>
         </form>
-      </div>
 
-      {error && (
-        <div className="alert alert-error mb-6">
-          {error}
-        </div>
-      )}
-
-      <div className="card">
-        {loading ? (
-          <div className="p-8 text-center text-slate-400">Loading audit log...</div>
-        ) : events.length === 0 ? (
-          <div className="p-8 text-center text-slate-400">No audit events match the specified criteria.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+        {loading && !data && <LoadingBlock />}
+        {!loading && rows.length === 0 && <Empty>No audit events match the specified criteria.</Empty>}
+        {rows.length > 0 && (
+          <div className="table-wrap">
+            <table className="table">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400">
-                  <th className="py-3 px-4">Timestamp</th>
-                  <th className="py-3 px-4">Action</th>
-                  <th className="py-3 px-4">Entity Type</th>
-                  <th className="py-3 px-4">Entity ID</th>
-                  <th className="py-3 px-4">Tenant ID</th>
-                  <th className="py-3 px-4">Actor</th>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Action</th>
+                  <th>Entity Type</th>
+                  <th>Entity ID</th>
+                  <th>Tenant ID</th>
+                  <th>Actor</th>
                 </tr>
               </thead>
               <tbody>
-                {events.map((evt) => (
-                  <tr key={evt.eventId} className="border-b border-slate-800/50 hover:bg-slate-900/40">
-                    <td className="py-3 px-4 font-mono text-xs text-slate-400">
-                      {new Date(evt.createdAt).toLocaleString()}
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-200">{evt.action}</td>
-                    <td className="py-3 px-4">
+                {rows.map((evt: AuditEventView) => (
+                  <tr key={evt.eventId}>
+                    <td className="mono small muted">{formatDate(evt.createdAt)}</td>
+                    <td className="small">{evt.action}</td>
+                    <td>
                       <StatusBadge value={evt.resourceType || 'UNKNOWN'} />
                     </td>
-                    <td className="py-3 px-4 font-mono text-xs text-slate-300">
-                      {evt.resourceId || '—'}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs text-slate-400">
-                      {evt.tenantId || '—'}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-xs text-slate-400">
-                      {evt.actorUserId || 'system'}
-                    </td>
+                    <td className="mono small">{evt.resourceId || '—'}</td>
+                    <td className="mono small muted">{evt.tenantId || '—'}</td>
+                    <td className="mono small muted">{evt.actorUserId || 'system'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-800 text-xs text-slate-400">
-              <div>
-                Showing page {meta.page} of {meta.totalPages || 1} ({meta.total} total events)
-              </div>
-              <div className="flex gap-2">
-                <button
-                  disabled={meta.page <= 1}
-                  onClick={() => loadAuditEvents(meta.page - 1)}
-                  className="btn btn-secondary text-xs px-3 py-1 disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled={meta.page >= meta.totalPages}
-                  onClick={() => loadAuditEvents(meta.page + 1)}
-                  className="btn btn-secondary text-xs px-3 py-1 disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
           </div>
         )}
-      </div>
+
+        <div className="card-pad pager">
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={page <= 1}
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          >
+            ← Prev
+          </button>
+          <span className="muted small">
+            Page {page} / {pages} · {data?.meta.total ?? 0} total
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={page >= pages}
+            onClick={() => setPage((prev) => prev + 1)}
+          >
+            Next →
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

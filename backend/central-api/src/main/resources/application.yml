@@ -44,6 +44,9 @@ cybelinx:
     jwt-secret: ${IDP_JWT_SECRET:}
     jwks-uri: ${IDP_JWKS_URI:${SUPABASE_JWKS_URL:}}
     jwt-clock-skew-seconds: ${IDP_JWT_CLOCK_SKEW_SECONDS:0}
+  auth:
+    bootstrap-password: ${CYBELINX_AUTH_BOOTSTRAP_PASSWORD:Admin@123}
+    token-ttl-hours: ${CYBELINX_AUTH_TOKEN_TTL_HOURS:24}
 
 management:
   endpoints:

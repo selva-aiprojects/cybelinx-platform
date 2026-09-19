@@ -45,6 +45,18 @@ public class Product extends BaseTimestampedEntity {
     @Column(name = "base_url", length = 256)
     private String baseUrl;
 
+    @Column(name = "domain", length = 256)
+    private String domain;
+
+    @Column(name = "database_location", length = 512)
+    private String databaseLocation;
+
+    @Column(name = "database_connection_string", length = 512)
+    private String databaseConnectionString;
+
+    @Column(name = "configuration_location", length = 512)
+    private String configurationLocation;
+
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "product_category", nullable = false)
     private ProductCategory productCategory = ProductCategory.ENTERPRISE_OPERATIONS;
@@ -103,6 +115,38 @@ public class Product extends BaseTimestampedEntity {
 
     public void setBaseUrl(String baseUrl) {
         this.baseUrl = baseUrl;
+    }
+
+    public String getDomain() {
+        return domain;
+    }
+
+    public void setDomain(String domain) {
+        this.domain = domain;
+    }
+
+    public String getDatabaseLocation() {
+        return databaseLocation;
+    }
+
+    public void setDatabaseLocation(String databaseLocation) {
+        this.databaseLocation = databaseLocation;
+    }
+
+    public String getDatabaseConnectionString() {
+        return databaseConnectionString;
+    }
+
+    public void setDatabaseConnectionString(String databaseConnectionString) {
+        this.databaseConnectionString = databaseConnectionString;
+    }
+
+    public String getConfigurationLocation() {
+        return configurationLocation;
+    }
+
+    public void setConfigurationLocation(String configurationLocation) {
+        this.configurationLocation = configurationLocation;
     }
 
     public ProductCategory getProductCategory() {

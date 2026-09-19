@@ -11,6 +11,7 @@ const NAV_SECTIONS = [
     links: [
       { href: '/tenants', label: 'Tenants', icon: '▤' },
       { href: '/products', label: 'Products', icon: '▣' },
+      { href: '/product-repository', label: 'Product Repository', icon: '🗄️' },
       { href: '/onboarding', label: 'Product Onboarding', icon: '🚀' },
       { href: '/storeai/merchant', label: 'Store Merchant Portal', icon: '⚡' },
     ],
@@ -18,7 +19,7 @@ const NAV_SECTIONS = [
   {
     label: 'Operations',
     links: [
-      { href: '/subscriptions', label: 'Subscriptions', icon: '⇄' },
+      { href: '/subscriptions', label: 'Subscription Master', icon: '⇄' },
       { href: '/users', label: 'Users & Roles', icon: '◉' },
       { href: '/audit', label: 'Audit Log', icon: '▤' },
       { href: '/events', label: 'Platform Events', icon: '⚡' },

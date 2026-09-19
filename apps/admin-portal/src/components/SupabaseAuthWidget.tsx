@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { User, Session } from '@supabase/supabase-js';
 import {
@@ -145,12 +146,12 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
         </div>
 
         <div style={{ marginTop: '0.8rem', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <a href={dashboardUrl} className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff', textDecoration: 'none' }}>
+          <Link href={dashboardUrl} className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #10B981, #059669)', color: '#fff', textDecoration: 'none' }}>
             ⚡ Go to {tenantLabel}
-          </a>
-          <a href="/tenants" className="btn btn-ghost btn-sm">
+          </Link>
+          <Link href="/tenants" className="btn btn-ghost btn-sm">
             View Tenant Subscriptions
-          </a>
+          </Link>
         </div>
 
         {msg && (
@@ -178,36 +179,6 @@ export function SupabaseAuthWidget({ onTokenChange }: { onTokenChange?: (token: 
       )}
 
       <form onSubmit={handleAuth} className="stack" style={{ gap: '0.8rem', marginTop: '0.8rem' }}>
-        <div style={{ padding: '8px 12px', background: 'rgba(59, 130, 246, 0.08)', borderRadius: '6px', border: '1px solid rgba(59, 130, 246, 0.2)', fontSize: '0.82rem' }}>
-          <div style={{ fontWeight: 600, color: '#3b82f6', marginBottom: '4px' }}>🛍️ StoreAI Demo Presets:</div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.75rem', padding: '2px 8px', background: 'rgba(255,255,255,0.8)' }}
-              onClick={() => { setEmail('storeai.admin@cybelinx.com'); setPassword('DemoPass123!'); }}
-            >
-              StoreAI Platform Admin
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.75rem', padding: '2px 8px', background: 'rgba(255,255,255,0.8)' }}
-              onClick={() => { setEmail('demo.nike@cybelinx.com'); setPassword('DemoPass123!'); }}
-            >
-              Nike Merchant Admin (Demo)
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.75rem', padding: '2px 8px', background: 'rgba(255,255,255,0.8)' }}
-              onClick={() => { setEmail('demo.adidas@cybelinx.com'); setPassword('DemoPass123!'); }}
-            >
-              Adidas Merchant Admin (Demo)
-            </button>
-          </div>
-        </div>
-
         <div className="field">
           <label className="label" htmlFor="supabase-email">Email</label>
           <input

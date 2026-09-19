@@ -8,11 +8,11 @@ import {
   DEFAULT_API_BASE_URL,
 } from '@/lib/api';
 import { Alert } from '@/components/ui';
+import { AdminLoginWidget } from '@/components/AdminLoginWidget';
 import { SupabaseAuthWidget } from '@/components/SupabaseAuthWidget';
 
 const KNOWN_SERVICES: Array<[string, string]> = [
-  ['Control plane API', `${DEFAULT_API_BASE_URL}/health`],
-  ['Admin portal', '/api/health'],
+  ['Control plane API', `${DEFAULT_API_BASE_URL || '<configured base>'}/health`],
 ];
 
 export default function SettingsPage() {
@@ -39,20 +39,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function mintDevToken() {
-    try {
-      const res = await fetch('/api/auth/token');
-      if (!res.ok) throw new Error(`Failed to mint token: status ${res.status}`);
-      const data = (await res.json()) as { token: string };
-      setToken(data.token);
-      storeSettings(data.token, baseUrl.trim() || null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch (err) {
-      window.alert(`Token minting error: ${(err as Error).message}`);
-    }
-  }
-
   function save() {
     storeSettings(token.trim() || null, baseUrl.trim() || null);
     setSaved(true);
@@ -64,7 +50,7 @@ export default function SettingsPage() {
       <div className="page-header">
         <div>
           <h1>Settings</h1>
-          <p>Connect the Admin Portal to the control plane API and mint a development token.</p>
+          <p>Connect the Admin Portal to the control plane API.</p>
         </div>
       </div>
 
@@ -87,9 +73,11 @@ export default function SettingsPage() {
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setBaseUrl('/api/v1')}
+              onClick={() =>
+                setBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL ?? '')
+              }
             >
-              Use Embedded API (/api/v1)
+              Reset to default
             </button>
             <button
               type="button"
@@ -107,7 +95,8 @@ export default function SettingsPage() {
             </div>
           )}
           <div className="hint" style={{ marginTop: '0.5rem' }}>
-            Defaults to <code>{DEFAULT_API_BASE_URL}</code>. On Vercel, <code>/api/v1</code> routes to the embedded control plane API or proxy.
+            Defaults to <code>{DEFAULT_API_BASE_URL || 'NEXT_PUBLIC_API_BASE_URL (unset)'}</code>. Configure the
+            control plane URL via <code>NEXT_PUBLIC_API_BASE_URL</code>, or set it here to override.
           </div>
         </div>
         <div className="flex">
@@ -116,6 +105,8 @@ export default function SettingsPage() {
           </button>
         </div>
       </section>
+
+      <AdminLoginWidget onTokenChange={(t) => setToken(t ?? '')} />
 
       <SupabaseAuthWidget onTokenChange={(t) => setToken(t ?? '')} />
 
@@ -144,46 +135,8 @@ export default function SettingsPage() {
           <button type="button" className="btn btn-primary" onClick={save}>
             Save settings
           </button>
-          <button type="button" className="btn btn-ghost" onClick={mintDevToken}>
-            ⚡ Mint & Auto-Apply Token
-          </button>
           {saved && <Alert kind="success">Settings saved.</Alert>}
         </div>
-      </section>
-
-      <section className="card card-pad">
-        <h2 className="card-title" style={{ marginTop: 0 }}>
-          Minting a development token
-        </h2>
-        <p className="muted">
-          The control plane signs HS256 tokens with the raw bytes of <code>IDP_JWT_SECRET</code>.
-          Create one with <code>scripts/mint-dev-jwt.mjs</code>, then paste it above.
-        </p>
-        <pre
-          className="mono small"
-          style={{
-            background: 'var(--bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '0.9rem 1rem',
-            overflowX: 'auto',
-          }}
-        >
-{`# 1. Pick a secret (>= 32 chars) and set it on the API (application.yml / env)
-set IDP_JWT_SECRET=change-me-development-secret-key-1234
-
-# 2. (Re)start the API so the HMAC verifier picks it up
-npm run dev:api
-
-# 3. Mint a token for the seeded dev admin (provider "generic")
-npm run mint:jwt -- --sub seed-dev-admin-0001 --email dev.admin@cybelinx.test
-`}
-        </pre>
-        <p className="hint">
-          The dev admin <code>seed-dev-admin-0001</code> is created by migration{' '}
-          <code>V6__seed_reference_data.sql</code> and carries the{' '}
-          <code>CYBELINX_PLATFORM_ADMIN</code> role, which bypasses permission checks.
-        </p>
       </section>
 
       <section className="card card-pad">

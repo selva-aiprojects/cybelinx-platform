@@ -56,18 +56,24 @@ import type {
   TenantMemberView,
   CreateTenantMemberRequest,
   UserView,
+  SubscriptionMasterListResponse,
+  CreateSubscriptionRequest,
+  CreateSubscriptionResponse,
+  SubscriptionActionResponse,
+  ProductRepositoryListResponse,
+  ProductRepositoryDetail,
+  ProductRepositoryView,
+  ProductRepositoryCustomerView,
+  UpdateProductRepositoryRequest,
+  UpdateProductRepositoryCustomerRequest,
+  LoginRequest,
+  LoginResponse,
 } from './types';
 
 const STORAGE_TOKEN_KEY = 'cybelinx_api_token';
 const STORAGE_BASE_URL_KEY = 'cybelinx_api_base_url';
 
-export const DEFAULT_DEV_TOKEN =
-  process.env.NODE_ENV === 'production'
-    ? null
-    : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzZWVkLWRldi1hZG1pbi0wMDAxIiwiZW1haWwiOiJkZXYuYWRtaW5AY3liZWxpbngudGVzdCIsInJvbGVzIjpbIkNZQkVMSU5YX1BMQVRGT1JNX0FETUlOIl19.dev-demo-token';
-
-export const DEFAULT_API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api/v1';
+export const DEFAULT_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 export class ApiClientError extends Error {
   constructor(
@@ -102,15 +108,13 @@ export function resolveApiBaseUrl(): string {
 }
 
 export function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return DEFAULT_DEV_TOKEN;
-  return window.localStorage.getItem(STORAGE_TOKEN_KEY) || DEFAULT_DEV_TOKEN;
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(STORAGE_TOKEN_KEY);
 }
 
-export async function fetchMintedToken(): Promise<string> {
-  const res = await fetch('/api/auth/token');
-  if (!res.ok) throw new Error('Failed to mint token from server');
-  const data = (await res.json()) as { token: string };
-  return data.token;
+export function clearStoredToken(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(STORAGE_TOKEN_KEY);
 }
 
 export function storeSettings(token: string | null, baseUrl: string | null): void {
@@ -137,6 +141,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
 
   const currentBase = resolveApiBaseUrl();
+  if (!currentBase) {
+    throw new ApiClientError(
+      0,
+      'API_BASE_URL_UNCONFIGURED',
+      'No API base URL configured. Set NEXT_PUBLIC_API_BASE_URL or configure one in Settings.',
+    );
+  }
   let response: Response;
   try {
     response = await fetch(`${currentBase}${path}`, {
@@ -146,20 +157,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
-    if (typeof window !== 'undefined' && currentBase !== DEFAULT_API_BASE_URL) {
-      try {
-        response = await fetch(`${DEFAULT_API_BASE_URL}${path}`, {
-          method,
-          headers,
-          signal,
-          body: body === undefined ? undefined : JSON.stringify(body),
-        });
-      } catch {
-        throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${currentBase}`, error);
-      }
-    } else {
-      throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${currentBase}`, error);
-    }
+    throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${currentBase}`, error);
   }
 
   if (!response.ok) {
@@ -322,6 +320,34 @@ export const api = {
       }),
   },
 
+  subscriptionMaster: {
+    list: () => request<SubscriptionMasterListResponse>('/subscriptions'),
+    create: (body: CreateSubscriptionRequest) =>
+      request<CreateSubscriptionResponse>('/subscriptions', { method: 'POST', body }),
+    setStatus: (tenantProductId: string, status: TenantProductStatus) =>
+      request<SubscriptionActionResponse>(`/subscriptions/${tenantProductId}/status`, {
+        method: 'PATCH',
+        body: { status },
+      }),
+    detach: (tenantProductId: string) =>
+      request<SubscriptionActionResponse>(`/subscriptions/${tenantProductId}`, {
+        method: 'DELETE',
+      }),
+  },
+
+  productRepository: {
+    list: (params?: ListParams) =>
+      request<ProductRepositoryListResponse>(`/product-repository${buildQuery(params)}`),
+    get: (productId: string) => request<ProductRepositoryDetail>(`/product-repository/${productId}`),
+    update: (productId: string, body: UpdateProductRepositoryRequest) =>
+      request<ProductRepositoryView>(`/product-repository/${productId}`, { method: 'PUT', body }),
+    updateCustomer: (productId: string, tenantId: string, body: UpdateProductRepositoryCustomerRequest) =>
+      request<ProductRepositoryCustomerView>(
+        `/product-repository/${productId}/customers/${tenantId}`,
+        { method: 'PATCH', body },
+      ),
+  },
+
   regions: {
     list: () => request<unknown[]>('/regions'),
   },
@@ -375,6 +401,11 @@ export const api = {
       request<{ data: TenantMemberView[] }>(`/iam/tenants/${tenantId}/members`),
     addMember: (tenantId: string, body: CreateTenantMemberRequest) =>
       request<TenantMemberView>(`/iam/tenants/${tenantId}/members`, { method: 'POST', body }),
+  },
+
+  auth: {
+    login: (body: LoginRequest) =>
+      request<LoginResponse>('/auth/login', { method: 'POST', body, token: null }),
   },
 };
 

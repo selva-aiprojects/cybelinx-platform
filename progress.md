@@ -313,3 +313,26 @@ repositories — the docs alone were not trusted.
 - [x] `OutboxEventRepository.findDeadLettered(Pageable)` (pessimistic lock over `DEAD_LETTERED`)
 - [x] `OutboxPollingService.replayDeadLettered()` — reset batch of `DEAD_LETTERED` → `PENDING` (attempts/processed_at/claim error + dead-letter + attempt-count cleared, `available_at = now`) so the next poll re-delivers (TRD §20 manual replay)
 - [x] `EventWorkerOutboxIT.replay_deadLetteredEventReturnedToPendingAndRedelivered` — replay resets state, next `pollOnce()` re-processes to `SUCCEEDED`
+
+## Phase: Email + Password Login (Control Plane)
+
+### Checklist
+- [x] Migration `V21__bootstrap_acme_login.sql`: `password_hash` column on `users` (nullable) + guarded ACME tenant/membership/`CYBELINX_PLATFORM_ADMIN` role restore for the dev admin (idempotent `WHERE NOT EXISTS` inserts, stable UUIDs from V6/V7 era)
+- [x] Migration `V22__ensure_dev_admin_user.sql`: idempotent restore of the dev-admin `users` row (`00000000-0000-0000-0000-000000000a01`) + `user_identities` row (`...0a02`, provider `generic`, subject `seed-dev-admin-0001`) — required because integration-test isolation deletes all users during the suite (destroying V6's seed after V6 applied); V21 is checksum-locked so a new V22 carries the user restore
+- [x] Login flow (`com.cybelinx.platform.api.auth`): `LoginController` `POST /auth/login` (public; excluded from the `TenantAuthInterceptor` path patterns) → `LoginService`:
+  - Email normalized lower-case; unknown email → 401 `INVALID_CREDENTIALS` (NestJS shape)
+  - First login: accepts only the configured bootstrap password (`cybelinx.auth.bootstrap-password`, default `Admin@123`) and persists a BCrypt hash via a guarded `IS NULL` update (`UserRepository.updatePasswordHashIfNull`, race-safe, `REQUIRES_NEW`-safe + fallback re-read)
+  - Afterwards: bcrypt match required; success mints an HS256 JWT via nimbus `MACSigner` (`JwtMinter`, secret ≥ 32 bytes from `IDP_JWT_SECRET`)
+  - Identity selected by configured provider (`cybelinx.idp.provider`, `generic` in dev); roles flattened from `AuthorizationService.listAccess`
+  - Response mirrors the retired Next route: `{token, sub, email, roles, expiresAt (ISO), isProductionSecret}`
+- [x] `CybelinxProperties` gains an `Auth` block (`bootstrap-password`, `token-ttl-hours` default 24, env `CYBELINX_AUTH_*`); `ApiHttpException.serverError(...)` added for minting failures; `BCryptPasswordEncoder` bean in `IdentitySecurityConfig`
+- [x] `LoginServiceIT` (5 ITs): unknown email 401, wrong password before seed → 401 and nothing persisted, first login seeds hash + mints a token that passes `IdentityService.validateToken`/`resolvePrincipal`, wrong password after seed → 401, correct password after seed → success — central-api **222/222** + event-worker 21 = **243/243 backend green**
+- [x] Portal: `LoginRequest`/`LoginResponse` types; `api.auth.login(...)` (posts to `/auth/login` with `token: null` so no Authorization header leaks); `AdminLoginWidget` component (email+password → store token in `cybelinx_api_token` via `storeSettings(token, null)` + `onTokenChange`), rendered above the Supabase widget on `/settings`
+- [x] `clearStoredToken()` helper added to `lib/api.ts` for widget sign-out
+- [x] Portal lint green: fixed `ui.tsx` ref-during-render (ref assignment moved into a `useEffect`), `SupabaseAuthWidget` `<a href>` → `next/link` for portal-internal links, hostname-prefill `setState` in effects scoped with `react-hooks/set-state-in-effect` disables (`onboarding/storeai`, `storeai/merchant`), removed unused `getStoredToken`/`session` in the merchant page, added missing `selectedTenantId` dep in `/users`
+- [x] Portal `lint` + `typecheck` + `next build` green
+- [x] `.env.example` documents `CYBELINX_AUTH_BOOTSTRAP_PASSWORD` / `CYBELINX_AUTH_TOKEN_TTL_HOURS` and the dev login requirement (`IDP_PROVIDER=generic` + 32-byte `IDP_JWT_SECRET`)
+
+### Notes
+- Dev DB state after a full backend suite is clean (tests wipe users/ACME via raw JDBC cleanup); the migrations are idempotent so re-applying `V21`+`V22` SQL restores the dev-admin login (`dev.admin@cybelinx.test` / `Admin@123`).
+- `isProductionSecret` is always `true` on success in the current minting path (HS256 requires a signing secret).

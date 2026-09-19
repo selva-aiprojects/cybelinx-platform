@@ -37,6 +37,10 @@ public class User extends BaseTimestampedEntity {
     @Column(name = "timezone", length = 64)
     private String timezone;
 
+    /** BCrypt hash for the email+password login (see migration V21). Null until the first sign-in. */
+    @Column(name = "password_hash", length = 255)
+    private String passwordHash;
+
     public UUID getId() {
         return id;
     }
@@ -83,5 +87,13 @@ public class User extends BaseTimestampedEntity {
 
     public void setTimezone(String timezone) {
         this.timezone = timezone;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 }

@@ -11,6 +11,8 @@ import com.cybelinx.platform.api.security.jwt.SignatureVerifier;
 import com.cybelinx.platform.api.security.jwt.UnconfiguredSignatureVerifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Port of the {@code IdentityModule} provider wiring: chooses the JWT signature verifier from
@@ -46,6 +48,12 @@ public class IdentitySecurityConfig {
     @Bean
     public IdentityService identityService(IdentityProvider identityProvider, UserMappingService userMapping) {
         return new IdentityService(identityProvider, userMapping);
+    }
+
+    /** BCrypt encoder for the email+password login (first-login hash seeding and matching). */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 
     private static boolean hasText(String value) {

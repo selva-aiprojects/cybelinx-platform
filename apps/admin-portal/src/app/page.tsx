@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, resolveApiBaseUrl, getStoredToken, DEFAULT_DEV_TOKEN } from '@/lib/api';
+import { api, resolveApiBaseUrl, getStoredToken } from '@/lib/api';
 import { useAsyncData, ErrorBanner, LoadingBlock, Empty } from '@/components/ui';
 import { StatusBadge, formatDate } from '@/components/badges';
 

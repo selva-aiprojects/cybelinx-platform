@@ -1,89 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, isApiClientError } from '@/lib/api';
+import { api } from '@/lib/api';
 import type { UserView, TenantMemberView, TenantView } from '@/lib/types';
-
-const SEEDED_USERS: UserView[] = [
-  {
-    userId: 'seed-dev-admin-0001',
-    email: 'dev.admin@cybelinx.test',
-    displayName: 'Cybelinx Platform Admin',
-    status: 'ACTIVE',
-    identities: ['seed-jwt', 'supabase-auth'],
-    tenantCount: 4,
-    createdAt: '2026-09-01T08:00:00Z',
-  },
-  {
-    userId: 'user-selva-admin-003',
-    email: 'b.selvakumar@gmail.com',
-    displayName: 'Selvakumar B (Tenant Admin)',
-    status: 'ACTIVE',
-    identities: ['supabase-auth'],
-    tenantCount: 1,
-    createdAt: '2026-09-16T12:00:00Z',
-  },
-  {
-    userId: 'user-acme-admin-001',
-    email: 'admin@acme-hospital.org',
-    displayName: 'ACME Hospital Admin (Dr. John Smith)',
-    status: 'ACTIVE',
-    identities: ['supabase-auth'],
-    tenantCount: 1,
-    createdAt: '2026-09-15T10:15:00Z',
-  },
-  {
-    userId: 'user-nike-admin-002',
-    email: 'merchant@nike-e2e.com',
-    displayName: 'Nike Merchant Lead (Sarah Jenkins)',
-    status: 'ACTIVE',
-    identities: ['supabase-auth'],
-    tenantCount: 1,
-    createdAt: '2026-09-15T11:20:00Z',
-  },
-];
-
-const SEEDED_MEMBERS: Record<string, TenantMemberView[]> = {
-  selva_healthcare: [
-    {
-      membershipId: 'mem-selva-001',
-      tenantId: 'selva_healthcare',
-      userId: 'user-selva-admin-003',
-      email: 'b.selvakumar@gmail.com',
-      displayName: 'Selvakumar B',
-      status: 'ACTIVE',
-      roles: ['TENANT_ADMIN'],
-      permissions: ['TENANT_WRITE', 'PRODUCT_ACCESS', 'USER_MANAGE'],
-      joinedAt: '2026-09-16T12:00:00Z',
-    },
-  ],
-  acme: [
-    {
-      membershipId: 'mem-acme-001',
-      tenantId: 'acme',
-      userId: 'user-acme-admin-001',
-      email: 'admin@acme-hospital.org',
-      displayName: 'Dr. John Smith',
-      status: 'ACTIVE',
-      roles: ['TENANT_ADMIN'],
-      permissions: ['TENANT_WRITE', 'PRODUCT_ACCESS', 'USER_MANAGE'],
-      joinedAt: '2026-09-15T10:15:00Z',
-    },
-  ],
-  nike: [
-    {
-      membershipId: 'mem-nike-001',
-      tenantId: 'nike',
-      userId: 'user-nike-admin-002',
-      email: 'merchant@nike-e2e.com',
-      displayName: 'Sarah Jenkins',
-      status: 'ACTIVE',
-      roles: ['TENANT_ADMIN'],
-      permissions: ['TENANT_WRITE', 'PRODUCT_ACCESS', 'USER_MANAGE'],
-      joinedAt: '2026-09-15T11:20:00Z',
-    },
-  ],
-};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserView[]>([]);
@@ -110,11 +29,11 @@ export default function UsersPage() {
       setError(null);
       try {
         const [usersRes, tenantsRes] = await Promise.all([
-          api.iam.listUsers().catch(() => ({ data: SEEDED_USERS, total: SEEDED_USERS.length })),
-          api.tenants.list().catch(() => ({ data: [], total: 0 })),
+          api.iam.listUsers(),
+          api.tenants.list(),
         ]);
 
-        setUsers(usersRes.data.length > 0 ? usersRes.data : SEEDED_USERS);
+        setUsers(usersRes.data);
 
         if (tenantsRes.data.length > 0) {
           setTenants(tenantsRes.data);
@@ -122,16 +41,15 @@ export default function UsersPage() {
             setSelectedTenantId(tenantsRes.data[0].tenantCode || tenantsRes.data[0].tenantId);
           }
         }
-      } catch (err) {
-        console.warn('API error loading users/tenants, fallback to seeded view', err);
-        setUsers(SEEDED_USERS);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load users and tenants');
       } finally {
         setLoading(false);
       }
     }
 
     fetchData();
-  }, []);
+  }, [selectedTenantId]);
 
   useEffect(() => {
     if (!selectedTenantId) return;
@@ -139,8 +57,8 @@ export default function UsersPage() {
       try {
         const res = await api.iam.listMembers(selectedTenantId);
         setMembers(res.data);
-      } catch {
-        setMembers(SEEDED_MEMBERS[selectedTenantId.toLowerCase()] || []);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load tenant members');
       }
     }
     fetchMembers();
@@ -167,27 +85,7 @@ export default function UsersPage() {
       setShowInviteModal(false);
       setInviteForm({ tenantId: selectedTenantId || 'acme', email: '', displayName: '', roleCode: 'TENANT_ADMIN' });
     } catch (err) {
-      if (isApiClientError(err)) {
-        setError(`Failed to invite member: ${err.message}`);
-      } else {
-        // Optimistic UI fallback
-        const mockNewMember: TenantMemberView = {
-          membershipId: `mem-${Date.now().toString(36)}`,
-          tenantId: inviteForm.tenantId,
-          userId: `usr-${Date.now().toString(36)}`,
-          email: inviteForm.email,
-          displayName: inviteForm.displayName || inviteForm.email.split('@')[0],
-          status: 'ACTIVE',
-          roles: [inviteForm.roleCode],
-          permissions: ['PRODUCT_ACCESS'],
-          joinedAt: new Date().toISOString(),
-        };
-        setSuccessMsg(`Member ${mockNewMember.email} successfully provisioned as ${inviteForm.roleCode}.`);
-        if (inviteForm.tenantId === selectedTenantId) {
-          setMembers((prev) => [mockNewMember, ...prev]);
-        }
-        setShowInviteModal(false);
-      }
+      setError(`Failed to invite member: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }

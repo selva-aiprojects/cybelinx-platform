@@ -27,6 +27,9 @@ export default function StoreAiOnboardingPage() {
   const [planCode, setPlanCode] = useState(DEFAULT_PLAN);
   const [schemaName, setSchemaName] = useState('storeai_nike_01');
 
+  // Prefill the form from the hostname (adidas/puma/nike demo subdomains). Runs once
+  // on mount; window.location is unavailable during server/initial render.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const host = window.location.hostname.toLowerCase();
@@ -57,6 +60,7 @@ export default function StoreAiOnboardingPage() {
       }
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Batch Merchants State
   const [batchJson, setBatchJson] = useState('');

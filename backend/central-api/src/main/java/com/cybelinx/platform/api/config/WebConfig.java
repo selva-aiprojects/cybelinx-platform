@@ -29,6 +29,9 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns(
                         "/tenants/**",
                         "/products/**",
+                        "/subscriptions/**",
+                        "/product-repository/**",
+                        "/regions/**",
                         "/audit/**",
                         "/events/**",
                         "/api/v1/onboarding/**",

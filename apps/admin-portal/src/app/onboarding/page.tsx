@@ -9,11 +9,10 @@ import {
   GenericOnboardResponse,
   GenericOnboardStatusView,
 } from '@/lib/types';
-import { MOCK_ONBOARDING_DEFINITIONS } from '@/lib/mock-data';
 import { useProvisioningPolling } from '@/hooks/useProvisioningPolling';
 
 export default function UnifiedOnboardingPage() {
-  const [definitions, setDefinitions] = useState<ProductOnboardingDefinition[]>(MOCK_ONBOARDING_DEFINITIONS);
+  const [definitions, setDefinitions] = useState<ProductOnboardingDefinition[]>([]);
   const [selectedProductCode, setSelectedProductCode] = useState<string>('JIOPLIX');
   const [activeTab, setActiveTab] = useState<'wizard' | 'lookup' | 'definitions'>('wizard');
 
@@ -70,8 +69,7 @@ export default function UnifiedOnboardingPage() {
           setDefinitions(liveDefs);
         }
       } catch {
-        // Fallback to MOCK_ONBOARDING_DEFINITIONS when running standalone or offline
-        setDefinitions(MOCK_ONBOARDING_DEFINITIONS);
+        setDefinitions([]);
       }
     }
     loadDefinitions();
@@ -220,6 +218,26 @@ export default function UnifiedOnboardingPage() {
       </div>
 
       {/* Tabs */}
+      {definitions.length === 0 && (
+        <div
+          className="card card-pad"
+          style={{
+            textAlign: 'center',
+            padding: '3rem',
+            color: '#64748b',
+            border: '1px dashed #cbd5e1',
+            borderRadius: '10px',
+          }}
+        >
+          <div style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>📦 Loading Product Onboarding Definitions…</div>
+          <div style={{ fontSize: '0.85rem' }}>
+            Fetching registered product definitions from the control plane API.
+          </div>
+        </div>
+      )}
+
+      {definitions.length > 0 && (
+      <>
       <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '24px', gap: '24px' }}>
         <button
           type="button"
@@ -772,6 +790,8 @@ export default function UnifiedOnboardingPage() {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );
