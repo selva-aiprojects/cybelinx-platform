@@ -92,7 +92,7 @@ export const isApiClientError = (error: unknown): error is ApiClientError =>
   error instanceof ApiClientError;
 
 export function resolveApiBaseUrl(): string {
-  if (typeof window === 'undefined') return DEFAULT_API_BASE_URL;
+  if (typeof window === 'undefined') return DEFAULT_API_BASE_URL || '/api/v1';
   const stored = window.localStorage.getItem(STORAGE_BASE_URL_KEY);
   if (stored) {
     // On HTTPS, browsers block http:// URLs due to Mixed Content.
@@ -101,11 +101,11 @@ export function resolveApiBaseUrl(): string {
       (stored.startsWith('http://localhost') || stored.startsWith('http://127.0.0.1') || stored.startsWith('http://'))
     ) {
       window.localStorage.removeItem(STORAGE_BASE_URL_KEY);
-      return DEFAULT_API_BASE_URL;
+      return DEFAULT_API_BASE_URL || '/api/v1';
     }
     return stored;
   }
-  return DEFAULT_API_BASE_URL;
+  return DEFAULT_API_BASE_URL || '/api/v1';
 }
 
 export function getStoredToken(): string | null {
@@ -142,23 +142,20 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (activeToken) headers.Authorization = `Bearer ${activeToken}`;
 
   const currentBase = resolveApiBaseUrl();
-  if (!currentBase) {
-    throw new ApiClientError(
-      0,
-      'API_BASE_URL_UNCONFIGURED',
-      'No API base URL configured. Set NEXT_PUBLIC_API_BASE_URL or configure one in Settings.',
-    );
-  }
+  const normalizedBase = currentBase ? currentBase.replace(/\/+$/, '') : '';
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const fullUrl = `${normalizedBase}${normalizedPath}`;
+
   let response: Response;
   try {
-    response = await fetch(`${currentBase}${path}`, {
+    response = await fetch(fullUrl, {
       method,
       headers,
       signal,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (error) {
-    throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${currentBase}`, error);
+    throw new ApiClientError(0, 'NETWORK_ERROR', `Unable to reach the API at ${currentBase || fullUrl}`, error);
   }
 
   if (!response.ok) {
@@ -168,10 +165,19 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     } catch {
       // non-JSON error body
     }
+
+    const defaultMsg = response.status === 404
+      ? `API route ${normalizedPath} was not found on ${normalizedBase || 'the server'}. Check API Base URL in Settings.`
+      : response.status === 401
+      ? 'Unauthorized: Valid API token required. Please sign in.'
+      : response.status === 503
+      ? `Upstream service at ${normalizedBase} is currently unavailable.`
+      : `Request failed with status ${response.status}`;
+
     throw new ApiClientError(
       response.status,
       envelope?.code,
-      envelope?.message ?? `Request failed with status ${response.status}`,
+      envelope?.message ?? defaultMsg,
       envelope?.details,
     );
   }

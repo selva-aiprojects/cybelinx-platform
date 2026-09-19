@@ -99,6 +99,8 @@ export function ErrorBanner({ error }: { error: string }) {
     error.includes('localhost') || error.includes('127.0.0.1');
   const isNetworkError =
     error.includes('Unable to reach the API') || isLocalhostError;
+  const is404OrConfigError =
+    error.includes('404') || error.includes('not found') || error.includes('API_BASE_URL');
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
   function resetToCloud() {
@@ -113,11 +115,13 @@ export function ErrorBanner({ error }: { error: string }) {
     <div className="alert alert-error" role="alert">
       <div style={{ flex: 1 }}>
         <div>{error}</div>
-        {isNetworkError && (
+        {(isNetworkError || is404OrConfigError) && (
           <div style={{ marginTop: '0.6rem' }}>
             <span className="small">
               {isLocalhostError && isHttps
                 ? 'Your browser has a cached localhost endpoint that is blocked over HTTPS. '
+                : is404OrConfigError
+                ? 'The requested endpoint was not found on your current API host. '
                 : 'Having trouble reaching the remote API? '}
             </span>
             <button
