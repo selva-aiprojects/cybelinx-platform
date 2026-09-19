@@ -4,14 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cybelinx.platform.api.domain.MembershipStatus;
+import com.cybelinx.platform.api.domain.PlanStatus;
+import com.cybelinx.platform.api.domain.ProductStatus;
 import com.cybelinx.platform.api.domain.TenantStatus;
 import com.cybelinx.platform.api.iam.IamService;
 import com.cybelinx.platform.api.iam.IamViews;
+import com.cybelinx.platform.api.onboarding.adapter.ProductAdapterRegistry;
 import com.cybelinx.platform.api.onboarding.model.GenericOnboardRequest;
 import com.cybelinx.platform.api.onboarding.model.GenericOnboardResponse;
 import com.cybelinx.platform.api.onboarding.model.GenericOnboardStatusView;
+import com.cybelinx.platform.api.onboarding.model.ProductOnboardingDefinition;
 import com.cybelinx.platform.api.onboarding.service.GenericProductOnboardingService;
 import com.cybelinx.platform.api.persistence.MembershipRoleRepository;
+import com.cybelinx.platform.api.persistence.PlanRepository;
+import com.cybelinx.platform.api.persistence.ProductRepository;
 import com.cybelinx.platform.api.persistence.RoleRepository;
 import com.cybelinx.platform.api.persistence.TenantExternalIdentifierRepository;
 import com.cybelinx.platform.api.persistence.TenantMembershipRepository;
@@ -20,6 +26,8 @@ import com.cybelinx.platform.api.persistence.TenantRepository;
 import com.cybelinx.platform.api.persistence.TenantResourceRepository;
 import com.cybelinx.platform.api.persistence.UserRepository;
 import com.cybelinx.platform.api.persistence.entity.MembershipRole;
+import com.cybelinx.platform.api.persistence.entity.Plan;
+import com.cybelinx.platform.api.persistence.entity.Product;
 import com.cybelinx.platform.api.persistence.entity.Role;
 import com.cybelinx.platform.api.persistence.entity.Tenant;
 import com.cybelinx.platform.api.persistence.entity.TenantMembership;
@@ -34,11 +42,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -51,6 +61,9 @@ import org.springframework.transaction.annotation.Transactional;
 class TenantUserAndOnboardingE2EIT {
 
     @Autowired private GenericProductOnboardingService onboardingService;
+    @Autowired private ProductAdapterRegistry registry;
+    @Autowired private ProductRepository products;
+    @Autowired private PlanRepository plans;
     @Autowired private IamService iamService;
     @Autowired private TenantRepository tenants;
     @Autowired private TenantExternalIdentifierRepository externalIds;
@@ -61,6 +74,7 @@ class TenantUserAndOnboardingE2EIT {
     @Autowired private MembershipRoleRepository membershipRoles;
     @Autowired private RoleRepository roles;
     @Autowired private AuthorizationService authorization;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private AuthPrincipal platformAdminPrincipal;
 
@@ -112,6 +126,44 @@ class TenantUserAndOnboardingE2EIT {
                 new AuthPrincipal.AuthUser(adminUser.getId(), adminUser.getEmail(), adminUser.getDisplayName(), "ACTIVE", "en", "UTC"),
                 new AuthPrincipal.AuthIdentity("generic", "seed-dev-admin-0001", adminUser.getEmail(), adminUser.getDisplayName())
         );
+
+        for (ProductOnboardingDefinition def : registry.getAvailableDefinitions()) {
+            Product prod = products.findByProductCode(def.productCode()).orElseGet(() -> {
+                Product p = new Product();
+                p.setProductCode(def.productCode());
+                p.setName(def.displayName());
+                p.setDescription(def.description());
+                p.setStatus(ProductStatus.ACTIVE);
+                p.setDefaultIsolationMode("SCHEMA_PER_TENANT");
+                p.setSchemaPrefix(def.productCode().toLowerCase() + "_");
+                return products.save(p);
+            });
+            for (String planCode : def.subscription().availablePlans()) {
+                plans.findByProductIdAndPlanCode(prod.getId(), planCode).orElseGet(() -> {
+                    Plan p = new Plan();
+                    p.setProduct(prod);
+                    p.setPlanCode(planCode);
+                    p.setName(planCode);
+                    p.setStatus(PlanStatus.ACTIVE);
+                    return plans.save(p);
+                });
+            }
+        }
+    }
+
+    @AfterEach
+    void tearDown() {
+        jdbcTemplate.execute("DELETE FROM public.product_repository_customers");
+        jdbcTemplate.execute("DELETE FROM public.usage_events");
+        jdbcTemplate.execute("DELETE FROM public.provisioning_steps");
+        jdbcTemplate.execute("DELETE FROM public.provisioning_jobs");
+        jdbcTemplate.execute("DELETE FROM public.tenant_resources");
+        jdbcTemplate.execute("DELETE FROM public.tenant_products");
+        jdbcTemplate.execute("DELETE FROM public.tenant_external_identifiers");
+        jdbcTemplate.execute("DELETE FROM public.entitlements");
+        jdbcTemplate.execute("DELETE FROM public.plans");
+        jdbcTemplate.execute("DELETE FROM public.product_versions");
+        jdbcTemplate.execute("DELETE FROM public.products");
     }
 
     @Test

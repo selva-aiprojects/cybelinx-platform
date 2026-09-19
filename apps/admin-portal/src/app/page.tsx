@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { api, resolveApiBaseUrl, getStoredToken } from '@/lib/api';
-import { useAsyncData, ErrorBanner, LoadingBlock, Empty } from '@/components/ui';
+import { api, resolveApiBaseUrl } from '@/lib/api';
+import { useAsyncData, ErrorBanner, LoadingBlock, Empty, useIsMounted, useStoredToken } from '@/components/ui';
 import { StatusBadge, formatDate } from '@/components/badges';
 
 function useApiHealth() {
@@ -20,7 +20,8 @@ function useApiHealth() {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const token = getStoredToken();
+  const isMounted = useIsMounted();
+  const token = useStoredToken();
   const health = useApiHealth();
   const products = useAsyncData(() => api.products.list({ limit: 5 }), []);
   const tenants = useAsyncData(() => api.tenants.list({ limit: 5 }), []);
@@ -63,7 +64,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {!token && (
+      {isMounted && !token && (
         <div>
           <ErrorBanner error="No API token configured. Set your development JWT in Settings before the read-only views will load." />
         </div>

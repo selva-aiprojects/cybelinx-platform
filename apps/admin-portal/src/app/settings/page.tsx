@@ -2,12 +2,11 @@
 
 import { useState } from 'react';
 import {
-  getStoredToken,
   resolveApiBaseUrl,
   storeSettings,
   DEFAULT_API_BASE_URL,
 } from '@/lib/api';
-import { Alert } from '@/components/ui';
+import { Alert, useIsMounted, useStoredToken } from '@/components/ui';
 import { AdminLoginWidget } from '@/components/AdminLoginWidget';
 import { SupabaseAuthWidget } from '@/components/SupabaseAuthWidget';
 
@@ -16,16 +15,16 @@ const KNOWN_SERVICES: Array<[string, string]> = [
 ];
 
 export default function SettingsPage() {
-  const [token, setToken] = useState(() => getStoredToken() ?? '');
-  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-  const [baseUrl, setBaseUrl] = useState(() => {
-    const active = resolveApiBaseUrl();
-    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && (active.startsWith('http://localhost') || active.startsWith('http://127.0.0.1'))) {
-      return '/api/v1';
-    }
-    return active;
-  });
+  const isMounted = useIsMounted();
+  const storedToken = useStoredToken();
+  const [customToken, setCustomToken] = useState<string | null>(null);
+  const [customBaseUrl, setCustomBaseUrl] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const token = customToken ?? (isMounted ? (storedToken ?? '') : '');
+  const baseUrl = customBaseUrl ?? (isMounted ? resolveApiBaseUrl() : DEFAULT_API_BASE_URL);
+
+  const isHttps = isMounted && typeof window !== 'undefined' && window.location.protocol === 'https:';
   const hasMixedContentRisk = isHttps && baseUrl.startsWith('http://');
 
   async function testConnection() {
@@ -66,7 +65,7 @@ export default function SettingsPage() {
             id="base-url"
             className="input"
             value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
+            onChange={(event) => setCustomBaseUrl(event.target.value)}
             placeholder={DEFAULT_API_BASE_URL}
           />
           <div className="flex" style={{ marginTop: '0.5rem', gap: '0.5rem' }}>
@@ -74,7 +73,7 @@ export default function SettingsPage() {
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() =>
-                setBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL ?? '')
+                setCustomBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL ?? '')
               }
             >
               Reset to default
@@ -82,7 +81,7 @@ export default function SettingsPage() {
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setBaseUrl('http://localhost:3001/api/v1')}
+              onClick={() => setCustomBaseUrl('http://localhost:3001/api/v1')}
             >
               Use Local Spring Boot (localhost:3001)
             </button>
@@ -90,7 +89,7 @@ export default function SettingsPage() {
           {hasMixedContentRisk && (
             <div style={{ marginTop: '0.5rem' }}>
               <Alert kind="info">
-                You are accessing the portal over HTTPS ({typeof window !== 'undefined' ? window.location.origin : ''}). Browsers block requests to insecure HTTP endpoints (Mixed Content). Use <code>/api/v1</code> for the cloud API or an HTTPS tunnel if connecting to a remote backend.
+                You are accessing the portal over HTTPS ({isMounted && typeof window !== 'undefined' ? window.location.origin : ''}). Browsers block requests to insecure HTTP endpoints (Mixed Content). Use <code>/api/v1</code> for the cloud API or an HTTPS tunnel if connecting to a remote backend.
               </Alert>
             </div>
           )}
@@ -106,9 +105,9 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <AdminLoginWidget onTokenChange={(t) => setToken(t ?? '')} />
+      <AdminLoginWidget onTokenChange={(t) => setCustomToken(t ?? '')} />
 
-      <SupabaseAuthWidget onTokenChange={(t) => setToken(t ?? '')} />
+      <SupabaseAuthWidget onTokenChange={(t) => setCustomToken(t ?? '')} />
 
       <section className="card card-pad">
         <h2 className="card-title" style={{ marginTop: 0 }}>
@@ -122,7 +121,7 @@ export default function SettingsPage() {
             id="api-token"
             className="textarea"
             value={token}
-            onChange={(event) => setToken(event.target.value)}
+            onChange={(event) => setCustomToken(event.target.value)}
             placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.…"
             style={{ fontFamily: 'var(--mono)', minHeight: 90 }}
           />

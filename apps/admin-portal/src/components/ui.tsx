@@ -1,7 +1,31 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { isApiClientError } from '@/lib/api';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { isApiClientError, getStoredToken } from '@/lib/api';
+
+const emptySubscribe = () => () => {};
+
+export function useIsMounted(): boolean {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false,
+  );
+}
+
+function subscribeToStorage(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener('storage', callback);
+  return () => window.removeEventListener('storage', callback);
+}
+
+export function useStoredToken(): string | null {
+  return useSyncExternalStore(
+    subscribeToStorage,
+    () => getStoredToken(),
+    () => null,
+  );
+}
 
 export function useAsyncData<T>(
   fetcher: () => Promise<T>,

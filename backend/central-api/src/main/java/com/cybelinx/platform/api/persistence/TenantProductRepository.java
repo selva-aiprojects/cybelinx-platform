@@ -29,6 +29,8 @@ public interface TenantProductRepository extends JpaRepository<TenantProduct, UU
                     + "where tp.product.id = :productId order by tp.createdAt asc")
     List<TenantProduct> listByProductId(@Param("productId") UUID productId);
 
+    long countByProductId(UUID productId);
+
     @Query(
             "select tp from TenantProduct tp join fetch tp.product join fetch tp.plan join fetch tp.tenant "
                     + "where tp.id = :id")

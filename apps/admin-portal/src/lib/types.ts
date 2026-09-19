@@ -567,11 +567,50 @@ export interface ProductRepositoryView {
   repositoryId: string;
   productId: string;
   productCode: string;
+  name: string;
+  description: string | null;
+  productCategory: string;
+  status: string;
   domain: string | null;
+  subdomainPattern: string | null;
+  hostingProvider: string | null;
+  deploymentUrl: string | null;
+  healthEndpoint: string | null;
+  databaseProvider: string | null;
   databaseLocation: string | null;
   databaseConnectionString: string | null;
+  dbUrlDevelopment: string | null;
+  dbUrlStaging: string | null;
+  dbUrlProduction: string | null;
+  dbCredentialsReference: string | null;
+  defaultIsolationMode: string | null;
+  schemaPrefix: string | null;
+  ddlTemplatePath: string | null;
   configurationLocation: string | null;
+  customerCount: number;
   updatedAt: string;
+}
+
+export interface CreateProductRepositoryRequest {
+  productCode: string;
+  name: string;
+  description?: string;
+  productCategory?: string;
+  status?: string;
+  domain?: string;
+  subdomainPattern?: string;
+  hostingProvider?: string;
+  deploymentUrl?: string;
+  healthEndpoint?: string;
+  databaseProvider?: string;
+  dbUrlDevelopment?: string;
+  dbUrlStaging?: string;
+  dbUrlProduction?: string;
+  dbCredentialsReference?: string;
+  defaultIsolationMode?: string;
+  schemaPrefix?: string;
+  ddlTemplatePath?: string;
+  configurationLocation?: string;
 }
 
 export interface ProductRepositoryCustomerView {
@@ -596,9 +635,25 @@ export interface ProductRepositoryListResponse {
 }
 
 export interface UpdateProductRepositoryRequest {
+  name?: string | null;
+  description?: string | null;
+  productCategory?: string | null;
+  status?: string | null;
   domain?: string | null;
+  subdomainPattern?: string | null;
+  hostingProvider?: string | null;
+  deploymentUrl?: string | null;
+  healthEndpoint?: string | null;
+  databaseProvider?: string | null;
   databaseLocation?: string | null;
   databaseConnectionString?: string | null;
+  dbUrlDevelopment?: string | null;
+  dbUrlStaging?: string | null;
+  dbUrlProduction?: string | null;
+  dbCredentialsReference?: string | null;
+  defaultIsolationMode?: string | null;
+  schemaPrefix?: string | null;
+  ddlTemplatePath?: string | null;
   configurationLocation?: string | null;
 }
 

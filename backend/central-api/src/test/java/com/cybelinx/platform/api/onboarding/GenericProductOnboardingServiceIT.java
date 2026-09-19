@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.cybelinx.platform.api.domain.MembershipStatus;
+import com.cybelinx.platform.api.domain.PlanStatus;
+import com.cybelinx.platform.api.domain.ProductStatus;
 import com.cybelinx.platform.api.domain.RoleScope;
 import com.cybelinx.platform.api.onboarding.adapter.ProductAdapterRegistry;
 import com.cybelinx.platform.api.onboarding.model.GenericBatchOnboardRequest;
@@ -25,6 +27,8 @@ import com.cybelinx.platform.api.persistence.TenantRepository;
 import com.cybelinx.platform.api.persistence.TenantResourceRepository;
 import com.cybelinx.platform.api.persistence.UserRepository;
 import com.cybelinx.platform.api.persistence.entity.MembershipRole;
+import com.cybelinx.platform.api.persistence.entity.Plan;
+import com.cybelinx.platform.api.persistence.entity.Product;
 import com.cybelinx.platform.api.persistence.entity.Role;
 import com.cybelinx.platform.api.persistence.entity.Tenant;
 import com.cybelinx.platform.api.persistence.entity.TenantExternalIdentifier;
@@ -40,18 +44,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Integration test verifying that the Generic Product Onboarding Framework handles
  * multi-product lifecycle orchestration (Jioplix, StoreAI) uniformly.
  */
 @SpringBootTest
-@Transactional
 class GenericProductOnboardingServiceIT {
 
     @Autowired private GenericProductOnboardingService genericService;
@@ -67,6 +76,8 @@ class GenericProductOnboardingServiceIT {
     @Autowired private RoleRepository roles;
     @Autowired private MembershipRoleRepository membershipRoles;
     @Autowired private AuditEventRepository auditEvents;
+    @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private AuthPrincipal platformAdminPrincipal;
     private AuthPrincipal regularUserPrincipal;
@@ -118,6 +129,46 @@ class GenericProductOnboardingServiceIT {
         AuthPrincipal.AuthIdentity authRegIdent = new AuthPrincipal.AuthIdentity(
                 "generic", "sub-user-" + regularUser.getId(), regularUser.getEmail(), regularUser.getDisplayName());
         regularUserPrincipal = new AuthPrincipal(authRegUser, authRegIdent);
+
+        for (ProductOnboardingDefinition def : registry.getAvailableDefinitions()) {
+            Product prod = products.findByProductCode(def.productCode()).orElseGet(() -> {
+                Product p = new Product();
+                p.setProductCode(def.productCode());
+                p.setName(def.displayName());
+                p.setDescription(def.description());
+                p.setStatus(ProductStatus.ACTIVE);
+                p.setDefaultIsolationMode("SCHEMA_PER_TENANT");
+                p.setSchemaPrefix(def.productCode().toLowerCase() + "_");
+                return products.save(p);
+            });
+            for (String planCode : def.subscription().availablePlans()) {
+                plans.findByProductIdAndPlanCode(prod.getId(), planCode).orElseGet(() -> {
+                    Plan p = new Plan();
+                    p.setProduct(prod);
+                    p.setPlanCode(planCode);
+                    p.setName(planCode);
+                    p.setStatus(PlanStatus.ACTIVE);
+                    return plans.save(p);
+                });
+            }
+        }
+    }
+
+    @AfterEach
+    void tearDown() {
+        jdbcTemplate.execute("DELETE FROM public.product_repository_customers");
+        jdbcTemplate.execute("DELETE FROM public.usage_events");
+        jdbcTemplate.execute("DELETE FROM public.provisioning_steps");
+        jdbcTemplate.execute("DELETE FROM public.provisioning_jobs");
+        jdbcTemplate.execute("DELETE FROM public.tenant_resources");
+        jdbcTemplate.execute("DELETE FROM public.tenant_products");
+        jdbcTemplate.execute("DELETE FROM public.tenant_external_identifiers");
+        jdbcTemplate.execute("DELETE FROM public.entitlements");
+        jdbcTemplate.execute("DELETE FROM public.plans");
+        jdbcTemplate.execute("DELETE FROM public.product_versions");
+        jdbcTemplate.execute("DELETE FROM public.products");
+        jdbcTemplate.execute("DELETE FROM public.tenant_memberships WHERE tenant_id IN (SELECT id FROM public.tenants WHERE tenant_code LIKE 'BATCH_%' OR tenant_code LIKE 'TENANT_LIMS_%' OR tenant_code LIKE 'SYS-%')");
+        jdbcTemplate.execute("DELETE FROM public.tenants WHERE tenant_code LIKE 'BATCH_%' OR tenant_code LIKE 'TENANT_LIMS_%' OR tenant_code LIKE 'SYS-%'");
     }
 
     @Test
@@ -334,6 +385,8 @@ class GenericProductOnboardingServiceIT {
         com.cybelinx.platform.api.persistence.entity.TenantMembership membership =
                 memberships.findByTenant_IdAndUser_Id(UUID.fromString(resp.tenantId()), adminUser.getId()).orElseThrow();
         assertThat(membershipRoles.findByMembership_Id(membership.getId()))
-                .anyMatch(mr -> mr.getRole().getCode().equals(TenantConstants.TENANT_ADMIN_ROLE));
+                .anyMatch(mr -> roles.findById(mr.getRole().getId())
+                        .map(com.cybelinx.platform.api.persistence.entity.Role::getCode)
+                        .orElse("").equals(TenantConstants.TENANT_ADMIN_ROLE));
     }
 }

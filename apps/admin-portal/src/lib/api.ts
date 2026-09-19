@@ -64,6 +64,7 @@ import type {
   ProductRepositoryDetail,
   ProductRepositoryView,
   ProductRepositoryCustomerView,
+  CreateProductRepositoryRequest,
   UpdateProductRepositoryRequest,
   UpdateProductRepositoryCustomerRequest,
   LoginRequest,
@@ -339,8 +340,12 @@ export const api = {
     list: (params?: ListParams) =>
       request<ProductRepositoryListResponse>(`/product-repository${buildQuery(params)}`),
     get: (productId: string) => request<ProductRepositoryDetail>(`/product-repository/${productId}`),
+    create: (body: CreateProductRepositoryRequest) =>
+      request<ProductRepositoryView>('/product-repository', { method: 'POST', body }),
     update: (productId: string, body: UpdateProductRepositoryRequest) =>
       request<ProductRepositoryView>(`/product-repository/${productId}`, { method: 'PUT', body }),
+    delete: (productId: string) =>
+      request<void>(`/product-repository/${productId}`, { method: 'DELETE' }),
     updateCustomer: (productId: string, tenantId: string, body: UpdateProductRepositoryCustomerRequest) =>
       request<ProductRepositoryCustomerView>(
         `/product-repository/${productId}/customers/${tenantId}`,

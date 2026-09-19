@@ -1,9 +1,20 @@
 package com.cybelinx.platform.api.productrepository.dto;
 
-/** Update product repository deployment metadata & topology. */
-public class UpdateProductRepositoryRequest {
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
+/**
+ * Request payload to register a new product with physical topology in the Product Repository.
+ */
+public class CreateProductRepositoryRequest {
+
+    @NotBlank(message = "Product code is required")
+    @Pattern(regexp = "^[A-Z0-9_]{2,64}$", message = "Product code must be uppercase alphanumeric and underscore (2-64 chars)")
+    private String productCode;
+
+    @NotBlank(message = "Product name is required")
     private String name;
+
     private String description;
     private String productCategory;
     private String status;
@@ -16,8 +27,6 @@ public class UpdateProductRepositoryRequest {
     private String healthEndpoint;
 
     // Multi-Environment Database Topology
-    private String databaseLocation;
-    private String databaseConnectionString;
     private String databaseProvider;
     private String dbUrlDevelopment;
     private String dbUrlStaging;
@@ -31,6 +40,14 @@ public class UpdateProductRepositoryRequest {
 
     // Configuration / Code repository
     private String configurationLocation;
+
+    public String getProductCode() {
+        return productCode;
+    }
+
+    public void setProductCode(String productCode) {
+        this.productCode = productCode;
+    }
 
     public String getName() {
         return name;
@@ -102,22 +119,6 @@ public class UpdateProductRepositoryRequest {
 
     public void setHealthEndpoint(String healthEndpoint) {
         this.healthEndpoint = healthEndpoint;
-    }
-
-    public String getDatabaseLocation() {
-        return databaseLocation;
-    }
-
-    public void setDatabaseLocation(String databaseLocation) {
-        this.databaseLocation = databaseLocation;
-    }
-
-    public String getDatabaseConnectionString() {
-        return databaseConnectionString;
-    }
-
-    public void setDatabaseConnectionString(String databaseConnectionString) {
-        this.databaseConnectionString = databaseConnectionString;
     }
 
     public String getDatabaseProvider() {

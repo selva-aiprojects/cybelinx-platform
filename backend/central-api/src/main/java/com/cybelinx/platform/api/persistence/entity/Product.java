@@ -57,6 +57,42 @@ public class Product extends BaseTimestampedEntity {
     @Column(name = "configuration_location", length = 512)
     private String configurationLocation;
 
+    @Column(name = "hosting_provider", length = 64)
+    private String hostingProvider;
+
+    @Column(name = "deployment_url", length = 512)
+    private String deploymentUrl;
+
+    @Column(name = "subdomain_pattern", length = 256)
+    private String subdomainPattern;
+
+    @Column(name = "health_endpoint", length = 256)
+    private String healthEndpoint;
+
+    @Column(name = "database_provider", length = 64)
+    private String databaseProvider;
+
+    @Column(name = "db_url_development", length = 512)
+    private String dbUrlDevelopment;
+
+    @Column(name = "db_url_staging", length = 512)
+    private String dbUrlStaging;
+
+    @Column(name = "db_url_production", length = 512)
+    private String dbUrlProduction;
+
+    @Column(name = "db_credentials_reference", length = 256)
+    private String dbCredentialsReference;
+
+    @Column(name = "default_isolation_mode", length = 64)
+    private String defaultIsolationMode = "SCHEMA_PER_TENANT";
+
+    @Column(name = "schema_prefix", length = 64)
+    private String schemaPrefix;
+
+    @Column(name = "ddl_template_path", length = 256)
+    private String ddlTemplatePath;
+
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "product_category", nullable = false)
     private ProductCategory productCategory = ProductCategory.ENTERPRISE_OPERATIONS;
@@ -171,5 +207,101 @@ public class Product extends BaseTimestampedEntity {
 
     public void setCurrentVersion(ProductVersion currentVersion) {
         this.currentVersion = currentVersion;
+    }
+
+    public String getHostingProvider() {
+        return hostingProvider;
+    }
+
+    public void setHostingProvider(String hostingProvider) {
+        this.hostingProvider = hostingProvider;
+    }
+
+    public String getDeploymentUrl() {
+        return deploymentUrl;
+    }
+
+    public void setDeploymentUrl(String deploymentUrl) {
+        this.deploymentUrl = deploymentUrl;
+    }
+
+    public String getSubdomainPattern() {
+        return subdomainPattern;
+    }
+
+    public void setSubdomainPattern(String subdomainPattern) {
+        this.subdomainPattern = subdomainPattern;
+    }
+
+    public String getHealthEndpoint() {
+        return healthEndpoint;
+    }
+
+    public void setHealthEndpoint(String healthEndpoint) {
+        this.healthEndpoint = healthEndpoint;
+    }
+
+    public String getDatabaseProvider() {
+        return databaseProvider;
+    }
+
+    public void setDatabaseProvider(String databaseProvider) {
+        this.databaseProvider = databaseProvider;
+    }
+
+    public String getDbUrlDevelopment() {
+        return dbUrlDevelopment;
+    }
+
+    public void setDbUrlDevelopment(String dbUrlDevelopment) {
+        this.dbUrlDevelopment = dbUrlDevelopment;
+    }
+
+    public String getDbUrlStaging() {
+        return dbUrlStaging;
+    }
+
+    public void setDbUrlStaging(String dbUrlStaging) {
+        this.dbUrlStaging = dbUrlStaging;
+    }
+
+    public String getDbUrlProduction() {
+        return dbUrlProduction;
+    }
+
+    public void setDbUrlProduction(String dbUrlProduction) {
+        this.dbUrlProduction = dbUrlProduction;
+    }
+
+    public String getDbCredentialsReference() {
+        return dbCredentialsReference;
+    }
+
+    public void setDbCredentialsReference(String dbCredentialsReference) {
+        this.dbCredentialsReference = dbCredentialsReference;
+    }
+
+    public String getDefaultIsolationMode() {
+        return defaultIsolationMode;
+    }
+
+    public void setDefaultIsolationMode(String defaultIsolationMode) {
+        this.defaultIsolationMode = defaultIsolationMode;
+    }
+
+    public String getSchemaPrefix() {
+        return schemaPrefix;
+    }
+
+    public void setSchemaPrefix(String schemaPrefix) {
+        this.schemaPrefix = schemaPrefix;
+    }
+
+    public String getDdlTemplatePath() {
+        return ddlTemplatePath;
+    }
+
+    public void setDdlTemplatePath(String ddlTemplatePath) {
+        this.ddlTemplatePath = ddlTemplatePath;
     }
 }

@@ -3,12 +3,16 @@ package com.cybelinx.platform.api.productrepository;
 import com.cybelinx.platform.api.common.error.ApiHttpException;
 import com.cybelinx.platform.api.common.time.IsoTime;
 import com.cybelinx.platform.api.domain.Environment;
+import com.cybelinx.platform.api.domain.ProductCategory;
+import com.cybelinx.platform.api.domain.ProductStatus;
 import com.cybelinx.platform.api.persistence.AuditEventRepository;
+import com.cybelinx.platform.api.persistence.PlanRepository;
 import com.cybelinx.platform.api.persistence.ProductRepository;
 import com.cybelinx.platform.api.persistence.ProductRepositoryCustomerRepository;
+import com.cybelinx.platform.api.persistence.ProductVersionRepository;
 import com.cybelinx.platform.api.persistence.TenantProductRepository;
-import com.cybelinx.platform.api.persistence.TenantResourceRepository;
 import com.cybelinx.platform.api.persistence.TenantRepository;
+import com.cybelinx.platform.api.persistence.TenantResourceRepository;
 import com.cybelinx.platform.api.persistence.UserRepository;
 import com.cybelinx.platform.api.persistence.entity.AuditEvent;
 import com.cybelinx.platform.api.persistence.entity.Product;
@@ -20,12 +24,13 @@ import com.cybelinx.platform.api.productrepository.ProductRepositoryViews.Produc
 import com.cybelinx.platform.api.productrepository.ProductRepositoryViews.ProductRepositoryDetail;
 import com.cybelinx.platform.api.productrepository.ProductRepositoryViews.ProductRepositoryListResponse;
 import com.cybelinx.platform.api.productrepository.ProductRepositoryViews.ProductRepositoryView;
+import com.cybelinx.platform.api.productrepository.dto.CreateProductRepositoryRequest;
 import com.cybelinx.platform.api.productrepository.dto.UpdateProductRepositoryCustomerRequest;
 import com.cybelinx.platform.api.productrepository.dto.UpdateProductRepositoryRequest;
 import com.cybelinx.platform.api.products.ProductConstants;
 import com.cybelinx.platform.api.products.ProductViews.Meta;
-import com.cybelinx.platform.api.security.AuthorizationService;
 import com.cybelinx.platform.api.security.AuthPrincipal;
+import com.cybelinx.platform.api.security.AuthorizationService;
 import com.cybelinx.platform.api.subscriptions.SubscriptionViews.SubscriptionMasterView;
 import com.cybelinx.platform.api.subscriptions.SubscriptionsService;
 import com.cybelinx.platform.shared.ApiError;
@@ -47,7 +52,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Product repository registry: deployment metadata, customers and subscriptions per product. */
+/** Product repository registry: deployment metadata, cloud topology, customers and subscriptions per product. */
 @Service
 public class ProductRepositoryService {
 
@@ -58,6 +63,8 @@ public class ProductRepositoryService {
     private final TenantRepository tenants;
     private final UserRepository users;
     private final AuditEventRepository auditEvents;
+    private final PlanRepository plans;
+    private final ProductVersionRepository productVersions;
     private final AuthorizationService authorization;
 
     private static final ObjectMapper AUDIT_JSON = new ObjectMapper();
@@ -76,6 +83,8 @@ public class ProductRepositoryService {
             TenantRepository tenants,
             UserRepository users,
             AuditEventRepository auditEvents,
+            PlanRepository plans,
+            ProductVersionRepository productVersions,
             AuthorizationService authorization) {
         this.products = products;
         this.tenantProducts = tenantProducts;
@@ -84,6 +93,8 @@ public class ProductRepositoryService {
         this.tenants = tenants;
         this.users = users;
         this.auditEvents = auditEvents;
+        this.plans = plans;
+        this.productVersions = productVersions;
         this.authorization = authorization;
     }
 
@@ -93,15 +104,9 @@ public class ProductRepositoryService {
 
         int page = query.page() != null ? query.page() : 1;
         int limit = query.limit() != null ? query.limit() : 20;
-        if (page < 1) {
-            throw ApiHttpException.badRequest("page must not be less than 1");
-        }
-        if (limit < 1) {
-            throw ApiHttpException.badRequest("limit must not be less than 1");
-        }
-        if (limit > 100) {
-            throw ApiHttpException.badRequest("limit must not be greater than 100");
-        }
+        if (page < 1) throw ApiHttpException.badRequest("page must not be less than 1");
+        if (limit < 1) throw ApiHttpException.badRequest("limit must not be less than 1");
+        if (limit > 100) throw ApiHttpException.badRequest("limit must not be greater than 100");
         if (query.search() != null && query.search().length() > 100) {
             throw ApiHttpException.badRequest("search must not exceed 100 characters");
         }
@@ -118,7 +123,9 @@ public class ProductRepositoryService {
         Pageable pageable = PageRequest.of(page - 1, limit, Sort.by(desc ? Sort.Direction.DESC : Sort.Direction.ASC, key));
 
         Page<Product> result = products.findAll(where, pageable);
-        List<ProductRepositoryView> data = result.getContent().stream().map(ProductRepositoryService::toView).toList();
+        List<ProductRepositoryView> data = result.getContent().stream()
+                .map(p -> toView(p, (int) tenantProducts.countByProductId(p.getId())))
+                .toList();
         return new ProductRepositoryListResponse(data, new Meta(page, limit, result.getTotalElements(), result.getTotalPages()));
     }
 
@@ -136,16 +143,96 @@ public class ProductRepositoryService {
                 subscriptions.stream().map(SubscriptionsService::toMasterView).toList();
 
         return new ProductRepositoryDetail(
-                toView(product).repositoryId(),
+                product.getId().toString(),
                 product.getId().toString(),
                 product.getProductCode(),
+                product.getName(),
+                product.getDescription(),
+                product.getProductCategory() != null ? product.getProductCategory().name() : "ENTERPRISE_OPERATIONS",
+                product.getStatus() != null ? product.getStatus().name() : "ACTIVE",
                 product.getDomain(),
+                product.getSubdomainPattern(),
+                product.getHostingProvider(),
+                product.getDeploymentUrl(),
+                product.getHealthEndpoint(),
+                product.getDatabaseProvider(),
                 product.getDatabaseLocation(),
                 product.getDatabaseConnectionString(),
+                product.getDbUrlDevelopment(),
+                product.getDbUrlStaging(),
+                product.getDbUrlProduction(),
+                product.getDbCredentialsReference(),
+                product.getDefaultIsolationMode() != null ? product.getDefaultIsolationMode() : "SCHEMA_PER_TENANT",
+                product.getSchemaPrefix(),
+                product.getDdlTemplatePath(),
                 product.getConfigurationLocation(),
                 IsoTime.format(product.getUpdatedAt()),
                 customerViews,
                 subscriptionViews);
+    }
+
+    @Transactional
+    public ProductRepositoryView create(AuthPrincipal principal, CreateProductRepositoryRequest request) {
+        assertPlatformPermission(principal.user().id(), ProductConstants.PERMISSION_PRODUCT_WRITE);
+
+        String code = request.getProductCode().trim().toUpperCase();
+        if (products.findByProductCode(code).isPresent()) {
+            throw new ApiError(ErrorCode.PRODUCT_CODE_TAKEN, "Product code already exists: " + code, Map.of("productCode", code));
+        }
+
+        Product product = new Product();
+        product.setProductCode(code);
+        product.setName(request.getName().trim());
+        product.setDescription(request.getDescription());
+
+        if (request.getProductCategory() != null && !request.getProductCategory().isBlank()) {
+            try {
+                product.setProductCategory(ProductCategory.valueOf(request.getProductCategory().trim().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                product.setProductCategory(ProductCategory.ENTERPRISE_OPERATIONS);
+            }
+        } else {
+            product.setProductCategory(ProductCategory.ENTERPRISE_OPERATIONS);
+        }
+
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            try {
+                product.setStatus(ProductStatus.valueOf(request.getStatus().trim().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                product.setStatus(ProductStatus.ACTIVE);
+            }
+        } else {
+            product.setStatus(ProductStatus.ACTIVE);
+        }
+
+        // Hosting & Domains
+        product.setDomain(request.getDomain());
+        product.setSubdomainPattern(request.getSubdomainPattern());
+        product.setHostingProvider(request.getHostingProvider());
+        product.setDeploymentUrl(request.getDeploymentUrl());
+        product.setHealthEndpoint(request.getHealthEndpoint());
+
+        // Multi-Environment DB Topology
+        product.setDatabaseProvider(request.getDatabaseProvider());
+        product.setDbUrlDevelopment(request.getDbUrlDevelopment());
+        product.setDbUrlStaging(request.getDbUrlStaging());
+        product.setDbUrlProduction(request.getDbUrlProduction());
+        product.setDatabaseConnectionString(request.getDbUrlProduction() != null ? request.getDbUrlProduction() : request.getDbUrlDevelopment());
+        product.setDatabaseLocation(request.getDatabaseProvider() != null ? request.getDatabaseProvider() : "PostgreSQL Cluster");
+        product.setDbCredentialsReference(request.getDbCredentialsReference());
+
+        // Isolation & Provisioning
+        product.setDefaultIsolationMode(request.getDefaultIsolationMode() != null && !request.getDefaultIsolationMode().isBlank()
+                ? request.getDefaultIsolationMode() : "SCHEMA_PER_TENANT");
+        product.setSchemaPrefix(request.getSchemaPrefix());
+        product.setDdlTemplatePath(request.getDdlTemplatePath());
+        product.setConfigurationLocation(request.getConfigurationLocation());
+
+        product = products.save(product);
+
+        writeAudit(principal, product.getId(), "product_repository.created", Map.of("productCode", code));
+
+        return toView(product, 0);
     }
 
     @Transactional
@@ -154,28 +241,131 @@ public class ProductRepositoryService {
 
         Product product = requireProduct(productId);
         List<String> fields = new ArrayList<>();
+
+        if (request.getName() != null && !request.getName().isBlank()) {
+            product.setName(request.getName().trim());
+            fields.add("name");
+        }
+        if (request.getDescription() != null) {
+            product.setDescription(request.getDescription());
+            fields.add("description");
+        }
+        if (request.getProductCategory() != null && !request.getProductCategory().isBlank()) {
+            try {
+                product.setProductCategory(ProductCategory.valueOf(request.getProductCategory().trim().toUpperCase()));
+                fields.add("productCategory");
+            } catch (IllegalArgumentException ignored) {}
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            try {
+                product.setStatus(ProductStatus.valueOf(request.getStatus().trim().toUpperCase()));
+                fields.add("status");
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        // Domains & Hosting
         if (request.getDomain() != null) {
             product.setDomain(request.getDomain());
             fields.add("domain");
         }
-        if (request.getDatabaseLocation() != null) {
-            product.setDatabaseLocation(request.getDatabaseLocation());
-            fields.add("databaseLocation");
+        if (request.getSubdomainPattern() != null) {
+            product.setSubdomainPattern(request.getSubdomainPattern());
+            fields.add("subdomainPattern");
+        }
+        if (request.getHostingProvider() != null) {
+            product.setHostingProvider(request.getHostingProvider());
+            fields.add("hostingProvider");
+        }
+        if (request.getDeploymentUrl() != null) {
+            product.setDeploymentUrl(request.getDeploymentUrl());
+            fields.add("deploymentUrl");
+        }
+        if (request.getHealthEndpoint() != null) {
+            product.setHealthEndpoint(request.getHealthEndpoint());
+            fields.add("healthEndpoint");
+        }
+
+        // Database Topology
+        if (request.getDatabaseProvider() != null) {
+            product.setDatabaseProvider(request.getDatabaseProvider());
+            fields.add("databaseProvider");
+        }
+        if (request.getDbUrlDevelopment() != null) {
+            product.setDbUrlDevelopment(request.getDbUrlDevelopment());
+            fields.add("dbUrlDevelopment");
+        }
+        if (request.getDbUrlStaging() != null) {
+            product.setDbUrlStaging(request.getDbUrlStaging());
+            fields.add("dbUrlStaging");
+        }
+        if (request.getDbUrlProduction() != null) {
+            product.setDbUrlProduction(request.getDbUrlProduction());
+            fields.add("dbUrlProduction");
         }
         if (request.getDatabaseConnectionString() != null) {
             product.setDatabaseConnectionString(request.getDatabaseConnectionString());
             fields.add("databaseConnectionString");
         }
+        if (request.getDatabaseLocation() != null) {
+            product.setDatabaseLocation(request.getDatabaseLocation());
+            fields.add("databaseLocation");
+        }
+        if (request.getDbCredentialsReference() != null) {
+            product.setDbCredentialsReference(request.getDbCredentialsReference());
+            fields.add("dbCredentialsReference");
+        }
+
+        // Isolation
+        if (request.getDefaultIsolationMode() != null) {
+            product.setDefaultIsolationMode(request.getDefaultIsolationMode());
+            fields.add("defaultIsolationMode");
+        }
+        if (request.getSchemaPrefix() != null) {
+            product.setSchemaPrefix(request.getSchemaPrefix());
+            fields.add("schemaPrefix");
+        }
+        if (request.getDdlTemplatePath() != null) {
+            product.setDdlTemplatePath(request.getDdlTemplatePath());
+            fields.add("ddlTemplatePath");
+        }
         if (request.getConfigurationLocation() != null) {
             product.setConfigurationLocation(request.getConfigurationLocation());
             fields.add("configurationLocation");
         }
+
         if (!fields.isEmpty()) {
             products.save(product);
             writeAudit(principal, product.getId(), "product_repository.updated", Map.of("fields", fields));
         }
 
-        return toView(product);
+        int count = (int) tenantProducts.countByProductId(product.getId());
+        return toView(product, count);
+    }
+
+    @Transactional
+    public void delete(AuthPrincipal principal, UUID productId) {
+        assertPlatformPermission(principal.user().id(), ProductConstants.PERMISSION_PRODUCT_WRITE);
+
+        Product product = requireProduct(productId);
+        String code = product.getProductCode();
+
+        // Cascade cleanup
+        customers.findAll().stream()
+                .filter(c -> c.getProduct().getId().equals(productId))
+                .forEach(customers::delete);
+
+        tenantProducts.listByProductId(productId).forEach(tenantProducts::delete);
+
+        // Break self-referencing currentVersion
+        product.setCurrentVersion(null);
+        products.save(product);
+
+        productVersions.findByProductIdOrderByCreatedAtAsc(productId).forEach(productVersions::delete);
+        plans.findByProductIdOrderByCreatedAtAsc(productId).forEach(plans::delete);
+
+        products.delete(product);
+
+        writeAudit(principal, productId, "product_repository.deleted", Map.of("productCode", code));
     }
 
     @Transactional
@@ -253,15 +443,32 @@ public class ProductRepositoryService {
         }
     }
 
-    private static ProductRepositoryView toView(Product product) {
+    private static ProductRepositoryView toView(Product product, int customerCount) {
         return new ProductRepositoryView(
                 product.getId().toString(),
                 product.getId().toString(),
                 product.getProductCode(),
+                product.getName(),
+                product.getDescription(),
+                product.getProductCategory() != null ? product.getProductCategory().name() : "ENTERPRISE_OPERATIONS",
+                product.getStatus() != null ? product.getStatus().name() : "ACTIVE",
                 product.getDomain(),
+                product.getSubdomainPattern(),
+                product.getHostingProvider(),
+                product.getDeploymentUrl(),
+                product.getHealthEndpoint(),
+                product.getDatabaseProvider(),
                 product.getDatabaseLocation(),
                 product.getDatabaseConnectionString(),
+                product.getDbUrlDevelopment(),
+                product.getDbUrlStaging(),
+                product.getDbUrlProduction(),
+                product.getDbCredentialsReference(),
+                product.getDefaultIsolationMode() != null ? product.getDefaultIsolationMode() : "SCHEMA_PER_TENANT",
+                product.getSchemaPrefix(),
+                product.getDdlTemplatePath(),
                 product.getConfigurationLocation(),
+                customerCount,
                 IsoTime.format(product.getUpdatedAt()));
     }
 
