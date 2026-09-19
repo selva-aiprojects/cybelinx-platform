@@ -520,7 +520,9 @@ public class ProductRepositoryService {
 
     private void writeAudit(AuthPrincipal principal, UUID productId, String action, Object metadata) {
         AuditEvent audit = new AuditEvent();
-        audit.setProduct(products.getReferenceById(productId));
+        if (productId != null && !"product_repository.deleted".equals(action)) {
+            audit.setProduct(products.getReferenceById(productId));
+        }
         audit.setUser(users.getReferenceById(principal.user().id()));
         audit.setActorType("USER");
         audit.setAction(action);
