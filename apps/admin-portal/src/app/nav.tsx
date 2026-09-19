@@ -12,8 +12,7 @@ const NAV_SECTIONS = [
       { href: '/tenants', label: 'Tenants', icon: '▤' },
       { href: '/products', label: 'Products', icon: '▣' },
       { href: '/product-repository', label: 'Product Repository', icon: '🗄️' },
-      { href: '/onboarding', label: 'Product Onboarding', icon: '🚀' },
-      { href: '/storeai/merchant', label: 'Store Merchant Portal', icon: '⚡' },
+      { href: '/onboarding', label: 'Tenant Onboarding', icon: '🚀' },
     ],
   },
   {
