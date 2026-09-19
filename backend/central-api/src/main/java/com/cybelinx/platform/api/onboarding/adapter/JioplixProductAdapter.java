@@ -20,7 +20,7 @@ public class JioplixProductAdapter implements ProductAdapter {
 
     public static final String PRODUCT_CODE = "JIOPLIX";
     public static final String PROVIDER = "JIOPLIX_NEXUS";
-    public static final String DEFAULT_PLAN = "JIOPLIX_ENTERPRISE";
+    public static final String DEFAULT_PLAN = "BASIC";
 
     private final ProductOnboardingDefinition definition;
 
@@ -46,7 +46,7 @@ public class JioplixProductAdapter implements ProductAdapter {
                 ),
                 SubscriptionRequirement.of(
                         DEFAULT_PLAN,
-                        List.of("JIOPLIX_ENTERPRISE", "HEALTHCARE_TIER", "CLINIC_STARTER")
+                        List.of("BASIC", "STANDARD", "PROFESSIONAL", "ENTERPRISE", "JIOPLIX_ENTERPRISE")
                 ),
                 ResourceRequirement.schemaPerTenant("jioplix_"),
                 List.of(
