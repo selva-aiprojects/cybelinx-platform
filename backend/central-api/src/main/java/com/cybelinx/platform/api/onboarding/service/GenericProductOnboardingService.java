@@ -11,6 +11,7 @@ import com.cybelinx.platform.api.domain.TenantResourceStatus;
 import com.cybelinx.platform.api.domain.TenantStatus;
 import com.cybelinx.platform.api.email.EmailNotificationService;
 import com.cybelinx.platform.api.events.OutboxPublisher;
+import com.cybelinx.platform.api.onboarding.adapter.GenericDynamicProductAdapter;
 import com.cybelinx.platform.api.onboarding.adapter.ProductAdapter;
 import com.cybelinx.platform.api.onboarding.adapter.ProductAdapterRegistry;
 import com.cybelinx.platform.api.onboarding.model.GenericBatchOnboardRequest;
@@ -146,23 +147,24 @@ public class GenericProductOnboardingService {
 
     private GenericOnboardResponse doOnboardTenant(AuthPrincipal principal, GenericOnboardRequest request) {
         GenericOnboardRequest normalizedRequest = normalize(request);
-        ProductAdapter adapter = adapterRegistry.getRequiredAdapter(normalizedRequest.productCode());
-        adapter.validateCustomFields(normalizedRequest);
-
-        String productCode = adapter.getProductCode();
-        Product product = products.findByProductCode(productCode)
+        Product product = products.findByProductCode(normalizedRequest.productCode())
                 .orElseThrow(() -> new ApiError(
                         ErrorCode.PRODUCT_NOT_FOUND,
-                        "Product not found in catalog: " + productCode,
-                        Map.of("productCode", productCode)));
+                        "Product not found in catalog: " + normalizedRequest.productCode(),
+                        Map.of("productCode", normalizedRequest.productCode())));
 
         if (product.getStatus() != ProductStatus.ACTIVE) {
             throw new ApiError(
                     ErrorCode.PRODUCT_NOT_ACTIVE,
-                    "Product " + productCode + " is not active",
-                    Map.of("productCode", productCode, "status", product.getStatus().name()));
+                    "Product " + normalizedRequest.productCode() + " is not active",
+                    Map.of("productCode", normalizedRequest.productCode(), "status", product.getStatus().name()));
         }
 
+        ProductAdapter adapter = adapterRegistry.findAdapter(normalizedRequest.productCode())
+                .orElseGet(() -> new GenericDynamicProductAdapter(product));
+        adapter.validateCustomFields(normalizedRequest);
+
+        String productCode = product.getProductCode();
         String provider = adapter.getDefaultProvider();
         List<String> executedSteps = new ArrayList<>();
 

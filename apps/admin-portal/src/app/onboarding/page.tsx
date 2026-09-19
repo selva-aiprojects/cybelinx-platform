@@ -13,6 +13,7 @@ import { useProvisioningPolling } from '@/hooks/useProvisioningPolling';
 
 export default function UnifiedOnboardingPage() {
   const [definitions, setDefinitions] = useState<ProductOnboardingDefinition[]>([]);
+  const [loadingDefs, setLoadingDefs] = useState<boolean>(true);
   const [selectedProductCode, setSelectedProductCode] = useState<string>('JIOPLIX');
   const [activeTab, setActiveTab] = useState<'wizard' | 'lookup' | 'definitions'>('wizard');
 
@@ -60,16 +61,56 @@ export default function UnifiedOnboardingPage() {
   const [lookupResult, setLookupResult] = useState<GenericOnboardStatusView | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
+  const handleSelectProductForDef = (def: ProductOnboardingDefinition) => {
+    const code = def.productCode;
+    setPlanCode(def.subscription.defaultPlanCode);
+    setIsolationMode(def.resource.defaultIsolationMode);
+
+    if (code === 'JIOPLIX') {
+      setExternalId('JIOPLIX_NEXUS');
+      setTenantCode('JIOPLIX_APOLLO_01');
+      setTenantName('Apollo Multispecialty Hospital');
+      setSchemaName('jioplix_apollo_01');
+      setFieldValues({
+        hospitalName: 'Apollo Multispecialty Hospital',
+        domain: 'https://apollo.jioplix.com',
+        contactEmail: 'admin@apollo.org',
+        country: 'India',
+        timezone: 'Asia/Kolkata',
+      });
+    } else {
+      const sanitizedCode = code.toLowerCase();
+      setExternalId(`${code}_CLIENT_01`);
+      setTenantCode(`${code}_TENANT_01`);
+      setTenantName(`${def.displayName} Client Organization`);
+      setSchemaName(`${def.resource.schemaPrefix || sanitizedCode + '_'}client_01`);
+      const dynamicFields: Record<string, string> = {};
+      def.fields.forEach((f) => {
+        dynamicFields[f.key] = f.defaultValue || '';
+      });
+      setFieldValues(dynamicFields);
+    }
+    setProvisionResponse(null);
+    setErrorMessage(null);
+  };
+
   // Load live definitions from Central API on mount
   useEffect(() => {
     async function loadDefinitions() {
+      setLoadingDefs(true);
       try {
         const liveDefs = await api.onboarding.listDefinitions();
         if (Array.isArray(liveDefs) && liveDefs.length > 0) {
           setDefinitions(liveDefs);
+          setSelectedProductCode(liveDefs[0].productCode);
+          handleSelectProductForDef(liveDefs[0]);
+        } else {
+          setDefinitions([]);
         }
       } catch {
         setDefinitions([]);
+      } finally {
+        setLoadingDefs(false);
       }
     }
     loadDefinitions();
@@ -83,47 +124,7 @@ export default function UnifiedOnboardingPage() {
     setSelectedProductCode(code);
     const def = definitions.find((d) => d.productCode === code);
     if (!def) return;
-
-    setPlanCode(def.subscription.defaultPlanCode);
-    setIsolationMode(def.resource.defaultIsolationMode);
-    
-    // Seed sensible product-specific defaults
-    if (code === 'JIOPLIX') {
-      setExternalId('JIOPLIX_NEXUS');
-      setTenantCode('JIOPLIX_APOLLO_01');
-      setTenantName('Apollo Multispecialty Hospital');
-      setSchemaName('jioplix_apollo_01');
-      setFieldValues({
-        hospitalName: 'Apollo Multispecialty Hospital',
-        domain: 'https://apollo.jioplix.com',
-        contactEmail: 'admin@apollo.org',
-        country: 'India',
-        timezone: 'Asia/Kolkata',
-      });
-    } else if (code === 'STOREAI') {
-      setExternalId('STOREAI_NEXUS');
-      setTenantCode('STORE_NIKE_01');
-      setTenantName('Nike Flagship Store');
-      setSchemaName('storeai_nike_01');
-      setFieldValues({
-        storeName: 'Nike Flagship Store',
-        domain: 'https://nike.storeai.com',
-        contactEmail: 'merchant@nike.com',
-        adminUserId: 'usr_nike_owner_01',
-      });
-    } else if (code === 'LIMS') {
-      setExternalId('LAB_METROPOLIS_01');
-      setTenantCode('LAB_METRO_01');
-      setTenantName('Metropolis Central Diagnostics');
-      setSchemaName('lims_metro_01');
-      setFieldValues({
-        labName: 'Metropolis Central Diagnostics',
-        domain: 'https://lab.metropolis.com',
-        contactEmail: 'director@metropolis.com',
-      });
-    }
-    setProvisionResponse(null);
-    setErrorMessage(null);
+    handleSelectProductForDef(def);
   };
 
   const handleFieldChange = (key: string, value: string) => {
@@ -190,35 +191,35 @@ export default function UnifiedOnboardingPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <h1 style={{ fontSize: '1.75rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>
-              Unified Product Onboarding
+              Tenant Provisioning &amp; Onboarding
             </h1>
             <span style={{ backgroundColor: '#e0f2fe', color: '#0369a1', padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600 }}>
-              Generic Engine
+              Tenant Engine
             </span>
           </div>
           <p style={{ color: '#64748b', margin: '6px 0 0 0', fontSize: '0.95rem' }}>
-            Single, definition-driven onboarding workflow powered by <code>ProductOnboardingDefinition</code> &amp; Product Adapters.
+            Single, definition-driven onboarding workflow to provision and configure tenant customers into registered platform products.
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <Link
-            href="/onboarding/jioplix"
+            href="/product-repository"
             style={{ padding: '7px 14px', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid #cbd5e1', color: '#475569', textDecoration: 'none', background: '#fff' }}
           >
-            🏥 Jioplix View
+            🗄️ Product Repository
           </Link>
           <Link
-            href="/onboarding/storeai"
+            href="/subscriptions"
             style={{ padding: '7px 14px', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid #cbd5e1', color: '#475569', textDecoration: 'none', background: '#fff' }}
           >
-            🛍️ StoreAI View
+            ⇄ Subscription Master
           </Link>
         </div>
       </div>
 
-      {/* Tabs */}
-      {definitions.length === 0 && (
+      {/* Loading & Empty States */}
+      {loadingDefs && (
         <div
           className="card card-pad"
           style={{
@@ -231,8 +232,37 @@ export default function UnifiedOnboardingPage() {
         >
           <div style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>📦 Loading Product Onboarding Definitions…</div>
           <div style={{ fontSize: '0.85rem' }}>
-            Fetching registered product definitions from the control plane API.
+            Fetching active product definitions from the control plane catalog.
           </div>
+        </div>
+      )}
+
+      {!loadingDefs && definitions.length === 0 && (
+        <div
+          className="card card-pad"
+          style={{
+            textAlign: 'center',
+            padding: '3.5rem 2rem',
+            color: '#64748b',
+            border: '1px dashed #cbd5e1',
+            borderRadius: '10px',
+            background: '#fafbfc',
+          }}
+        >
+          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🗄️</div>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.5rem' }}>
+            No Active Products in Repository
+          </div>
+          <p style={{ fontSize: '0.95rem', maxWidth: '480px', margin: '0 auto 1.5rem', color: '#64748b', lineHeight: 1.5 }}>
+            You haven’t registered any products in the Product Repository yet. Register your applications and cloud topologies first to start provisioning tenant customers into them.
+          </p>
+          <Link
+            href="/product-repository"
+            className="btn btn-primary"
+            style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '6px', fontWeight: 600 }}
+          >
+            + Go to Product Repository
+          </Link>
         </div>
       )}
 

@@ -1,5 +1,7 @@
 package com.cybelinx.platform.api.onboarding.controller;
 
+import com.cybelinx.platform.api.onboarding.adapter.GenericDynamicProductAdapter;
+import com.cybelinx.platform.api.onboarding.adapter.ProductAdapter;
 import com.cybelinx.platform.api.onboarding.adapter.ProductAdapterRegistry;
 import com.cybelinx.platform.api.onboarding.model.GenericBatchOnboardRequest;
 import com.cybelinx.platform.api.onboarding.model.GenericBatchOnboardResponse;
@@ -8,15 +10,23 @@ import com.cybelinx.platform.api.onboarding.model.GenericOnboardResponse;
 import com.cybelinx.platform.api.onboarding.model.GenericOnboardStatusView;
 import com.cybelinx.platform.api.onboarding.model.ProductOnboardingDefinition;
 import com.cybelinx.platform.api.onboarding.service.GenericProductOnboardingService;
+import com.cybelinx.platform.api.domain.ProductStatus;
+import com.cybelinx.platform.api.persistence.ProductRepository;
+import com.cybelinx.platform.api.persistence.entity.Product;
 import com.cybelinx.platform.api.security.AuthPrincipal;
 import com.cybelinx.platform.api.security.CurrentPrincipal;
 import com.cybelinx.platform.api.security.RequirePermissions;
 import com.cybelinx.platform.api.tenants.TenantConstants;
+import com.cybelinx.platform.shared.ApiError;
+import com.cybelinx.platform.shared.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,24 +49,49 @@ public class GenericProductOnboardingController {
 
     private final ProductAdapterRegistry registry;
     private final GenericProductOnboardingService onboardingService;
+    private final ProductRepository products;
 
     public GenericProductOnboardingController(
             ProductAdapterRegistry registry,
-            GenericProductOnboardingService onboardingService) {
+            GenericProductOnboardingService onboardingService,
+            ProductRepository products) {
         this.registry = registry;
         this.onboardingService = onboardingService;
+        this.products = products;
     }
 
     @GetMapping("/definitions")
-    @Operation(summary = "List all available product onboarding definitions", description = "Returns declarative definitions including tenant identifiers, custom fields, supported isolation modes, and plans for all products")
+    @Operation(summary = "List all available product onboarding definitions", description = "Returns declarative definitions for products actively registered in the Product Repository")
     public List<ProductOnboardingDefinition> listDefinitions() {
-        return registry.getAvailableDefinitions();
+        List<Product> activeProducts = products.findAll().stream()
+                .filter(p -> p.getStatus() == ProductStatus.ACTIVE)
+                .toList();
+
+        List<ProductOnboardingDefinition> result = new ArrayList<>();
+        for (Product product : activeProducts) {
+            String code = product.getProductCode();
+            Optional<ProductAdapter> adapterOpt = registry.findAdapter(code);
+            if (adapterOpt.isPresent()) {
+                result.add(adapterOpt.get().getDefinition());
+            } else {
+                result.add(new GenericDynamicProductAdapter(product).getDefinition());
+            }
+        }
+        return result;
     }
 
     @GetMapping("/definitions/{productCode}")
     @Operation(summary = "Get onboarding definition for a specific product", description = "Returns the schema and form field specifications for a single product")
     public ProductOnboardingDefinition getDefinition(@PathVariable String productCode) {
-        return registry.getRequiredAdapter(productCode).getDefinition();
+        Product product = products.findByProductCode(productCode.toUpperCase())
+                .filter(p -> p.getStatus() == ProductStatus.ACTIVE)
+                .orElseThrow(() -> new ApiError(
+                        ErrorCode.PRODUCT_NOT_FOUND,
+                        "Product \"" + productCode + "\" not found or not active in catalog",
+                        Map.of("productCode", productCode)));
+        return registry.findAdapter(productCode)
+                .map(ProductAdapter::getDefinition)
+                .orElseGet(() -> new GenericDynamicProductAdapter(product).getDefinition());
     }
 
     @PostMapping("/execute")
