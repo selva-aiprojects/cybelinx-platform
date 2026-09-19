@@ -605,20 +605,20 @@ function RegisterResourceModal({
 function ExternalIdsSection({ tenantId }: { tenantId: string }) {
   const externalData = useAsyncData(() => api.externalIds.list(tenantId), [tenantId]);
   const [provider, setProvider] = useState('');
-  const [productId, setProductId] = useState('');
+  const [productCode, setProductCode] = useState('');
   const [externalId, setExternalId] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
-    if (!provider || !productId || !externalId) return;
+    if (!provider || !productCode || !externalId) return;
     setAdding(true);
     setError(null);
     try {
-      await api.externalIds.register(tenantId, { provider, productId, externalId });
+      await api.externalIds.register(tenantId, { provider, productCode, externalId });
       setProvider('');
-      setProductId('');
+      setProductCode('');
       setExternalId('');
       externalData.reload();
     } catch (err) {
@@ -654,14 +654,14 @@ function ExternalIdsSection({ tenantId }: { tenantId: string }) {
           <input className="input" placeholder="e.g. auth0" value={provider} onChange={(e) => setProvider(e.target.value)} />
         </div>
         <div>
-          <label className="label">Product ID</label>
-          <input className="input" placeholder="UUID or code" value={productId} onChange={(e) => setProductId(e.target.value)} />
+          <label className="label">Product Code</label>
+          <input className="input" placeholder="e.g. STOREAI" value={productCode} onChange={(e) => setProductCode(e.target.value)} />
         </div>
         <div>
           <label className="label">External ID</label>
           <input className="input" placeholder="Ext tenant ID" value={externalId} onChange={(e) => setExternalId(e.target.value)} />
         </div>
-        <button type="submit" className="btn btn-primary" disabled={adding || !provider || !productId || !externalId}>
+        <button type="submit" className="btn btn-primary" disabled={adding || !provider || !productCode || !externalId}>
           {adding ? 'Mapping...' : '+ Map External ID'}
         </button>
       </form>
@@ -676,7 +676,7 @@ function ExternalIdsSection({ tenantId }: { tenantId: string }) {
             <thead>
               <tr>
                 <th>Provider</th>
-                <th>Product ID</th>
+                <th>Product Code</th>
                 <th>External Tenant ID</th>
                 <th>Mapped At</th>
                 <th className="cell-actions">Actions</th>
@@ -684,13 +684,13 @@ function ExternalIdsSection({ tenantId }: { tenantId: string }) {
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.mappingId}>
+                <tr key={item.externalIdentifierId}>
                   <td className="mono">{item.provider}</td>
-                  <td className="mono muted">{item.productId}</td>
+                  <td className="mono muted">{item.productCode}</td>
                   <td className="mono">{item.externalId}</td>
                   <td className="muted small">{formatDate(item.createdAt)}</td>
                   <td className="cell-actions">
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRemove(item.mappingId)}>
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRemove(item.externalIdentifierId)}>
                       Remove
                     </button>
                   </td>
@@ -724,21 +724,23 @@ function UsageEventsSection({ tenantId }: { tenantId: string }) {
           <table className="table">
             <thead>
               <tr>
-                <th>Recorded At</th>
+                <th>Occurred At</th>
                 <th>Product ID</th>
                 <th>Event Type</th>
                 <th>Quantity</th>
-                <th>Idempotency Key</th>
+                <th>Unit</th>
+                <th>Dedupe Key</th>
               </tr>
             </thead>
             <tbody>
               {events.map((item) => (
                 <tr key={item.usageEventId}>
-                  <td className="muted small">{formatDate(item.recordedAt)}</td>
+                  <td className="muted small">{formatDate(item.occurredAt)}</td>
                   <td className="mono muted">{item.productId}</td>
                   <td className="mono">{item.eventType}</td>
                   <td className="mono font-bold">{item.quantity}</td>
-                  <td className="mono small muted">{item.idempotencyKey ?? '—'}</td>
+                  <td className="mono small muted">{item.unit ?? '—'}</td>
+                  <td className="mono small muted">{item.dedupeKey ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

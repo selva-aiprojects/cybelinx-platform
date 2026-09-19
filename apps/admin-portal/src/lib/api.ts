@@ -358,7 +358,7 @@ export const api = {
   },
 
   events: {
-    list: (params?: ListParams & { aggregateType?: string; aggregateId?: string; eventType?: string; tenantId?: string }) =>
+    list: (params?: ListParams & { entityType?: string; eventType?: string; status?: string; tenantId?: string }) =>
       request<PlatformEventListResponse>(`/events${buildQuery(params)}`),
   },
 
@@ -395,10 +395,8 @@ export const api = {
   },
 
   iam: {
-    listUsers: (params?: ListParams) =>
-      request<{ data: UserView[]; total: number }>(`/iam/users${buildQuery(params)}`),
-    listMembers: (tenantId: string) =>
-      request<{ data: TenantMemberView[] }>(`/iam/tenants/${tenantId}/members`),
+    listUsers: (params?: ListParams) => request<UserView[]>(`/iam/users${buildQuery(params)}`),
+    listMembers: (tenantId: string) => request<TenantMemberView[]>(`/iam/tenants/${tenantId}/members`),
     addMember: (tenantId: string, body: CreateTenantMemberRequest) =>
       request<TenantMemberView>(`/iam/tenants/${tenantId}/members`, { method: 'POST', body }),
   },

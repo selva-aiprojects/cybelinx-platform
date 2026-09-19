@@ -1,5 +1,6 @@
 package com.cybelinx.platform.api.config;
 
+import com.cybelinx.platform.api.common.ratelimit.RateLimitInterceptor;
 import com.cybelinx.platform.api.security.PrincipalArgumentResolver;
 import com.cybelinx.platform.api.security.TenantAuthInterceptor;
 import java.util.List;
@@ -16,10 +17,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
 
     private final TenantAuthInterceptor tenantAuthInterceptor;
+    private final RateLimitInterceptor rateLimitInterceptor;
     private final PrincipalArgumentResolver principalArgumentResolver;
 
-    public WebConfig(TenantAuthInterceptor tenantAuthInterceptor, PrincipalArgumentResolver principalArgumentResolver) {
+    public WebConfig(TenantAuthInterceptor tenantAuthInterceptor, RateLimitInterceptor rateLimitInterceptor,
+            PrincipalArgumentResolver principalArgumentResolver) {
         this.tenantAuthInterceptor = tenantAuthInterceptor;
+        this.rateLimitInterceptor = rateLimitInterceptor;
         this.principalArgumentResolver = principalArgumentResolver;
     }
 
@@ -32,8 +36,29 @@ public class WebConfig implements WebMvcConfigurer {
                         "/subscriptions/**",
                         "/product-repository/**",
                         "/regions/**",
+                        "/usage/**",
                         "/audit/**",
                         "/events/**",
+                        "/iam/**",
+                        "/broker/**",
+                        "/api/v1/onboarding/**",
+                        "/onboarding/**")
+                .excludePathPatterns(
+                        "/api/v1/onboarding/definitions/**",
+                        "/onboarding/definitions/**");
+        registry.addInterceptor(rateLimitInterceptor)
+                .addPathPatterns(
+                        "/auth/**",
+                        "/tenants/**",
+                        "/products/**",
+                        "/subscriptions/**",
+                        "/product-repository/**",
+                        "/regions/**",
+                        "/usage/**",
+                        "/audit/**",
+                        "/events/**",
+                        "/iam/**",
+                        "/broker/**",
                         "/api/v1/onboarding/**",
                         "/onboarding/**")
                 .excludePathPatterns(

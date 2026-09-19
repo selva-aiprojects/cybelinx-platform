@@ -47,6 +47,15 @@ cybelinx:
   auth:
     bootstrap-password: ${CYBELINX_AUTH_BOOTSTRAP_PASSWORD:Admin@123}
     token-ttl-hours: ${CYBELINX_AUTH_TOKEN_TTL_HOURS:24}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-window: ${RATE_LIMIT_REQUESTS_PER_WINDOW:300}
+    window-seconds: ${RATE_LIMIT_WINDOW_SECONDS:60}
+
+logging:
+  structured:
+    format:
+      console: ${STRUCTURED_LOGGING_FORMAT:}
 
 management:
   endpoints:

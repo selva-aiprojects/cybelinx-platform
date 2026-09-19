@@ -16,7 +16,7 @@ const PAYLOAD_STYLE: React.CSSProperties = {
 };
 
 export default function PlatformEventsPage() {
-  const [aggregateType, setAggregateType] = useState('');
+  const [entityType, setEntityType] = useState('');
   const [eventType, setEventType] = useState('');
   const [page, setPage] = useState(1);
   const { data, error, loading } = useAsyncData(
@@ -24,10 +24,10 @@ export default function PlatformEventsPage() {
       api.events.list({
         page,
         limit: PAGE_SIZE,
-        aggregateType: aggregateType.trim() || undefined,
+        entityType: entityType.trim() || undefined,
         eventType: eventType.trim() || undefined,
       }),
-    [page, aggregateType, eventType],
+    [page, entityType, eventType],
   );
 
   const rows = data?.data ?? [];
@@ -56,17 +56,17 @@ export default function PlatformEventsPage() {
           <input
             className="input"
             style={{ flex: 1, minWidth: '200px' }}
-            placeholder="e.g. TENANT, PRODUCT, PROVISIONING_JOB"
-            value={aggregateType}
+            placeholder="Entity type e.g. tenant, tenant_product, tenant_onboarding"
+            value={entityType}
             onChange={(e) => {
-              setAggregateType(e.target.value);
+              setEntityType(e.target.value);
               setPage(1);
             }}
           />
           <input
             className="input"
             style={{ flex: 1, minWidth: '200px' }}
-            placeholder="e.g. tenant.created, product.published"
+            placeholder="Event type e.g. tenant.created, resource.failed"
             value={eventType}
             onChange={(e) => {
               setEventType(e.target.value);
@@ -85,26 +85,28 @@ export default function PlatformEventsPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Timestamp</th>
+                  <th>Occurred At</th>
                   <th>Event Type</th>
-                  <th>Aggregate Type</th>
-                  <th>Aggregate ID</th>
+                  <th>Status</th>
+                  <th>Entity Type</th>
+                  <th>Entity ID</th>
                   <th>Tenant ID</th>
-                  <th>Payload</th>
+                  <th>Source</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((evt: PlatformEventView) => (
                   <tr key={evt.eventId}>
-                    <td className="mono small muted">{formatDate(evt.createdAt)}</td>
+                    <td className="mono small muted">{formatDate(evt.occurredAt)}</td>
                     <td className="small">{evt.eventType}</td>
                     <td>
-                      <StatusBadge value={evt.aggregateType} />
+                      <StatusBadge value={evt.status || 'UNKNOWN'} />
                     </td>
-                    <td className="mono small">{evt.aggregateId}</td>
+                    <td className="mono small">{evt.entityType || '—'}</td>
+                    <td className="mono small">{evt.entityId || '—'}</td>
                     <td className="mono small muted">{evt.tenantId || '—'}</td>
                     <td className="mono small muted" style={PAYLOAD_STYLE}>
-                      {JSON.stringify(evt.payload)}
+                      {evt.source || '—'}
                     </td>
                   </tr>
                 ))}

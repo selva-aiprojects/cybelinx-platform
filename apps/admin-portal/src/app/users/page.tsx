@@ -33,7 +33,7 @@ export default function UsersPage() {
           api.tenants.list(),
         ]);
 
-        setUsers(usersRes.data);
+        setUsers(usersRes);
 
         if (tenantsRes.data.length > 0) {
           setTenants(tenantsRes.data);
@@ -56,7 +56,7 @@ export default function UsersPage() {
     async function fetchMembers() {
       try {
         const res = await api.iam.listMembers(selectedTenantId);
-        setMembers(res.data);
+        setMembers(res);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'Failed to load tenant members');
       }

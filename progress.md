@@ -336,3 +336,22 @@ repositories — the docs alone were not trusted.
 ### Notes
 - Dev DB state after a full backend suite is clean (tests wipe users/ACME via raw JDBC cleanup); the migrations are idempotent so re-applying `V21`+`V22` SQL restores the dev-admin login (`dev.admin@cybelinx.test` / `Admin@123`).
 - `isProductionSecret` is always `true` on success in the current minting path (HS256 requires a signing secret).
+
+## Phase: Portal↔Backend Contract Alignment & Backend Hardening
+
+### Checklist
+- [x] Admin portal aligned to the live Java backend JSON contracts (backend is the source of truth):
+  - `lib/types.ts` rewritten: `AuditEventView` (`id`/`occurredAt`/`entityType`/`entityId`/`tenantId`/`userId`/`actorType`/`action`), `PlatformEventView` (`eventId`/`eventType`/`schemaVersion`/`status`/`source`/`occurredAt`/`createdAt` + entity/tenant/product refs), `UsageEventView` (`usageEventId`/`dedupeKey`/`occurredAt`/`unit`/`ingestedAt`), `IngestUsageRequest` (`productCode` + optional `unit`/`dedupeKey`/`occurredAt`/`metadata`), `TenantExternalIdView` (`externalIdentifierId`/`productCode`), `RegisterExternalIdRequest` (`productCode`)
+  - `lib/api.ts`: `events.list` now `{entityType?, eventType?, status?, tenantId?, page, limit}`; `iam.listUsers` → `UserView[]` and `iam.listMembers` → `TenantMemberView[]` (bare arrays)
+  - Pages: `audit` (event table → `evt.id`/`occurredAt`/`entityType`/`entityId`/`tenantId`/`userId`), `events` (rewritten Entity-Type + Event-Type filter fields + new columns), `tenants/[tenantId]` (external-ids form + table keyed on `productCode`/`externalIdentifierId`; usage table `occurredAt`/`dedupeKey`/`unit`), `users` (bare-array state)
+- [x] PlatformEventController gains `entityType` + `eventType` list filters (portal events page now renders live data)
+- [x] IAM/broker coverage added to `TenantAuthInterceptor` path patterns (`/iam/**`, `/broker/**`) in `WebConfig`
+- [x] Observability: `RequestIdFilter` (`@Component`) — accepts/propagates `X-Request-Id`, falls back to a generated UUID, puts `request_id` on the MDC; structured logging opt-in via `logging.structured.format.console=${STRUCTURED_LOGGING_FORMAT:}` (ECS/logstash when set)
+- [x] Rate limiting: `RateLimitInterceptor` (in-memory sliding window per client IP, `Retry-After` on 429) + `ApiHttpException.tooManyRequests()`; registered in `WebConfig` over `/auth/**`, `/tenants/**`, `/products/**`, `/subscriptions/**`, `/product-repository/**`, `/regions/**`, `/usage/**`, `/audit/**`, `/events/**`, `/iam/**`, `/broker/**`, `/api/v1/onboarding/**`, `/onboarding/**` (excluding `/onboarding/definitions/**`); tunable via `cybelinx.rate-limit.*` (`RATE_LIMIT_ENABLED`/`RATE_LIMIT_REQUESTS_PER_WINDOW`/`RATE_LIMIT_WINDOW_SECONDS`, defaults 300/60 s)
+- [x] Dev-DB self-restore: `UserMappingServiceIT` gained `@AfterEach restoreDevSeedRows()` — re-applies `V22`+`V21` SQL via `ScriptUtils` so the full suite never wipes the dev admin again
+- [x] Tests: central-api **226/226** (+ 4 `RateLimitInterceptorTest` rate-limit unit tests) + event-worker 21 = **247/247 backend green**; portal `lint` + `typecheck` + `next build` green
+- [x] Live E2E verified against the running API on `:3001`: login (`token` field, `CYBELINX_PLATFORM_ADMIN`), IAM `/users`/`/members` (bare arrays), events `?entityType=tenant` filter, audit list, external-IDs register/list/remove (`DELETE /tenants/{tenantId}/external-ids/{mappingId}`), usage ingest/list (dedupe-key contract), `X-Request-Id` present on responses
+
+### Notes
+- The dev DB is shared with the integration-test suite, which wipes users/tables by design; the `UserMappingServiceIT` `@AfterEach` restore now keeps `dev.admin@cybelinx.test` presidential across runs (verified user=1, ACME membership=1, platform-admin grant=1 after the full suite).
+- External-ID removal takes the mapping UUID (`externalIdentifierId`), not the external id itself.

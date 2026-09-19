@@ -58,6 +58,8 @@ public class PlatformEventController {
             @CurrentPrincipal AuthPrincipal principal,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String tenantId,
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) String eventType,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int limit) {
 
@@ -67,15 +69,37 @@ public class PlatformEventController {
         int safeLimit = Math.min(200, Math.max(1, limit));
 
         Page<PlatformEvent> resultPage;
-        if (tenantId != null && !tenantId.isBlank()) {
-            try {
-                UUID tid = UUID.fromString(tenantId);
-                resultPage = platformEvents.findAll(
-                        (root, query, cb) -> cb.equal(root.join("tenant").get("id"), tid),
-                        PageRequest.of(safePage - 1, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt")));
-            } catch (IllegalArgumentException e) {
-                return new EventListResponse(List.of(), new Meta(safePage, safeLimit, 0, 0));
+        boolean hasTenant = tenantId != null && !tenantId.isBlank();
+        boolean hasEntityType = entityType != null && !entityType.isBlank();
+        boolean hasEventType = eventType != null && !eventType.isBlank();
+
+        if (hasTenant || hasEntityType || hasEventType) {
+            UUID tid = null;
+            if (hasTenant) {
+                try {
+                    tid = UUID.fromString(tenantId);
+                } catch (IllegalArgumentException e) {
+                    return new EventListResponse(List.of(), new Meta(safePage, safeLimit, 0, 0));
+                }
             }
+            UUID filterTenant = tid;
+            String filterEntityType = hasEntityType ? entityType.trim() : null;
+            String filterEventType = hasEventType ? eventType.trim() : null;
+            resultPage = platformEvents.findAll(
+                    (root, query, cb) -> {
+                        var predicates = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
+                        if (filterTenant != null) {
+                            predicates.add(cb.equal(root.join("tenant").get("id"), filterTenant));
+                        }
+                        if (filterEntityType != null) {
+                            predicates.add(cb.equal(cb.lower(root.get("entityType")), filterEntityType.toLowerCase()));
+                        }
+                        if (filterEventType != null) {
+                            predicates.add(cb.equal(cb.lower(root.get("eventType")), filterEventType.toLowerCase()));
+                        }
+                        return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+                    },
+                    PageRequest.of(safePage - 1, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt")));
         } else {
             resultPage = platformEvents.findAll(
                     PageRequest.of(safePage - 1, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt")));

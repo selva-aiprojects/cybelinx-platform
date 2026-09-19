@@ -41,6 +41,11 @@ public class ApiHttpException extends RuntimeException {
         return new ApiHttpException(400, body(400, "Bad Request", message), message);
     }
 
+    /** Builds a NestJS {@code TooManyRequestsException} body. */
+    public static ApiHttpException tooManyRequests(String message) {
+        return new ApiHttpException(429, body(429, "Too Many Requests", message), message);
+    }
+
     /** Builds a NestJS {@code InternalServerErrorException} body. */
     public static ApiHttpException serverError(String message) {
         return new ApiHttpException(500, body(500, "Internal Server Error", message), message);

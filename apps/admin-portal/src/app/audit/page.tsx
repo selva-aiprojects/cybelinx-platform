@@ -88,15 +88,15 @@ export default function AuditLogPage() {
               </thead>
               <tbody>
                 {rows.map((evt: AuditEventView) => (
-                  <tr key={evt.eventId}>
-                    <td className="mono small muted">{formatDate(evt.createdAt)}</td>
+                  <tr key={evt.id}>
+                    <td className="mono small muted">{formatDate(evt.occurredAt)}</td>
                     <td className="small">{evt.action}</td>
                     <td>
-                      <StatusBadge value={evt.resourceType || 'UNKNOWN'} />
+                      <StatusBadge value={evt.entityType || 'UNKNOWN'} />
                     </td>
-                    <td className="mono small">{evt.resourceId || '—'}</td>
+                    <td className="mono small">{evt.entityId || '—'}</td>
                     <td className="mono small muted">{evt.tenantId || '—'}</td>
-                    <td className="mono small muted">{evt.actorUserId || 'system'}</td>
+                    <td className="mono small muted">{evt.userId || 'system'}</td>
                   </tr>
                 ))}
               </tbody>

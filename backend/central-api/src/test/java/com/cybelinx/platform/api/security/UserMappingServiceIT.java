@@ -9,15 +9,21 @@ import com.cybelinx.platform.api.persistence.UserIdentityRepository;
 import com.cybelinx.platform.api.persistence.UserRepository;
 import com.cybelinx.platform.api.security.AuthPrincipal.AuthIdentity;
 import com.cybelinx.platform.api.security.AuthPrincipal.AuthUser;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 /**
  * First-sign-in auto-provisioning against the real schema. The service writes in
  * {@code REQUIRES_NEW} (to keep the insert durable across unique-key races), so these tests
- * are deliberately non-transactional and re-baseline the tables before each method.
+ * are deliberately non-transactional and re-baseline the tables before each method. The seeded
+ * dev admin restored by the V21/V22 migrations is re-created after each method so running the
+ * suite never wipes the local dev login.
  */
 @SpringBootTest
 class UserMappingServiceIT {
@@ -31,10 +37,27 @@ class UserMappingServiceIT {
     @Autowired
     private UserIdentityRepository userIdentities;
 
+    @Autowired
+    private DataSource dataSource;
+
     @BeforeEach
     void cleanCommittedRows() {
         userIdentities.deleteAll();
         users.deleteAll();
+    }
+
+    @AfterEach
+    void restoreDevSeedRows() throws Exception {
+        // Idempotent re-apply of the seed migrations (guarded on natural keys),
+        // restoring dev.admin@cybelinx.test, the ACME membership and platform-admin grant.
+        try (java.sql.Connection connection = dataSource.getConnection()) {
+            ScriptUtils.executeSqlScript(
+                    connection,
+                    new ClassPathResource("db/migration/V22__ensure_dev_admin_user.sql"));
+            ScriptUtils.executeSqlScript(
+                    connection,
+                    new ClassPathResource("db/migration/V21__bootstrap_acme_login.sql"));
+        }
     }
 
     private static AuthIdentity identity(String subject, String email) {

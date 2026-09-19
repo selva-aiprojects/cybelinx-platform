@@ -339,15 +339,18 @@ export interface UpdateTenantResourceRequest {
 // --- Audit & Events ------------------------------------------------------
 
 export interface AuditEventView {
-  eventId: string;
+  id: string;
   tenantId?: string;
-  actorUserId?: string;
+  userId?: string;
+  productId?: string;
+  actorType?: string;
   action: string;
-  resourceType: string;
-  resourceId?: string;
-  details?: Record<string, unknown>;
+  entityType: string;
+  entityId?: string;
+  metadata?: string;
   ipAddress?: string;
-  createdAt: string;
+  requestId?: string;
+  occurredAt: string;
 }
 
 export interface AuditListResponse {
@@ -357,11 +360,15 @@ export interface AuditListResponse {
 
 export interface PlatformEventView {
   eventId: string;
-  aggregateType: string;
-  aggregateId: string;
   eventType: string;
-  payload: Record<string, unknown>;
+  schemaVersion?: string;
   tenantId?: string;
+  productId?: string;
+  entityType?: string;
+  entityId?: string;
+  status?: string;
+  source?: string;
+  occurredAt: string;
   createdAt: string;
 }
 
@@ -378,8 +385,10 @@ export interface UsageEventView {
   productId: string;
   eventType: string;
   quantity: number;
-  idempotencyKey?: string;
-  recordedAt: string;
+  unit?: string;
+  dedupeKey?: string;
+  occurredAt: string;
+  ingestedAt?: string;
 }
 
 export interface UsageListResponse {
@@ -388,18 +397,22 @@ export interface UsageListResponse {
 }
 
 export interface IngestUsageRequest {
-  productId: string;
+  productCode: string;
   eventType: string;
   quantity: number;
-  idempotencyKey?: string;
+  unit?: string;
+  dedupeKey?: string;
+  occurredAt?: string;
+  metadata?: Record<string, unknown>;
 }
 
 // --- External IDs -------------------------------------------------------
 
 export interface TenantExternalIdView {
-  mappingId: string;
+  externalIdentifierId: string;
   tenantId: string;
-  productId: string;
+  productId?: string;
+  productCode?: string;
   provider: string;
   externalId: string;
   createdAt: string;
@@ -410,7 +423,7 @@ export interface TenantExternalIdListResponse {
 }
 
 export interface RegisterExternalIdRequest {
-  productId: string;
+  productCode: string;
   provider: string;
   externalId: string;
 }
