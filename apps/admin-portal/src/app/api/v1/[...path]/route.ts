@@ -137,6 +137,13 @@ export function generateSsoToken(params: {
 }
 
 // ─── StoreAI Direct Login Bypass Token Generator (StoreAI JWT Specification) ──
+// ─── StoreAI Direct Login Bypass Token Generator (StoreAI JWT Specification) ──
+const STOREAI_KNOWN_TENANTS: Record<string, string> = {
+  abccorp: '743beaf2-e038-4942-bf1b-62a4f1b17d00',
+  textronic: 'ab4f2d99-58ef-4d1f-80b4-6b29301d0e3e',
+  wellness: 'ee6336aa-a5b6-4584-b13f-4035d99d5ca5',
+};
+
 export function generateStoreAiToken(params: {
   email: string;
   tenantCode: string;
@@ -147,15 +154,19 @@ export function generateStoreAiToken(params: {
   const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 86400 * 7;
-  const isAbc = params.tenantCode.toLowerCase() === 'abccorp';
+  const slug = params.tenantCode.toLowerCase();
+  const tenantId = STOREAI_KNOWN_TENANTS[slug] || crypto.randomUUID();
+  // Primary StoreAI superadmin user in Neon DB
+  const userId = 'b8fb58c6-7618-43f0-a4e0-fa53f3586b82';
+
   const payload = base64UrlEncode(
     JSON.stringify({
-      id: isAbc ? 'f94db1ea-1f41-4c6e-a226-d30f40d0484b' : crypto.randomUUID(),
-      email: params.email,
+      id: userId,
+      email: params.email || 'b.selvakumar@cognivectra.com',
       firstName: params.tenantCode.toUpperCase(),
       lastName: 'Admin',
-      tenantId: isAbc ? '743beaf2-e038-4942-bf1b-62a4f1b17d00' : crypto.randomUUID(),
-      tenantSlug: params.tenantCode.toLowerCase(),
+      tenantId,
+      tenantSlug: slug,
       role: 'SUPER_ADMIN',
       permissions: [
         'dashboard:view', 'inventory:read', 'inventory:write', 'sales:read',
