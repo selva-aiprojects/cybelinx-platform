@@ -20,6 +20,7 @@ export function GET() {
       status: 'ok',
       service: 'Cybelinx Central SaaS Platform — Control Plane API',
       version: 'v1',
+      buildId: 'build-2026-09-20-1241',
       environment: process.env.NODE_ENV ?? 'production',
       endpoints: {
         health: '/api/v1/health',
