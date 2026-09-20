@@ -211,11 +211,11 @@ The production deployment at `https://cybelinx-platform-admin-portal.vercel.app`
 | Data Domain | Direct Aiven Database Query | Live Production Portal API Response | Verification Source | Parity Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **Catalog Products** | 7 records | 7 records (`CYBEHEALTH`, `JIOPLIX`, `JIOPLIX_SMART`, `LIMS`, `STOREAI`, `SYNTHALYST`, `SYNTHALYST_HRM`) | `public.products` | **Exact Parity (100%)** |
-| **Provisioned Tenants** | 4 records | 4 records (`ACME`, `STOREAI_ADIDAS_01`, `STOREAI_NIKE_01`, `STORE_PUMA_01`) | `public.tenants` | **Exact Parity (100%)** |
-| **Active Subscriptions** | 1 record | 1 record (`ACME` → `JIOPLIX_ENTERPRISE`) | `public.tenant_products` | **Exact Parity (100%)** |
+| **Provisioned Tenants** | 5 records | 5 records (`ACME`, `OMEGA_HEALTHCARE_01`, `STOREAI_ADIDAS_01`, `STOREAI_NIKE_01`, `STORE_PUMA_01`) | `public.tenants` | **Exact Parity (100%)** |
+| **Active Subscriptions** | 2 records | 2 records (`ACME` → `JIOPLIX_ENTERPRISE`, `OMEGA_HEALTHCARE_01` → `JIOPLIX_ENTERPRISE`) | `public.tenant_products` | **Exact Parity (100%)** |
 | **Platform Identities** | 5 users | 5 users (`demo.adidas@...`, `demo.nike@...`, `demo.puma@...`, `dev.admin@...`, `storeai.admin@...`) | `public.users` | **Exact Parity (100%)** |
-| **Audit Log Trail** | 1 event | 1 event (`tenant.resource.provisioned`) | `public.audit_events` | **Exact Parity (100%)** |
-| **Outbox Relay Stream** | 0 pending | Active outbox relay (zero failed/stuck events) | `public.platform_events` | **Exact Parity (100%)** |
+| **Audit Log Trail** | 2 events | 2 events (`tenant.resource.provisioned`, `tenant.provisioned`) | `public.audit_events` | **Exact Parity (100%)** |
+| **Outbox Relay Stream** | 1 event | 1 event (`tenant.provisioned` - SUCCEEDED) | `public.platform_events` | **Exact Parity (100%)** |
 | **Plan Entitlements** | 3 records | 3 records (`isolation_mode`, `max_seats`, `support_level`) | `public.entitlements` | **Exact Parity (100%)** |
 
 ---
