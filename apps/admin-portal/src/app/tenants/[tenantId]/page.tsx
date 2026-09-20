@@ -113,6 +113,23 @@ export default function TenantDetailPage() {
     }
   }
 
+  async function launchSso(product: TenantProductView) {
+    try {
+      const res = await fetch(`/api/v1/auth/sso/token?tenantId=${encodeURIComponent(tenantId)}&productCode=${encodeURIComponent(product.productCode)}&email=${encodeURIComponent(tenant.contactEmail || '')}`);
+      const data = await res.json();
+      if (data?.launchUrl) {
+        window.open(data.launchUrl, '_blank', 'noopener,noreferrer');
+        notify('success', 'SSO Dashboard launched in a new tab!');
+      } else {
+        const fallback = product.appUrl || `https://${tenant.tenantCode.toLowerCase()}.jioplix.com/login`;
+        window.open(fallback, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err) {
+      const fallback = product.appUrl || `https://${tenant.tenantCode.toLowerCase()}.jioplix.com/login`;
+      window.open(fallback, '_blank', 'noopener,noreferrer');
+    }
+  }
+
   async function removeResource(resource: TenantResourceView) {
     if (!window.confirm(`Unregister ${resource.resourceTypeCode} resource?`)) return;
     try {
@@ -242,16 +259,15 @@ export default function TenantDetailPage() {
                       <td className="muted small">{formatDate(product.activatedAt)}</td>
                       <td className="cell-actions">
                         {product.appUrl && (
-                          <a
-                            href={product.appUrl.includes('jioplix') ? `${product.appUrl}/tenant/dashboard` : `${product.appUrl}/dashboard`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => launchSso(product)}
                             className="btn btn-sm"
-                            style={{ background: '#7c3aed', color: '#fff', textDecoration: 'none' }}
-                            title="Launch Tenant Dashboard (SSO Bypass)"
+                            style={{ background: '#7c3aed', color: '#fff', textDecoration: 'none', cursor: 'pointer' }}
+                            title="Launch Tenant Dashboard with Single Sign-On (Bypasses Login Form)"
                           >
                             SSO Dashboard ↗
-                          </a>
+                          </button>
                         )}
                         {product.status !== 'ACTIVE' && (
                           <button

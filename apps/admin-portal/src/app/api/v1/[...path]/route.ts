@@ -6,6 +6,7 @@
  * Runtime: nodejs (NOT edge — pg requires Node.js APIs)
  */
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { query, queryOne, execute, getDatabaseDiagnostics } from '@/lib/db';
 import { sendWelcomeEmail } from '@/lib/email';
 
@@ -94,6 +95,37 @@ function createDevToken(email: string, roles: string[]): string {
   );
   const signature = base64UrlEncode('cybelinx-dev-signature-verified');
   return `${header}.${payload}.${signature}`;
+}
+
+// ─── Universal SSO Launch Token Generator (HMAC-SHA256 standard JWT) ─────────
+export function generateSsoToken(params: {
+  user: string;
+  tenantCode: string;
+  tenantName?: string;
+  role?: string;
+  expiresInSec?: number;
+}): string {
+  const secret = process.env.JWT_SECRET || 'hims-jwt-secret-key-2024-jio-hms-secure-token';
+  const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + (params.expiresInSec || 86400 * 7);
+  const payload = base64UrlEncode(
+    JSON.stringify({
+      user: params.user,
+      email: params.user,
+      tenantId: params.tenantCode.toLowerCase(),
+      tenantCode: params.tenantCode.toLowerCase(),
+      tenantName: params.tenantName || params.tenantCode,
+      role: params.role || 'admin',
+      type: 'tenant',
+      iss: 'cybelinx-control-plane',
+      iat: now,
+      exp,
+    }),
+  );
+  const unsigned = `${header}.${payload}`;
+  const signature = crypto.createHmac('sha256', secret).update(unsigned).digest('base64url');
+  return `${unsigned}.${signature}`;
 }
 
 // ─── Universal Generic Onboarding Definitions Builder (Metadata-Driven for 12+ Products) ──
@@ -713,6 +745,54 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
     }
   }
 
+  // ── SSO Token Generation: GET /auth/sso/token ──────────────────────────────
+  if (p0 === 'auth' && p1 === 'sso' && p2 === 'token') {
+    try {
+      const { searchParams } = new URL(req.url);
+      const tenantParam = searchParams.get('tenantId') || searchParams.get('tenantCode');
+      const productCode = searchParams.get('productCode') || 'JIOPLIX';
+      const email = searchParams.get('email') || 'b.selvakumar@cognivectra.com';
+
+      if (!tenantParam) return apiError('tenantId or tenantCode is required', 400, 'MISSING_FIELDS');
+
+      const tenant = await queryOne<{ id: string; tenant_code: string; name: string }>(`
+        SELECT id, tenant_code, name FROM public.tenants
+        WHERE id::text = $1 OR tenant_code = $1
+        LIMIT 1
+      `, [tenantParam]);
+      if (!tenant) return apiError(`Tenant '${tenantParam}' not found`, 404, 'TENANT_NOT_FOUND');
+
+      const tp = await queryOne<{ app_url: string; product_code: string }>(`
+        SELECT tp.app_url, p.product_code
+        FROM public.tenant_products tp
+        JOIN public.products p ON p.id = tp.product_id
+        WHERE tp.tenant_id = $1 AND (p.product_code = $2 OR $2 IS NULL)
+        ORDER BY tp.created_at DESC LIMIT 1
+      `, [tenant.id, productCode ? productCode.toUpperCase() : null]);
+
+      const ssoToken = generateSsoToken({
+        user: email,
+        tenantCode: tenant.tenant_code.toLowerCase(),
+        tenantName: tenant.name,
+        role: 'admin',
+      });
+
+      const rawAppUrl = tp?.app_url || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+      const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
+      const launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+
+      return json({
+        ssoToken,
+        launchUrl,
+        tenantCode: tenant.tenant_code.toLowerCase(),
+        tenantName: tenant.name,
+        email,
+      });
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
   return apiError(`Path /${path.join('/')} not found`, 404, 'NOT_FOUND');
 }
 
@@ -744,6 +824,54 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         roles,
         expiresAt: new Date(Date.now() + 86400 * 7 * 1000).toISOString(),
         isProductionSecret: false,
+      });
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
+  // ── SSO Token Generation: POST /auth/sso/token ─────────────────────────────
+  if (p0 === 'auth' && p1 === 'sso' && p2 === 'token') {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const tenantParam = (body.tenantId || body.tenantCode) as string;
+      const productCode = (body.productCode || 'JIOPLIX') as string;
+      const email = (body.email || 'b.selvakumar@cognivectra.com') as string;
+
+      if (!tenantParam) return apiError('tenantId or tenantCode is required', 400, 'MISSING_FIELDS');
+
+      const tenant = await queryOne<{ id: string; tenant_code: string; name: string }>(`
+        SELECT id, tenant_code, name FROM public.tenants
+        WHERE id::text = $1 OR tenant_code = $1
+        LIMIT 1
+      `, [tenantParam]);
+      if (!tenant) return apiError(`Tenant '${tenantParam}' not found`, 404, 'TENANT_NOT_FOUND');
+
+      const tp = await queryOne<{ app_url: string; product_code: string }>(`
+        SELECT tp.app_url, p.product_code
+        FROM public.tenant_products tp
+        JOIN public.products p ON p.id = tp.product_id
+        WHERE tp.tenant_id = $1 AND (p.product_code = $2 OR $2 IS NULL)
+        ORDER BY tp.created_at DESC LIMIT 1
+      `, [tenant.id, productCode ? productCode.toUpperCase() : null]);
+
+      const ssoToken = generateSsoToken({
+        user: email,
+        tenantCode: tenant.tenant_code.toLowerCase(),
+        tenantName: tenant.name,
+        role: 'admin',
+      });
+
+      const rawAppUrl = tp?.app_url || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+      const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
+      const launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+
+      return json({
+        ssoToken,
+        launchUrl,
+        tenantCode: tenant.tenant_code.toLowerCase(),
+        tenantName: tenant.name,
+        email,
       });
     } catch (err) {
       return dbError(err);
@@ -970,9 +1098,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
               tenant_product_id = EXCLUDED.tenant_product_id,
               updated_at = NOW()
           `, [crypto.randomUUID(), tenant.id, resolvedProductId, resource.id, schemaName, region.id, tpId]);
-          try {
-            await execute(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
-          } catch (sErr) {}
+          // Note: Operational schema lives exclusively in the product's database (e.g. Supabase), not Cybelinx Platform central database
         }
       } catch (rErr) {}
 
@@ -993,10 +1119,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         ]);
       } catch (aErr) {}
 
-      // 6. Dispatch Welcome Email asynchronously to tenant's admin email
+      // 6. Dispatch Welcome Email asynchronously to tenant's admin email with SSO token attached
       try {
         const bodyObj = body as Record<string, string>;
         const emailRecipient = (bodyObj.adminEmail || bodyObj.contactEmail || `admin@${tenant.tenant_code.toLowerCase()}.com`).trim();
+        const ssoToken = generateSsoToken({
+          user: emailRecipient,
+          tenantCode: tenant.tenant_code.toLowerCase(),
+          tenantName: tenant.name,
+          role: 'admin',
+        });
+        const rawAppUrl = resolvedAppUrl || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+        const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
+        const emailLaunchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+
         sendWelcomeEmail({
           to: emailRecipient,
           tenantName: tenant.name,
@@ -1004,7 +1140,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
           productCode: resolvedProductCode || 'JIOPLIX',
           productName: resolvedProductCode === 'JIOPLIX' ? 'Jioplix HIMS' : (resolvedProductCode || 'Platform'),
           planCode: resolvedPlanCode || 'ENTERPRISE',
-          appUrl: resolvedAppUrl || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com/login`,
+          appUrl: emailLaunchUrl,
           adminEmail: emailRecipient,
           tempPassword: 'Admin@123',
           contactName: tenant.name,
@@ -1117,9 +1253,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         environment || 'PRODUCTION'
       ]);
 
-      try {
-        await execute(`CREATE SCHEMA IF NOT EXISTS ${targetSchema}`);
-      } catch (sErr) {}
+      // Note: Operational schema lives exclusively in the product's database (e.g. Supabase), not Cybelinx Platform central database
 
       return json({
         tenantResourceId: resourceId,
@@ -1255,11 +1389,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         `, [crypto.randomUUID(), tenantId, product.productId, resource.resourceId,
             schemaName, region.regionId, tenantProductId]);
 
-        try {
-          await execute(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
-        } catch (schemaErr) {
-          console.warn('Physical schema creation notice:', schemaErr);
-        }
+        // Note: Operational schema lives exclusively in the product's database, not Cybelinx Platform central database
       }
 
       await execute(`
