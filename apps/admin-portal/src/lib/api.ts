@@ -418,4 +418,4 @@ export const api = {
   },
 };
 
-export type { AccessView, IsolationMode, ProvisioningJobView, TenantProductView, TenantStatus };
+export type { AccessView, IsolationMode, ProvisioningJobView, TenantProductView, TenantStatus, ProductOnboardingDefinition };

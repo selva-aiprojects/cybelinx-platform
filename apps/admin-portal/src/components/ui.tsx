@@ -100,7 +100,9 @@ export function ErrorBanner({ error }: { error: string }) {
   const isNetworkError =
     error.includes('Unable to reach the API') || isLocalhostError;
   const is404OrConfigError =
-    error.includes('404') || error.includes('not found') || error.includes('API_BASE_URL');
+    ((error.includes('404') || error.toLowerCase().includes('endpoint not found')) &&
+      (error.includes('Path /') || error.includes('Cannot GET') || error.includes('Cannot POST') || error.includes('NOT_FOUND — Path'))) ||
+    error.includes('API_BASE_URL');
   const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
   function resetToCloud() {
