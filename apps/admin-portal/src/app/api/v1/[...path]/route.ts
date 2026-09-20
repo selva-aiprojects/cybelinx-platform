@@ -324,10 +324,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   if (p0 === 'users') {
     try {
       const rows = await query(`
-        SELECT u.id AS "userId", u.email, u.name, u.status,
+        SELECT u.id AS "userId", u.email, COALESCE(u."displayName", u.email) AS name, u.status,
                u.created_at AS "createdAt"
         FROM public.users u
-        ORDER BY u.name
+        ORDER BY u.email
       `);
       return json(paginate(rows));
     } catch (err) {

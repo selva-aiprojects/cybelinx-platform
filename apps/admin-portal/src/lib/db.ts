@@ -117,7 +117,7 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
       port = 19168;
     }
     database = 'cybelinx-platform';
-    if (!user || user === 'cybelinx') user = 'avnadmin';
+    user = 'avnadmin';
   }
 
   try {
@@ -128,7 +128,7 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
   } catch {}
 
   const finalUser = user || process.env.SPRING_DATASOURCE_USERNAME || process.env.PGUSER || (rawStr.includes('avnadmin') ? 'avnadmin' : 'cybelinx');
-  const finalPass = password || process.env.SPRING_DATASOURCE_PASSWORD || process.env.PGPASSWORD || '';
+  const finalPass = password || process.env.AIVEN_PASSWORD || process.env.SPRING_DATASOURCE_PASSWORD || process.env.PGPASSWORD || '';
 
   const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
 
