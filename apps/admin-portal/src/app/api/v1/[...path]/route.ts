@@ -6,7 +6,7 @@
  * Runtime: nodejs (NOT edge — pg requires Node.js APIs)
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, execute } from '@/lib/db';
+import { query, queryOne, execute, getDatabaseDiagnostics } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -39,14 +39,23 @@ function apiError(message: string, status = 400, code?: string) {
 function dbError(err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
   console.error('[DB Error]', msg);
-  if (msg.includes('DATABASE_URL')) {
+  const diag = getDatabaseDiagnostics();
+  if (!diag.configured || msg.includes('DATABASE_URL')) {
     return apiError(
       'Database not configured. Set DATABASE_URL in Vercel project environment variables.',
       503,
       'DB_NOT_CONFIGURED',
     );
   }
-  return apiError('Database error: ' + msg, 500, 'DB_ERROR');
+  return NextResponse.json(
+    {
+      statusCode: 500,
+      message: 'Database error: ' + msg,
+      code: 'DB_ERROR',
+      diagnostics: diag,
+    },
+    { status: 500, headers: corsHeaders() },
+  );
 }
 
 function paginate<T>(rows: T[], page = 1, limit = 50) {
@@ -94,9 +103,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 
   // Health
   if (p0 === 'health') {
+    const diag = getDatabaseDiagnostics();
     try {
       await query('SELECT 1');
-      return json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+      return json({
+        status: 'ok',
+        db: 'connected',
+        diagnostics: diag,
+        timestamp: new Date().toISOString(),
+      });
     } catch (err) {
       return dbError(err);
     }
