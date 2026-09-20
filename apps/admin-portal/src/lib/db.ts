@@ -1,90 +1,22 @@
 /**
  * PostgreSQL connection pool for Vercel Node.js API routes.
  *
- * Automatically checks in order:
+ * Automatically checks candidate environment variables in order:
  *   1. DATABASE_URL
  *   2. POSTGRES_URL
  *   3. POSTGRES_PRISMA_URL
  *   4. SPRING_DATASOURCE_URL
  *
- * Handles common copy-paste formats:
- *   - Strips surrounding quotation marks (" or ')
- *   - Strips Java JDBC prefix (jdbc:postgresql:// -> postgresql://)
- *   - Safely URL-encodes user and password if they contain special characters (#, @, ?, /)
- *   - Automatically configures SSL for hosted databases (Aiven, Supabase, Neon, AWS RDS)
+ * Parses connection configuration directly to bypass URL parser strictness
+ * and handle common copy-paste artifacts (quotes, jdbc: prefix, unencoded passwords, etc.).
  */
-import { Pool, PoolClient } from 'pg';
+import { Pool, PoolClient, PoolConfig } from 'pg';
 
 let pool: Pool | null = null;
-let cachedEnvVar = '';
+let resolvedEnvVar = 'NONE';
+let resolvedConfig: PoolConfig | null = null;
 
-export function sanitizeConnectionString(raw: string): string {
-  if (!raw) return '';
-  let str = raw.trim();
-
-  // 1. Remove surrounding quotes and trailing semicolons
-  str = str.replace(/^["']|["'];?$/g, '').trim();
-
-  // 2. Remove jdbc: prefix
-  if (str.startsWith('jdbc:')) {
-    str = str.slice(5).trim();
-  }
-
-  // 3. Ensure scheme
-  const schemeMatch = str.match(/^(postgres(?:ql)?:\/\/)/i);
-  let scheme = 'postgresql://';
-  let rest = str;
-  if (schemeMatch) {
-    scheme = schemeMatch[1];
-    rest = str.slice(schemeMatch[0].length);
-  }
-
-  // Authority ends at the first '/' or '?'
-  const slashIdx = rest.indexOf('/');
-  const qIdx = rest.indexOf('?');
-  let endOfAuthority = rest.length;
-  if (slashIdx !== -1 && qIdx !== -1) {
-    endOfAuthority = Math.min(slashIdx, qIdx);
-  } else if (slashIdx !== -1) {
-    endOfAuthority = slashIdx;
-  } else if (qIdx !== -1) {
-    endOfAuthority = qIdx;
-  }
-
-  const authority = rest.slice(0, endOfAuthority);
-  const pathAndQuery = rest.slice(endOfAuthority);
-
-  const atIdx = authority.lastIndexOf('@');
-  if (atIdx !== -1) {
-    const userInfo = authority.slice(0, atIdx);
-    const hostPort = authority.slice(atIdx + 1);
-
-    const colonIdx = userInfo.indexOf(':');
-    let user = userInfo;
-    let pass = '';
-    if (colonIdx !== -1) {
-      user = userInfo.slice(0, colonIdx);
-      pass = userInfo.slice(colonIdx + 1);
-    }
-
-    const safeUser = encodeURIComponent(safeDecode(user));
-    const safePass = pass ? `:${encodeURIComponent(safeDecode(pass))}` : '';
-
-    return `${scheme}${safeUser}${safePass}@${hostPort}${pathAndQuery}`;
-  }
-
-  return `${scheme}${rest}`;
-}
-
-function safeDecode(val: string): string {
-  try {
-    return decodeURIComponent(val);
-  } catch {
-    return val;
-  }
-}
-
-export function resolveConnectionString(): { url: string; envVar: string } {
+export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar: string } | null {
   const candidates: { key: string; val: string | undefined }[] = [
     { key: 'DATABASE_URL', val: process.env.DATABASE_URL },
     { key: 'POSTGRES_URL', val: process.env.POSTGRES_URL },
@@ -92,13 +24,100 @@ export function resolveConnectionString(): { url: string; envVar: string } {
     { key: 'SPRING_DATASOURCE_URL', val: process.env.SPRING_DATASOURCE_URL },
   ];
 
-  for (const c of candidates) {
-    if (c.val && c.val.trim().length > 0) {
-      return { url: sanitizeConnectionString(c.val), envVar: c.key };
+  let rawStr = raw;
+  let sourceEnv = 'DIRECT';
+
+  if (!rawStr) {
+    for (const c of candidates) {
+      if (c.val && c.val.trim().length > 0) {
+        rawStr = c.val;
+        sourceEnv = c.key;
+        break;
+      }
     }
   }
 
-  return { url: '', envVar: '' };
+  if (!rawStr) return null;
+
+  let str = rawStr.trim().replace(/^["']|["'];?$/g, '').trim();
+  if (str.startsWith('jdbc:')) {
+    str = str.slice(5).trim();
+  }
+  // Strip scheme
+  str = str.replace(/^postgres(?:ql)?:\/\//i, '');
+
+  let user = '';
+  let password = '';
+  let host = 'localhost';
+  let port = 5432;
+  let database = 'cybelinx_platform';
+
+  // Extract query parameters if any
+  const qIdx = str.indexOf('?');
+  let base = str;
+  if (qIdx !== -1) {
+    base = str.slice(0, qIdx);
+  }
+
+  // Extract path (database name)
+  const slashIdx = base.indexOf('/');
+  let authority = base;
+  if (slashIdx !== -1) {
+    authority = base.slice(0, slashIdx);
+    database = base.slice(slashIdx + 1).trim() || database;
+  }
+
+  // Extract credentials
+  const atIdx = authority.lastIndexOf('@');
+  let hostPort = authority;
+  if (atIdx !== -1) {
+    const creds = authority.slice(0, atIdx);
+    hostPort = authority.slice(atIdx + 1);
+    const colonIdx = creds.indexOf(':');
+    if (colonIdx !== -1) {
+      user = creds.slice(0, colonIdx);
+      password = creds.slice(colonIdx + 1);
+    } else {
+      user = creds;
+    }
+  }
+
+  // Extract host and port
+  hostPort = hostPort.replace(/^https?:\/\//i, '').replace(/^\/\//, '').trim();
+  const colonIdx = hostPort.indexOf(':');
+  if (colonIdx !== -1) {
+    host = hostPort.slice(0, colonIdx).trim();
+    const p = parseInt(hostPort.slice(colonIdx + 1).trim(), 10);
+    if (!isNaN(p)) port = p;
+  } else {
+    host = hostPort || 'localhost';
+  }
+
+  try {
+    user = decodeURIComponent(user);
+  } catch {}
+  try {
+    password = decodeURIComponent(password);
+  } catch {}
+
+  const finalUser = user || process.env.SPRING_DATASOURCE_USERNAME || process.env.PGUSER || 'cybelinx';
+  const finalPass = password || process.env.SPRING_DATASOURCE_PASSWORD || process.env.PGPASSWORD || '';
+
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+
+  const config: PoolConfig = {
+    host,
+    port,
+    database,
+    user: finalUser,
+    password: finalPass,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
+    max: 5,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  };
+
+  return { config, envVar: sourceEnv };
 }
 
 export function getDatabaseDiagnostics(): {
@@ -107,59 +126,37 @@ export function getDatabaseDiagnostics(): {
   target?: string;
   database?: string;
   hasSsl: boolean;
-  rawSample?: string;
 } {
-  const { url, envVar } = resolveConnectionString();
-  if (!url) {
+  const res = parseDatabaseConfig();
+  if (!res) {
     return { configured: false, envVar: 'NONE', hasSsl: false };
   }
 
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname;
-    const port = parsed.port || '5432';
-    const database = parsed.pathname.replace(/^\//, '') || 'default';
-    const user = parsed.username || 'unknown';
-    return {
-      configured: true,
-      envVar,
-      target: `${user}@${host}:${port}`,
-      database,
-      hasSsl: !url.includes('localhost'),
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return {
-      configured: true,
-      envVar,
-      target: `Unparseable URL (${msg})`,
-      hasSsl: false,
-    };
-  }
+  const { config, envVar } = res;
+  return {
+    configured: true,
+    envVar,
+    target: `${config.user}@${config.host}:${config.port}`,
+    database: config.database,
+    hasSsl: Boolean(config.ssl),
+  };
 }
 
 export function getPool(): Pool {
   if (!pool) {
-    const { url, envVar } = resolveConnectionString();
-    if (!url) {
+    const res = parseDatabaseConfig();
+    if (!res) {
       throw new Error(
         'DATABASE_URL is not configured. Set DATABASE_URL in Vercel project environment variables.'
       );
     }
-    cachedEnvVar = envVar;
+    resolvedEnvVar = res.envVar;
+    resolvedConfig = res.config;
 
-    const isLocal = url.includes('localhost') || url.includes('127.0.0.1');
-
-    pool = new Pool({
-      connectionString: url,
-      ssl: isLocal ? false : { rejectUnauthorized: false },
-      max: 5,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-    });
+    pool = new Pool(res.config);
 
     pool.on('error', (err) => {
-      console.error('[pg pool background error]', err.message);
+      console.error('[pg pool error]', err.message);
     });
   }
   return pool;
