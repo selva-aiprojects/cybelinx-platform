@@ -136,6 +136,51 @@ export function generateSsoToken(params: {
   return `${unsigned}.${signature}`;
 }
 
+// ─── StoreAI Direct Login Bypass Token Generator (StoreAI JWT Specification) ──
+export function generateStoreAiToken(params: {
+  email: string;
+  tenantCode: string;
+  tenantName?: string;
+  role?: string;
+}): string {
+  const secret = process.env.STOREAI_JWT_SECRET || 'MqOqO1LLP8PK8DRwe9NenNZfmquJz1POzdcbDJ+gbL4=';
+  const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + 86400 * 7;
+  const isAbc = params.tenantCode.toLowerCase() === 'abccorp';
+  const payload = base64UrlEncode(
+    JSON.stringify({
+      id: isAbc ? 'f94db1ea-1f41-4c6e-a226-d30f40d0484b' : crypto.randomUUID(),
+      email: params.email,
+      firstName: params.tenantCode.toUpperCase(),
+      lastName: 'Admin',
+      tenantId: isAbc ? '743beaf2-e038-4942-bf1b-62a4f1b17d00' : crypto.randomUUID(),
+      tenantSlug: params.tenantCode.toLowerCase(),
+      role: 'SUPER_ADMIN',
+      permissions: [
+        'dashboard:view', 'inventory:read', 'inventory:write', 'sales:read',
+        'sales:write', 'hr:read', 'hr:write', 'accounts:read',
+        'accounts:write', 'reports:view', 'crm:write', 'orders:read',
+        'orders:write', 'users:manage', 'tenants:manage', 'payroll:read',
+        'payroll:write', 'reports:read'
+      ],
+      features: {
+        currency: 'INR',
+        HR_MODULE: true,
+        CRM_MODULE: true,
+        RETAIL_MODULE: true,
+        FINANCE_MODULE: true,
+        INVENTORY_MODULE: true
+      },
+      iat: now,
+      exp,
+    }),
+  );
+  const unsigned = `${header}.${payload}`;
+  const signature = crypto.createHmac('sha256', secret).update(unsigned).digest('base64url');
+  return `${unsigned}.${signature}`;
+}
+
 // ─── Universal Generic Onboarding Definitions Builder (Metadata-Driven for 12+ Products) ──
 function buildProductDefinition(p: {
   productCode: string;
@@ -811,15 +856,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
         role: 'admin',
       });
 
+      const isStoreAi = (productCode || '').toUpperCase() === 'STOREAI' ||
+        (tp?.product_code || '').toUpperCase() === 'STOREAI' ||
+        (tp?.app_url || '').includes('storeai');
+
       let rawAppUrl = tp?.app_url || '';
-      if (!rawAppUrl || rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com') {
+      if (!rawAppUrl) {
+        if (isStoreAi) {
+          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
+        } else {
+          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+        }
+      } else if (isStoreAi && rawAppUrl.includes('jioplix.com')) {
+        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
+      } else if (!isStoreAi && (rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com')) {
         rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
       }
+
       const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
-      const launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+      let launchUrl = '';
+      let storeAiToken = '';
+
+      if (isStoreAi) {
+        storeAiToken = generateStoreAiToken({
+          email,
+          tenantCode: tenant.tenant_code,
+          tenantName: tenant.name,
+        });
+        launchUrl = `${baseClean}/?token=${storeAiToken}&sso_token=${ssoToken}`;
+      } else {
+        launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+      }
 
       return json({
         ssoToken,
+        storeAiToken: storeAiToken || undefined,
         launchUrl,
         tenantCode: tenant.tenant_code.toLowerCase(),
         tenantName: tenant.name,
@@ -899,15 +970,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         role: 'admin',
       });
 
+      const isStoreAi = (productCode || '').toUpperCase() === 'STOREAI' ||
+        (tp?.product_code || '').toUpperCase() === 'STOREAI' ||
+        (tp?.app_url || '').includes('storeai');
+
       let rawAppUrl = tp?.app_url || '';
-      if (!rawAppUrl || rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com') {
+      if (!rawAppUrl) {
+        if (isStoreAi) {
+          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
+        } else {
+          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+        }
+      } else if (isStoreAi && rawAppUrl.includes('jioplix.com')) {
+        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
+      } else if (!isStoreAi && (rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com')) {
         rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
       }
+
       const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
-      const launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+      let launchUrl = '';
+      let storeAiToken = '';
+
+      if (isStoreAi) {
+        storeAiToken = generateStoreAiToken({
+          email,
+          tenantCode: tenant.tenant_code,
+          tenantName: tenant.name,
+        });
+        launchUrl = `${baseClean}/?token=${storeAiToken}&sso_token=${ssoToken}`;
+      } else {
+        launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+      }
 
       return json({
         ssoToken,
+        storeAiToken: storeAiToken || undefined,
         launchUrl,
         tenantCode: tenant.tenant_code.toLowerCase(),
         tenantName: tenant.name,
