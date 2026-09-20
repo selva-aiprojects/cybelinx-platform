@@ -27,6 +27,14 @@ export function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
 }
 
+function mapCategoryToDb(cat?: string | null): string {
+  if (!cat) return 'ENTERPRISE_OPERATIONS';
+  const c = cat.toUpperCase();
+  if (c === 'HEALTHCARE' || c === 'DIAGNOSTIC_LABS' || c === 'REGULATED_MARKETS') return 'REGULATED_MARKETS';
+  if (c === 'RETAIL_COMMERCE' || c === 'CORE_PAAS_AI') return 'CORE_PAAS_AI';
+  return 'ENTERPRISE_OPERATIONS';
+}
+
 function json<T>(data: T, status = 200) {
   return NextResponse.json(data, { status, headers: corsHeaders() });
 }
@@ -643,10 +651,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
                p.name, p.description, p.status,
                COALESCE(p.product_category, 'ENTERPRISE_OPERATIONS') AS "productCategory",
                COUNT(DISTINCT tp.tenant_id)::int AS "customerCount",
-               p.base_url AS "domain",
-               '/api/v1/health' AS "healthEndpoint",
-               'AIVEN' AS "databaseProvider",
-               'SCHEMA_PER_TENANT' AS "defaultIsolationMode",
+               COALESCE(p.domain, p.base_url) AS "domain",
+               p.subdomain_pattern AS "subdomainPattern",
+               COALESCE(p.hosting_provider, 'VERCEL') AS "hostingProvider",
+               p.deployment_url AS "deploymentUrl",
+               COALESCE(p.health_endpoint, '/api/v1/health') AS "healthEndpoint",
+               COALESCE(p.database_provider, 'AIVEN') AS "databaseProvider",
+               p.database_location AS "databaseLocation",
+               p.database_connection_string AS "databaseConnectionString",
+               p.db_url_development AS "dbUrlDevelopment",
+               p.db_url_staging AS "dbUrlStaging",
+               COALESCE(p.db_url_production, p.database_connection_string) AS "dbUrlProduction",
+               p.db_credentials_reference AS "dbCredentialsReference",
+               COALESCE(p.default_isolation_mode, 'SCHEMA_PER_TENANT') AS "defaultIsolationMode",
+               p.schema_prefix AS "schemaPrefix",
+               p.ddl_template_path AS "ddlTemplatePath",
+               p.configuration_location AS "configurationLocation",
                p.created_at AS "createdAt",
                p.updated_at AS "updatedAt"
         FROM public.products p
@@ -663,13 +683,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
         SELECT t.id AS "tenantId", t.tenant_code AS "tenantCode", t.name AS "tenantName",
                p.product_code AS "productCode", pl.plan_code AS "planCode",
                tp.status, tp.activated_at AS "activatedAt", tp.app_url AS "appUrl",
-               tr.schema_name AS "tenantSchema", tr.isolation_mode AS "isolationMode",
-               'cybelinx-platform' AS "databaseName"
+               COALESCE(prc.tenant_schema, tr.schema_name, t.tenant_code) AS "tenantSchema",
+               tr.isolation_mode AS "isolationMode",
+               COALESCE(prc.database_name, 'cybelinx-platform') AS "databaseName",
+               prc.contact_person AS "contactPerson",
+               prc.contact_email AS "contactEmail"
         FROM public.tenant_products tp
         JOIN public.tenants t ON t.id = tp.tenant_id
         JOIN public.products p ON p.id = tp.product_id
         JOIN public.plans pl ON pl.id = tp.plan_id
         LEFT JOIN public.tenant_resources tr ON tr.tenant_id = tp.tenant_id AND tr.product_id = tp.product_id
+        LEFT JOIN public.product_repository_customers prc ON prc.product_id = p.id AND prc.tenant_id = t.id
         WHERE tp.product_id::text = $1
         ORDER BY t.tenant_code
       `, [(repo as { productId: string }).productId]);
@@ -898,6 +922,102 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         VALUES ($1, $2, $3, $4, 'ACTIVE', $5, NOW(), NOW(), 1)
       `, [productId, productCode.toUpperCase(), name, description || null, baseUrl || null]);
       return json({ productId, productCode: productCode.toUpperCase(), name, status: 'ACTIVE' }, 201);
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
+  // ── Product Repository Create: POST /product-repository ─────────────────────
+  if (p0 === 'product-repository' && !p1) {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const {
+        productCode, name, description, productCategory, status,
+        domain, subdomainPattern, hostingProvider, deploymentUrl,
+        healthEndpoint, databaseProvider, databaseLocation, databaseConnectionString,
+        dbUrlDevelopment, dbUrlStaging, dbUrlProduction, dbCredentialsReference,
+        defaultIsolationMode, schemaPrefix, ddlTemplatePath, configurationLocation,
+      } = body as Record<string, unknown>;
+
+      if (!productCode || !name) {
+        return apiError('productCode and name are required', 400, 'MISSING_FIELDS');
+      }
+
+      const codeStr = String(productCode).trim().toUpperCase();
+      const existing = await queryOne('SELECT id FROM public.products WHERE UPPER(product_code) = UPPER($1)', [codeStr]);
+      if (existing) {
+        return apiError(`Product code '${codeStr}' already exists`, 409, 'PRODUCT_CODE_TAKEN');
+      }
+
+      const id = crypto.randomUUID();
+      const cat = mapCategoryToDb(productCategory ? String(productCategory) : null);
+      const stat = status ? String(status) : 'ACTIVE';
+      const d = domain ? String(domain).trim() : null;
+
+      await execute(`
+        INSERT INTO public.products (
+          id, product_code, name, description, product_category, status,
+          domain, base_url, subdomain_pattern, hosting_provider, deployment_url,
+          health_endpoint, database_provider, database_location, database_connection_string,
+          db_url_development, db_url_staging, db_url_production, db_credentials_reference,
+          default_isolation_mode, schema_prefix, ddl_template_path, configuration_location,
+          created_at, updated_at, version
+        ) VALUES (
+          $1, $2, $3, $4, $5::product_category, $6::productstatus,
+          $7, $7, $8, $9, $10,
+          $11, $12, $13, $14,
+          $15, $16, $17, $18,
+          $19, $20, $21, $22,
+          NOW(), NOW(), 0
+        )
+      `, [
+        id, codeStr, String(name).trim(), description ? String(description).trim() : null, cat, stat,
+        d, subdomainPattern ? String(subdomainPattern).trim() : null,
+        hostingProvider ? String(hostingProvider) : 'VERCEL',
+        deploymentUrl ? String(deploymentUrl).trim() : null,
+        healthEndpoint ? String(healthEndpoint).trim() : '/api/v1/health',
+        databaseProvider ? String(databaseProvider) : 'AIVEN',
+        databaseLocation ? String(databaseLocation).trim() : null,
+        databaseConnectionString ? String(databaseConnectionString).trim() : null,
+        dbUrlDevelopment ? String(dbUrlDevelopment).trim() : null,
+        dbUrlStaging ? String(dbUrlStaging).trim() : null,
+        dbUrlProduction ? String(dbUrlProduction).trim() : null,
+        dbCredentialsReference ? String(dbCredentialsReference).trim() : null,
+        defaultIsolationMode ? String(defaultIsolationMode) : 'SCHEMA_PER_TENANT',
+        schemaPrefix ? String(schemaPrefix).trim() : null,
+        ddlTemplatePath ? String(ddlTemplatePath).trim() : null,
+        configurationLocation ? String(configurationLocation).trim() : null,
+      ]);
+
+      const created = await queryOne(`
+        SELECT p.id AS "productId", p.id AS "repositoryId",
+               p.product_code AS "productCode",
+               p.name, p.description, p.status,
+               COALESCE(p.product_category, 'ENTERPRISE_OPERATIONS') AS "productCategory",
+               0 AS "customerCount",
+               COALESCE(p.domain, p.base_url) AS "domain",
+               p.subdomain_pattern AS "subdomainPattern",
+               COALESCE(p.hosting_provider, 'VERCEL') AS "hostingProvider",
+               p.deployment_url AS "deploymentUrl",
+               COALESCE(p.health_endpoint, '/api/v1/health') AS "healthEndpoint",
+               COALESCE(p.database_provider, 'AIVEN') AS "databaseProvider",
+               p.database_location AS "databaseLocation",
+               p.database_connection_string AS "databaseConnectionString",
+               p.db_url_development AS "dbUrlDevelopment",
+               p.db_url_staging AS "dbUrlStaging",
+               COALESCE(p.db_url_production, p.database_connection_string) AS "dbUrlProduction",
+               p.db_credentials_reference AS "dbCredentialsReference",
+               COALESCE(p.default_isolation_mode, 'SCHEMA_PER_TENANT') AS "defaultIsolationMode",
+               p.schema_prefix AS "schemaPrefix",
+               p.ddl_template_path AS "ddlTemplatePath",
+               p.configuration_location AS "configurationLocation",
+               p.created_at AS "createdAt",
+               p.updated_at AS "updatedAt"
+        FROM public.products p
+        WHERE p.id = $1
+      `, [id]);
+
+      return json(created, 201);
     } catch (err) {
       return dbError(err);
     }
@@ -1553,6 +1673,190 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ path
       return dbError(err);
     }
   }
+  // ── PUT /product-repository/:productId ────────────────────────────────────────
+  if (p0 === 'product-repository' && p1 && !p2) {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const {
+        name, description, productCategory, status,
+        domain, subdomainPattern, hostingProvider, deploymentUrl,
+        healthEndpoint, databaseProvider, databaseLocation, databaseConnectionString,
+        dbUrlDevelopment, dbUrlStaging, dbUrlProduction, dbCredentialsReference,
+        defaultIsolationMode, schemaPrefix, ddlTemplatePath, configurationLocation,
+      } = body as Record<string, unknown>;
+
+      const product = await queryOne<{ id: string; product_code: string }>(`
+        SELECT id, product_code FROM public.products
+        WHERE id::text = $1 OR product_code = $1
+        LIMIT 1
+      `, [p1]);
+      if (!product) return apiError(`Product '${p1}' not found`, 404, 'PRODUCT_NOT_FOUND');
+
+      const cat = productCategory !== undefined ? mapCategoryToDb(productCategory ? String(productCategory) : null) : null;
+      const dom = domain !== undefined ? (domain ? String(domain).trim() : null) : undefined;
+
+      await execute(`
+        UPDATE public.products SET
+          name = CASE WHEN $1::text IS NOT NULL THEN $1::text ELSE name END,
+          description = CASE WHEN $2 IS TRUE THEN $3::text ELSE description END,
+          product_category = CASE WHEN $4::text IS NOT NULL THEN $4::product_category ELSE product_category END,
+          status = CASE WHEN $5::text IS NOT NULL THEN $5::productstatus ELSE status END,
+          domain = CASE WHEN $6 IS TRUE THEN $7::text ELSE domain END,
+          base_url = CASE WHEN $6 IS TRUE THEN $7::text ELSE base_url END,
+          subdomain_pattern = CASE WHEN $8 IS TRUE THEN $9::text ELSE subdomain_pattern END,
+          hosting_provider = CASE WHEN $10 IS TRUE THEN $11::text ELSE hosting_provider END,
+          deployment_url = CASE WHEN $12 IS TRUE THEN $13::text ELSE deployment_url END,
+          health_endpoint = CASE WHEN $14 IS TRUE THEN $15::text ELSE health_endpoint END,
+          database_provider = CASE WHEN $16 IS TRUE THEN $17::text ELSE database_provider END,
+          database_location = CASE WHEN $18 IS TRUE THEN $19::text ELSE database_location END,
+          database_connection_string = CASE WHEN $20 IS TRUE THEN $21::text ELSE database_connection_string END,
+          db_url_development = CASE WHEN $22 IS TRUE THEN $23::text ELSE db_url_development END,
+          db_url_staging = CASE WHEN $24 IS TRUE THEN $25::text ELSE db_url_staging END,
+          db_url_production = CASE WHEN $26 IS TRUE THEN $27::text ELSE db_url_production END,
+          db_credentials_reference = CASE WHEN $28 IS TRUE THEN $29::text ELSE db_credentials_reference END,
+          default_isolation_mode = CASE WHEN $30 IS TRUE THEN $31::text ELSE default_isolation_mode END,
+          schema_prefix = CASE WHEN $32 IS TRUE THEN $33::text ELSE schema_prefix END,
+          ddl_template_path = CASE WHEN $34 IS TRUE THEN $35::text ELSE ddl_template_path END,
+          configuration_location = CASE WHEN $36 IS TRUE THEN $37::text ELSE configuration_location END,
+          updated_at = NOW(),
+          version = version + 1
+        WHERE id = $38
+      `, [
+        name ? String(name).trim() : null,                                               // $1
+        description !== undefined,                                                       // $2
+        description ? String(description).trim() : null,                                 // $3
+        cat,                                                                             // $4
+        status ? String(status) : null,                                                  // $5
+        dom !== undefined,                                                               // $6
+        dom !== undefined ? dom : null,                                                  // $7
+        subdomainPattern !== undefined,                                                  // $8
+        subdomainPattern ? String(subdomainPattern).trim() : null,                       // $9
+        hostingProvider !== undefined,                                                   // $10
+        hostingProvider ? String(hostingProvider) : null,                                // $11
+        deploymentUrl !== undefined,                                                     // $12
+        deploymentUrl ? String(deploymentUrl).trim() : null,                             // $13
+        healthEndpoint !== undefined,                                                    // $14
+        healthEndpoint ? String(healthEndpoint).trim() : null,                           // $15
+        databaseProvider !== undefined,                                                  // $16
+        databaseProvider ? String(databaseProvider) : null,                              // $17
+        databaseLocation !== undefined,                                                  // $18
+        databaseLocation ? String(databaseLocation).trim() : null,                       // $19
+        databaseConnectionString !== undefined,                                          // $20
+        databaseConnectionString ? String(databaseConnectionString).trim() : null,       // $21
+        dbUrlDevelopment !== undefined,                                                  // $22
+        dbUrlDevelopment ? String(dbUrlDevelopment).trim() : null,                       // $23
+        dbUrlStaging !== undefined,                                                      // $24
+        dbUrlStaging ? String(dbUrlStaging).trim() : null,                               // $25
+        dbUrlProduction !== undefined,                                                   // $26
+        dbUrlProduction ? String(dbUrlProduction).trim() : null,                         // $27
+        dbCredentialsReference !== undefined,                                            // $28
+        dbCredentialsReference ? String(dbCredentialsReference).trim() : null,           // $29
+        defaultIsolationMode !== undefined,                                              // $30
+        defaultIsolationMode ? String(defaultIsolationMode) : null,                      // $31
+        schemaPrefix !== undefined,                                                      // $32
+        schemaPrefix ? String(schemaPrefix).trim() : null,                               // $33
+        ddlTemplatePath !== undefined,                                                   // $34
+        ddlTemplatePath ? String(ddlTemplatePath).trim() : null,                         // $35
+        configurationLocation !== undefined,                                             // $36
+        configurationLocation ? String(configurationLocation).trim() : null,             // $37
+        product.id,                                                                      // $38
+      ]);
+
+      const updated = await queryOne(`
+        SELECT p.id AS "productId", p.id AS "repositoryId",
+               p.product_code AS "productCode",
+               p.name, p.description, p.status,
+               COALESCE(p.product_category, 'ENTERPRISE_OPERATIONS') AS "productCategory",
+               COUNT(DISTINCT tp.tenant_id)::int AS "customerCount",
+               COALESCE(p.domain, p.base_url) AS "domain",
+               p.subdomain_pattern AS "subdomainPattern",
+               COALESCE(p.hosting_provider, 'VERCEL') AS "hostingProvider",
+               p.deployment_url AS "deploymentUrl",
+               COALESCE(p.health_endpoint, '/api/v1/health') AS "healthEndpoint",
+               COALESCE(p.database_provider, 'AIVEN') AS "databaseProvider",
+               p.database_location AS "databaseLocation",
+               p.database_connection_string AS "databaseConnectionString",
+               p.db_url_development AS "dbUrlDevelopment",
+               p.db_url_staging AS "dbUrlStaging",
+               COALESCE(p.db_url_production, p.database_connection_string) AS "dbUrlProduction",
+               p.db_credentials_reference AS "dbCredentialsReference",
+               COALESCE(p.default_isolation_mode, 'SCHEMA_PER_TENANT') AS "defaultIsolationMode",
+               p.schema_prefix AS "schemaPrefix",
+               p.ddl_template_path AS "ddlTemplatePath",
+               p.configuration_location AS "configurationLocation",
+               p.created_at AS "createdAt",
+               p.updated_at AS "updatedAt"
+        FROM public.products p
+        LEFT JOIN public.tenant_products tp ON tp.product_id = p.id AND tp.status = 'ACTIVE'
+        WHERE p.id = $1
+        GROUP BY p.id
+      `, [product.id]);
+
+      return json(updated);
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
+  // ── PUT /product-repository/:productId/customers/:tenantId ──────────────────
+  if (p0 === 'product-repository' && p1 && p2 === 'customers' && p3) {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const { tenantSchema, databaseName, contactPerson, contactEmail } = body as Record<string, unknown>;
+
+      const product = await queryOne<{ id: string }>(`
+        SELECT id FROM public.products WHERE id::text = $1 OR product_code = $1 LIMIT 1
+      `, [p1]);
+      if (!product) return apiError(`Product '${p1}' not found`, 404, 'PRODUCT_NOT_FOUND');
+
+      const tenant = await queryOne<{ id: string; tenant_code: string }>(`
+        SELECT id, tenant_code FROM public.tenants WHERE id::text = $1 OR tenant_code = $1 LIMIT 1
+      `, [p3]);
+      if (!tenant) return apiError(`Tenant '${p3}' not found`, 404, 'TENANT_NOT_FOUND');
+
+      await execute(`
+        INSERT INTO public.product_repository_customers (
+          id, version, product_id, tenant_id, tenant_schema, database_name,
+          contact_person, contact_email, created_at, updated_at
+        ) VALUES (
+          gen_random_uuid(), 0, $1, $2, $3, $4, $5, $6, NOW(), NOW()
+        )
+        ON CONFLICT (product_id, tenant_id) DO UPDATE SET
+          tenant_schema = EXCLUDED.tenant_schema,
+          database_name = EXCLUDED.database_name,
+          contact_person = EXCLUDED.contact_person,
+          contact_email = EXCLUDED.contact_email,
+          updated_at = NOW(),
+          version = public.product_repository_customers.version + 1
+      `, [
+        product.id,
+        tenant.id,
+        tenantSchema ? String(tenantSchema).trim() : null,
+        databaseName ? String(databaseName).trim() : null,
+        contactPerson ? String(contactPerson).trim() : null,
+        contactEmail ? String(contactEmail).trim() : null,
+      ]);
+
+      if (tenantSchema) {
+        await execute(`
+          UPDATE public.tenant_resources SET schema_name = $1, updated_at = NOW()
+          WHERE tenant_id = $2 AND product_id = $3
+        `, [String(tenantSchema).trim(), tenant.id, product.id]);
+      }
+
+      return json({
+        tenantId: tenant.id,
+        tenantCode: tenant.tenant_code,
+        tenantSchema,
+        databaseName,
+        contactPerson,
+        contactEmail,
+      });
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
   return json({ status: 'ok' });
 }
 
@@ -1613,6 +1917,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pa
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   const [p0, p1, p2, p3] = path;
+
+  // DELETE /product-repository/:productId
+  if (p0 === 'product-repository' && p1 && !p2) {
+    try {
+      const product = await queryOne<{ id: string }>(`
+        SELECT id FROM public.products WHERE id::text = $1 OR product_code = $1 LIMIT 1
+      `, [p1]);
+      if (!product) return apiError(`Product '${p1}' not found`, 404, 'PRODUCT_NOT_FOUND');
+
+      await execute('DELETE FROM public.product_repository_customers WHERE product_id = $1', [product.id]);
+      await execute('DELETE FROM public.products WHERE id = $1', [product.id]);
+      return json({ status: 'deleted' });
+    } catch (err) {
+      return dbError(err);
+    }
+  }
 
   // DELETE /tenants/:id
   if (p0 === 'tenants' && p1 && !p2) {

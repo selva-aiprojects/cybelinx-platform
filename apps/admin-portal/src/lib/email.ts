@@ -144,8 +144,9 @@ export async function sendWelcomeEmail(params: WelcomeEmailParams): Promise<{ su
       console.warn(`[EMAIL] Failed to send email to ${to}:`, data);
       return { success: false, error: data.message || 'Resend API error' };
     }
-  } catch (err: any) {
-    console.error(`[EMAIL] Error dispatching welcome email:`, err.message);
-    return { success: false, error: err.message };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[EMAIL] Error dispatching welcome email:`, msg);
+    return { success: false, error: msg };
   }
 }

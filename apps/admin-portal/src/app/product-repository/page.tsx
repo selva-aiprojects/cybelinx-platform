@@ -543,9 +543,11 @@ function CreateProductModal({ onClose, onCreated }: { onClose: () => void; onCre
                   value={productCategory}
                   onChange={(e) => setProductCategory(e.target.value)}
                 >
+                  <option value="REGULATED_MARKETS">Healthcare & Regulated Markets</option>
+                  <option value="ENTERPRISE_OPERATIONS">Enterprise Operations & HRM</option>
+                  <option value="CORE_PAAS_AI">Core PaaS, Retail & AI</option>
                   <option value="HEALTHCARE">Healthcare & Clinical EHR</option>
                   <option value="RETAIL_COMMERCE">Retail & E-Commerce</option>
-                  <option value="ENTERPRISE_OPERATIONS">Enterprise Operations & HRM</option>
                   <option value="DIAGNOSTIC_LABS">Diagnostic Laboratories</option>
                 </select>
               </div>
