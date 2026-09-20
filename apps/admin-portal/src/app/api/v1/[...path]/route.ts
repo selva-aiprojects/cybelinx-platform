@@ -373,7 +373,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
                  tp.created_at AS "createdAt"
           FROM public.tenant_products tp
           JOIN public.products p ON p.id = tp.product_id
-          JOIN public.plans pl ON pl.id = tp.plan_id
+          LEFT JOIN public.plans pl ON pl.id = tp.plan_id
           WHERE tp.tenant_id::text = $1
           ORDER BY tp.activated_at DESC
         `, [tenant.tenantId]);
@@ -866,17 +866,204 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
   if (p0 === 'tenants' && p1 && p2 === 'products') {
     try {
       const body = await req.json().catch(() => ({}));
-      const { productId, planId, appUrl } = body as Record<string, string>;
-      if (!productId) return apiError('productId is required', 400, 'MISSING_FIELDS');
+      const { productId, productCode, planId, planCode, appUrl } = body as Record<string, string>;
 
-      const tpId = crypto.randomUUID();
+      // 1. Resolve tenant
+      const tenant = await queryOne<{ id: string; tenant_code: string; name: string }>(`
+        SELECT id, tenant_code, name FROM public.tenants
+        WHERE id::text = $1 OR tenant_code = $1
+        LIMIT 1
+      `, [p1]);
+      if (!tenant) return apiError(`Tenant '${p1}' not found`, 404, 'TENANT_NOT_FOUND');
+
+      // 2. Resolve Product
+      let resolvedProductId: string | null = productId || null;
+      let resolvedProductCode: string | null = productCode || null;
+      let resolvedAppUrl: string | null = appUrl || null;
+
+      if (!resolvedProductId && resolvedProductCode) {
+        const prod = await queryOne<{ id: string; product_code: string; app_url: string | null }>(`
+          SELECT id, product_code, app_url FROM public.products
+          WHERE product_code = $1 OR id::text = $1
+          LIMIT 1
+        `, [resolvedProductCode.toUpperCase()]);
+        if (prod) {
+          resolvedProductId = prod.id;
+          resolvedProductCode = prod.product_code;
+          if (!resolvedAppUrl) resolvedAppUrl = prod.app_url || null;
+        }
+      } else if (resolvedProductId && !resolvedProductCode) {
+        const prod = await queryOne<{ id: string; product_code: string; app_url: string | null }>(`
+          SELECT id, product_code, app_url FROM public.products
+          WHERE id::text = $1 LIMIT 1
+        `, [resolvedProductId]);
+        if (prod) {
+          resolvedProductCode = prod.product_code;
+          if (!resolvedAppUrl) resolvedAppUrl = prod.app_url || null;
+        }
+      }
+
+      if (!resolvedProductId) {
+        return apiError('Product not found. Either productId or productCode is required', 400, 'MISSING_FIELDS');
+      }
+
+      // 3. Resolve Plan
+      let resolvedPlanId = planId || null;
+      let resolvedPlanCode = planCode || null;
+
+      if (!resolvedPlanId && resolvedPlanCode) {
+        const p = await queryOne<{ id: string; plan_code: string }>(`
+          SELECT id, plan_code FROM public.plans
+          WHERE product_id::text = $1 AND (plan_code = $2 OR id::text = $2)
+          LIMIT 1
+        `, [resolvedProductId, resolvedPlanCode.toUpperCase()]);
+        resolvedPlanId = p?.id || null;
+        if (p?.plan_code) resolvedPlanCode = p.plan_code;
+      }
+      if (!resolvedPlanId) {
+        const defaultPlan = await queryOne<{ id: string; plan_code: string }>(`
+          SELECT id, plan_code FROM public.plans WHERE product_id::text = $1 ORDER BY plan_code LIMIT 1
+        `, [resolvedProductId]);
+        resolvedPlanId = defaultPlan?.id || null;
+        resolvedPlanCode = defaultPlan?.plan_code || 'DEFAULT';
+      }
+
+      // 4. Resolve App URL dynamically if not specified
+      if (!resolvedAppUrl) {
+        const slug = tenant.tenant_code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        resolvedAppUrl = `https://${slug}.${resolvedProductCode?.toLowerCase() || 'cloud'}.jioplix.com`;
+      }
+
+      // 5. Upsert Tenant Product
+      const existing = await queryOne<{ id: string }>(`
+        SELECT id FROM public.tenant_products
+        WHERE tenant_id::text = $1 AND product_id::text = $2
+        LIMIT 1
+      `, [tenant.id, resolvedProductId]);
+
+      let tpId = existing?.id;
+      if (existing) {
+        await execute(`
+          UPDATE public.tenant_products
+          SET status = 'ACTIVE', plan_id = COALESCE($1, plan_id), app_url = COALESCE($2, app_url), updated_at = NOW()
+          WHERE id = $3
+        `, [resolvedPlanId, resolvedAppUrl, existing.id]);
+      } else {
+        tpId = crypto.randomUUID();
+        await execute(`
+          INSERT INTO public.tenant_products
+            (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
+          VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
+        `, [tpId, tenant.id, resolvedProductId, resolvedPlanId, resolvedAppUrl]);
+      }
+
+      // Ensure physical schema and tenant_resources record exist
+      try {
+        const schemaName = `${(resolvedProductCode || 'tenant').toLowerCase()}_${tenant.tenant_code.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const resource = await queryOne<{ id: string }>(`
+          SELECT id FROM public.resource_catalog WHERE resource_type_code = 'POSTGRES_SCHEMA' LIMIT 1
+        `);
+        const region = await queryOne<{ id: string }>(`SELECT id FROM public.regions LIMIT 1`);
+        if (resource && region) {
+          const resExists = await queryOne<{ id: string }>(`
+            SELECT id FROM public.tenant_resources WHERE tenant_id::text = $1 AND product_id::text = $2 LIMIT 1
+          `, [tenant.id, resolvedProductId]);
+          if (!resExists) {
+            await execute(`
+              INSERT INTO public.tenant_resources
+                (id, tenant_id, product_id, resource_id, isolation_mode, schema_name, region_id, environment, status, provisioning_state, migration_version, tenant_product_id, created_at, updated_at, version)
+              VALUES ($1, $2, $3, $4, 'SCHEMA_PER_TENANT', $5, $6, 'PRODUCTION', 'ACTIVE', 'SUCCEEDED', 1, $7, NOW(), NOW(), 1)
+            `, [crypto.randomUUID(), tenant.id, resolvedProductId, resource.id, schemaName, region.id, tpId]);
+            try {
+              await execute(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
+            } catch (sErr) {}
+          }
+        }
+      } catch (rErr) {}
+
+      // Emit platform audit event
+      try {
+        await execute(`
+          INSERT INTO public.audit_events (id, action, entity_type, entity_id, actor_type, metadata, occurred_at)
+          VALUES ($1, 'tenant.product_attached', 'TENANT', $2, 'SYSTEM', $3, NOW())
+        `, [
+          crypto.randomUUID(),
+          tenant.id,
+          JSON.stringify({
+            tenantCode: tenant.tenant_code,
+            productCode: resolvedProductCode,
+            planCode: resolvedPlanCode,
+            appUrl: resolvedAppUrl,
+          })
+        ]);
+      } catch (aErr) {}
+
+      return json({
+        subscription: {
+          tenantProductId: tpId,
+          tenantId: tenant.id,
+          productId: resolvedProductId,
+          productCode: resolvedProductCode,
+          planId: resolvedPlanId,
+          planCode: resolvedPlanCode,
+          appUrl: resolvedAppUrl,
+          status: 'ACTIVE'
+        }
+      }, 201);
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
+  // ── Register Resource: POST /tenants/:id/resources ──────────────────────────
+  if (p0 === 'tenants' && p1 && p2 === 'resources') {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const { productCode, resourceTypeCode, isolationMode, environment, schemaName } = body as Record<string, string>;
+
+      const tenant = await queryOne<{ id: string; tenant_code: string }>(`
+        SELECT id, tenant_code FROM public.tenants WHERE id::text = $1 OR tenant_code = $1 LIMIT 1
+      `, [p1]);
+      if (!tenant) return apiError(`Tenant '${p1}' not found`, 404, 'TENANT_NOT_FOUND');
+
+      const prod = await queryOne<{ id: string }>(`
+        SELECT id FROM public.products WHERE product_code = $1 OR id::text = $1 LIMIT 1
+      `, [(productCode || 'JIOPLIX').toUpperCase()]);
+
+      const resCatalog = await queryOne<{ id: string }>(`
+        SELECT id FROM public.resource_catalog WHERE resource_type_code = $1 OR id::text = $1 LIMIT 1
+      `, [resourceTypeCode || 'POSTGRES_SCHEMA']);
+
+      const region = await queryOne<{ id: string }>(`SELECT id FROM public.regions LIMIT 1`);
+      const targetSchema = schemaName || `${(productCode || 'app').toLowerCase()}_${tenant.tenant_code.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      const resourceId = crypto.randomUUID();
+
       await execute(`
-        INSERT INTO public.tenant_products
-          (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
-        VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
-      `, [tpId, p1, productId, planId || null, appUrl || null]);
+        INSERT INTO public.tenant_resources
+          (id, tenant_id, product_id, resource_id, isolation_mode, schema_name, region_id, environment, status, provisioning_state, migration_version, created_at, updated_at, version)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ACTIVE', 'SUCCEEDED', 1, NOW(), NOW(), 1)
+      `, [
+        resourceId,
+        tenant.id,
+        prod?.id || null,
+        resCatalog?.id || null,
+        isolationMode || 'SCHEMA_PER_TENANT',
+        targetSchema,
+        region?.id || null,
+        environment || 'PRODUCTION'
+      ]);
 
-      return json({ subscription: { tenantProductId: tpId, status: 'ACTIVE' } }, 201);
+      try {
+        await execute(`CREATE SCHEMA IF NOT EXISTS ${targetSchema}`);
+      } catch (sErr) {}
+
+      return json({
+        tenantResourceId: resourceId,
+        tenantId: tenant.id,
+        schemaName: targetSchema,
+        status: 'ACTIVE',
+        provisioningState: 'SUCCEEDED'
+      }, 201);
     } catch (err) {
       return dbError(err);
     }
@@ -1138,7 +1325,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ path
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
-  const [p0, p1, p2] = path;
+  const [p0, p1, p2, p3, p4] = path;
 
   // PATCH /products/:id/status
   if (p0 === 'products' && p1 && p2 === 'status') {
@@ -1163,6 +1350,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pa
         UPDATE public.tenant_products SET status = $1, updated_at = NOW() WHERE id::text = $2
       `, [status, p1]);
       return json({ tenantProductId: p1, status });
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
+  // PATCH /tenants/:id/products/:productCode/status
+  if (p0 === 'tenants' && p1 && p2 === 'products' && p3 && p4 === 'status') {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const { status } = body as { status: string };
+      await execute(`
+        UPDATE public.tenant_products tp
+        SET status = $1, updated_at = NOW()
+        FROM public.tenants t, public.products p
+        WHERE tp.tenant_id = t.id AND tp.product_id = p.id
+          AND (t.id::text = $2 OR t.tenant_code = $2)
+          AND (p.product_code = $3 OR p.id::text = $3)
+      `, [status, p1, p3.toUpperCase()]);
+      return json({ tenantId: p1, productCode: p3, status });
     } catch (err) {
       return dbError(err);
     }
@@ -1194,7 +1400,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     try {
       await execute(`
         DELETE FROM public.tenant_products tp
-        WHERE tp.tenant_id::text = $1 AND tp.product_id IN (SELECT id FROM public.products WHERE product_code = $2)
+        USING public.tenants t, public.products p
+        WHERE tp.tenant_id = t.id AND tp.product_id = p.id
+          AND (t.id::text = $1 OR t.tenant_code = $1)
+          AND (p.product_code = $2 OR p.id::text = $2)
       `, [p1, p3.toUpperCase()]);
       return json({ tenantId: p1, productCode: p3, status: 'DETACHED' });
     } catch (err) {
