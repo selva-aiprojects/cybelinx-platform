@@ -7,6 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute, getDatabaseDiagnostics } from '@/lib/db';
+import { sendWelcomeEmail } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -992,6 +993,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         ]);
       } catch (aErr) {}
 
+      // 6. Dispatch Welcome Email asynchronously to tenant's admin email
+      try {
+        const bodyObj = body as Record<string, string>;
+        const emailRecipient = (bodyObj.adminEmail || bodyObj.contactEmail || `admin@${tenant.tenant_code.toLowerCase()}.com`).trim();
+        sendWelcomeEmail({
+          to: emailRecipient,
+          tenantName: tenant.name,
+          tenantCode: tenant.tenant_code,
+          productCode: resolvedProductCode || 'JIOPLIX',
+          productName: resolvedProductCode === 'JIOPLIX' ? 'Jioplix HIMS' : (resolvedProductCode || 'Platform'),
+          planCode: resolvedPlanCode || 'ENTERPRISE',
+          appUrl: resolvedAppUrl || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com/login`,
+          adminEmail: emailRecipient,
+          tempPassword: 'Admin@123',
+          contactName: tenant.name,
+        }).catch(e => console.warn('[EMAIL] Automatic welcome email notice:', e));
+      } catch (eErr) {}
+
       return json({
         subscription: {
           tenantProductId: tpId,
@@ -1004,6 +1023,57 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
           status: 'ACTIVE'
         }
       }, 201);
+    } catch (err) {
+      return dbError(err);
+    }
+  }
+
+  // ── Explicit Send Welcome Email: POST /tenants/:id/welcome-email ────────────
+  if (p0 === 'tenants' && p1 && p2 === 'welcome-email') {
+    try {
+      const body = await req.json().catch(() => ({}));
+      const { to, productCode, tempPassword } = body as Record<string, string>;
+
+      const tenant = await queryOne<{ id: string; tenant_code: string; name: string }>(`
+        SELECT id, tenant_code, name FROM public.tenants
+        WHERE id::text = $1 OR tenant_code = $1 LIMIT 1
+      `, [p1]);
+      if (!tenant) return apiError(`Tenant '${p1}' not found`, 404, 'TENANT_NOT_FOUND');
+
+      // Find primary product subscription
+      const sub = await queryOne<{ productCode: string; planCode: string; appUrl: string }>(`
+        SELECT p.product_code AS "productCode", pl.plan_code AS "planCode", tp.app_url AS "appUrl"
+        FROM public.tenant_products tp
+        JOIN public.products p ON p.id = tp.product_id
+        LEFT JOIN public.plans pl ON pl.id = tp.plan_id
+        WHERE tp.tenant_id = $1 AND ($2::text IS NULL OR p.product_code = $2)
+        ORDER BY tp.created_at DESC LIMIT 1
+      `, [tenant.id, productCode ? productCode.toUpperCase() : null]);
+
+      const resolvedProductCode = sub?.productCode || productCode || 'JIOPLIX';
+      const resolvedPlanCode = sub?.planCode || 'ENTERPRISE';
+      const resolvedAppUrl = sub?.appUrl || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com/login`;
+      const recipient = (to || `admin@${tenant.tenant_code.toLowerCase()}.com`).trim();
+
+      const result = await sendWelcomeEmail({
+        to: recipient,
+        tenantName: tenant.name,
+        tenantCode: tenant.tenant_code,
+        productCode: resolvedProductCode,
+        productName: resolvedProductCode === 'JIOPLIX' ? 'Jioplix HIMS' : resolvedProductCode,
+        planCode: resolvedPlanCode,
+        appUrl: resolvedAppUrl,
+        adminEmail: recipient,
+        tempPassword: tempPassword || 'Admin@123',
+        contactName: tenant.name,
+      });
+
+      return json({
+        success: result.success,
+        messageId: result.id,
+        sentTo: recipient,
+        error: result.error,
+      }, result.success ? 200 : 400);
     } catch (err) {
       return dbError(err);
     }
@@ -1252,6 +1322,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
       } catch (outboxErr) {
         console.warn('Outbox event notice:', outboxErr);
       }
+
+      // Dispatch Welcome Email asynchronously
+      sendWelcomeEmail({
+        to: resolvedEmail,
+        tenantName,
+        tenantCode: tenantCode.toUpperCase(),
+        productCode: product.productCode,
+        productName: product.productCode === 'JIOPLIX' ? 'Jioplix HIMS' : (product.name || product.productCode),
+        planCode: plan?.planCode || resolvedPlanCode,
+        appUrl: targetDomain,
+        adminEmail: resolvedEmail,
+        tempPassword: 'Admin@123',
+        contactName: tenantName,
+      }).catch(e => console.warn('[EMAIL] Onboarding welcome email notice:', e));
 
       return json({
         status: 'SUCCESS',

@@ -52,6 +52,25 @@ export default function TenantDetailPage() {
   if (!detail.data) return null;
 
   const { tenant, products, resources, provisioningJobs, memberships } = detail.data;
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  async function sendWelcomeEmailAction() {
+    setSendingEmail(true);
+    try {
+      const res = await fetch(`/api/v1/tenants/${tenantId}/welcome-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to dispatch email');
+      notify('success', `Welcome email sent successfully to ${data.sentTo}`);
+    } catch (err) {
+      notify('error', describeError(err));
+    } finally {
+      setSendingEmail(false);
+    }
+  }
 
   async function suspend() {
     try {
@@ -140,7 +159,17 @@ export default function TenantDetailPage() {
             <span className="v">{formatDate(tenant.createdAt)}</span>
           </div>
         </div>
-        <div className="flex">
+        <div className="flex" style={{ gap: '0.5rem' }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={sendWelcomeEmailAction}
+            disabled={sendingEmail}
+            title="Dispatch welcome email with credentials and workspace URL"
+            style={{ border: '1px solid #38bdf8', color: '#38bdf8' }}
+          >
+            {sendingEmail ? '✉ Sending...' : '✉ Send Welcome Email'}
+          </button>
           {tenant.status !== 'SUSPENDED' && (
             <button type="button" className="btn btn-danger btn-sm" onClick={suspend}>
               Suspend
