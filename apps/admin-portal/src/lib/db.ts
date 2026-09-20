@@ -8,13 +8,21 @@
  *   4. SPRING_DATASOURCE_URL
  *
  * Parses connection configuration directly to bypass URL parser strictness
- * and handle common copy-paste artifacts (quotes, jdbc: prefix, unencoded passwords, etc.).
+ * and handle common copy-paste artifacts (quotes, jdbc: prefix, unencoded passwords, typos).
  */
 import { Pool, PoolClient, PoolConfig } from 'pg';
 
 let pool: Pool | null = null;
-let resolvedEnvVar = 'NONE';
-let resolvedConfig: PoolConfig | null = null;
+let lastRawStr = '';
+
+export function safeMask(str: string): string {
+  if (!str) return 'EMPTY';
+  return str.replace(/^(postgres(?:ql)?:\/\/)([^:@]+)(?::([^@]+))?@/i, (m, proto, u, p) => {
+    const userMasked = u ? u.slice(0, 3) + '***' : '***';
+    const passMasked = p ? '***' : '';
+    return `${proto}${userMasked}:${passMasked}@`;
+  });
+}
 
 export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar: string } | null {
   const candidates: { key: string; val: string | undefined }[] = [
@@ -38,6 +46,7 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
   }
 
   if (!rawStr) return null;
+  lastRawStr = rawStr;
 
   let str = rawStr.trim().replace(/^["']|["'];?$/g, '').trim();
   if (str.startsWith('jdbc:')) {
@@ -45,6 +54,9 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
   }
   // Strip scheme
   str = str.replace(/^postgres(?:ql)?:\/\//i, '');
+
+  // Fix common typo: slash instead of dot before domain (e.g. .f/aivencloud.com -> .f.aivencloud.com)
+  str = str.replace(/([a-zA-Z0-9_-]+)\/(aivencloud\.com)/gi, '$1.$2');
 
   let user = '';
   let password = '';
@@ -93,6 +105,17 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
     host = hostPort || 'localhost';
   }
 
+  // Self-heal Aiven hostname if found anywhere in the string
+  const aivenMatch = rawStr.match(/([a-zA-Z0-9_.-]+(?:\.|\/)aivencloud\.com)(?::(\d+))?/i);
+  if (aivenMatch) {
+    host = aivenMatch[1].replace('/', '.');
+    if (aivenMatch[2]) port = parseInt(aivenMatch[2], 10);
+  }
+
+  if (rawStr.includes('cybelinx-platform')) {
+    database = 'cybelinx-platform';
+  }
+
   try {
     user = decodeURIComponent(user);
   } catch {}
@@ -100,7 +123,7 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
     password = decodeURIComponent(password);
   } catch {}
 
-  const finalUser = user || process.env.SPRING_DATASOURCE_USERNAME || process.env.PGUSER || 'cybelinx';
+  const finalUser = user || process.env.SPRING_DATASOURCE_USERNAME || process.env.PGUSER || (rawStr.includes('avnadmin') ? 'avnadmin' : 'cybelinx');
   const finalPass = password || process.env.SPRING_DATASOURCE_PASSWORD || process.env.PGPASSWORD || '';
 
   const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
@@ -126,6 +149,7 @@ export function getDatabaseDiagnostics(): {
   target?: string;
   database?: string;
   hasSsl: boolean;
+  rawSample?: string;
 } {
   const res = parseDatabaseConfig();
   if (!res) {
@@ -139,6 +163,7 @@ export function getDatabaseDiagnostics(): {
     target: `${config.user}@${config.host}:${config.port}`,
     database: config.database,
     hasSsl: Boolean(config.ssl),
+    rawSample: safeMask(lastRawStr),
   };
 }
 
@@ -150,8 +175,6 @@ export function getPool(): Pool {
         'DATABASE_URL is not configured. Set DATABASE_URL in Vercel project environment variables.'
       );
     }
-    resolvedEnvVar = res.envVar;
-    resolvedConfig = res.config;
 
     pool = new Pool(res.config);
 
