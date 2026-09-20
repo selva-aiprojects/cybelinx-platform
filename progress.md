@@ -446,4 +446,12 @@ This phase tracks the standardized onboarding, database isolation, and SSO integ
 - [ ] Candidate & proctor SSO authentication gateway
 - [ ] Assessment result webhook ingestion into Cybelinx usage metering (`platform_usage_records`)
 
+#### 7. Product Target Database Decoupling & Resolution — `[x] COMPLETE (LIVE)`
+- [x] Eliminated hardcoded `'cybelinx-platform'` fallback in `GET /api/v1/product-repository/:productId` ([route.ts](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/api/v1/%5B...path%5D/route.ts)).
+- [x] Dynamic SQL resolver accurately reports the tenant's remote dedicated database provider and cluster (`Supabase PostgreSQL (aws-1-ap-southeast-1)` for Jioplix, `Neon Serverless PostgreSQL (storeai-db)` for StoreAI, etc.).
+- [x] Migrated all existing live customer tenant mappings in `public.product_repository_customers` on Aiven PostgreSQL (`ACME`, `NIXON`, `OMEGA_HEALTHCARE_01`, `WELLNESS`, `ABCCORP`).
+- [x] Populated `public.products` database topology across all products (`JIOPLIX`, `STOREAI`, `JIOPLIX_SMART`, `LIMS`, `SYNTHALYST`, `CYBEHEALTH`).
+- [x] Cleaned up UI placeholders, defaults, and fallback labels in [page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/product-repository/page.tsx) and [[productId]/page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/product-repository/%5BproductId%5D/page.tsx).
+- [x] Successfully built and deployed to production Vercel; verified live API endpoints return decoupled target database names for all customers and products.
+
 
