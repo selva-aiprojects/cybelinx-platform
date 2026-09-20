@@ -26,6 +26,9 @@ export function safeMask(str: string): string {
 
 export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar: string } | null {
   const candidates: { key: string; val: string | undefined }[] = [
+    { key: 'AIVEN_DATABASE_URL', val: process.env.AIVEN_DATABASE_URL },
+    { key: 'AIVEN_SERVICE_URI', val: process.env.AIVEN_SERVICE_URI },
+    { key: 'AIVEN_URL', val: process.env.AIVEN_URL },
     { key: 'DATABASE_URL', val: process.env.DATABASE_URL },
     { key: 'POSTGRES_URL', val: process.env.POSTGRES_URL },
     { key: 'POSTGRES_PRISMA_URL', val: process.env.POSTGRES_PRISMA_URL },
@@ -36,11 +39,22 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
   let sourceEnv = 'DIRECT';
 
   if (!rawStr) {
+    // Check candidates, skipping known broken truncated strings if another candidate exists
     for (const c of candidates) {
-      if (c.val && c.val.trim().length > 0) {
+      if (c.val && c.val.trim().length > 0 && !c.val.includes('@://aivencloud.com')) {
         rawStr = c.val;
         sourceEnv = c.key;
         break;
+      }
+    }
+    // Fallback to any non-empty candidate
+    if (!rawStr) {
+      for (const c of candidates) {
+        if (c.val && c.val.trim().length > 0) {
+          rawStr = c.val;
+          sourceEnv = c.key;
+          break;
+        }
       }
     }
   }
@@ -128,7 +142,7 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
   } catch {}
 
   const finalUser = user || process.env.SPRING_DATASOURCE_USERNAME || process.env.PGUSER || (rawStr.includes('avnadmin') ? 'avnadmin' : 'cybelinx');
-  const finalPass = password || process.env.AIVEN_PASSWORD || process.env.SPRING_DATASOURCE_PASSWORD || process.env.PGPASSWORD || '';
+  const finalPass = process.env.AIVEN_PASSWORD || process.env.SPRING_DATASOURCE_PASSWORD || password || process.env.PGPASSWORD || '';
 
   const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
 
@@ -154,10 +168,28 @@ export function getDatabaseDiagnostics(): {
   database?: string;
   hasSsl: boolean;
   rawSample?: string;
+  availableEnvVars: string[];
+  hasAivenPassword: boolean;
 } {
+  const availableEnvVars = [
+    'AIVEN_DATABASE_URL',
+    'AIVEN_SERVICE_URI',
+    'AIVEN_URL',
+    'DATABASE_URL',
+    'POSTGRES_URL',
+    'POSTGRES_PRISMA_URL',
+    'SPRING_DATASOURCE_URL',
+  ].filter((k) => Boolean(process.env[k]));
+
   const res = parseDatabaseConfig();
   if (!res) {
-    return { configured: false, envVar: 'NONE', hasSsl: false };
+    return {
+      configured: false,
+      envVar: 'NONE',
+      hasSsl: false,
+      availableEnvVars,
+      hasAivenPassword: Boolean(process.env.AIVEN_PASSWORD),
+    };
   }
 
   const { config, envVar } = res;
@@ -168,6 +200,8 @@ export function getDatabaseDiagnostics(): {
     database: config.database,
     hasSsl: Boolean(config.ssl),
     rawSample: safeMask(lastRawStr),
+    availableEnvVars,
+    hasAivenPassword: Boolean(process.env.AIVEN_PASSWORD),
   };
 }
 
