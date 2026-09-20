@@ -70,8 +70,8 @@ export default function SubscriptionsPage() {
                   <tr key={row.tenantProductId}>
                     <td>
                       <Link href={`/tenants/${row.tenantId}`} className="row-link">
-                        <strong className="mono">{row.tenant.tenantCode}</strong>
-                        <div className="faint small">{row.tenant.name}</div>
+                        <strong className="mono">{row.tenant?.tenantCode ?? (row as any).tenantCode}</strong>
+                        <div className="faint small">{row.tenant?.name ?? (row as any).tenantName}</div>
                       </Link>
                     </td>
                     <td className="mono" style={{ fontWeight: 600, color: '#0284c7' }}>

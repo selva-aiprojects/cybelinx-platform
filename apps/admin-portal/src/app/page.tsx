@@ -37,19 +37,13 @@ export default function DashboardPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const products = useAsyncData(
-    () =>
-      token
-        ? api.products.list({ limit: 5 })
-        : Promise.resolve({ data: [], meta: { page: 1, limit: 5, total: 0, totalPages: 0 } }),
-    [token],
+    () => api.products.list({ limit: 5 }),
+    [],
   );
 
   const tenants = useAsyncData(
-    () =>
-      token
-        ? api.tenants.list({ limit: 5 })
-        : Promise.resolve({ data: [], meta: { page: 1, limit: 5, total: 0, totalPages: 0 } }),
-    [token],
+    () => api.tenants.list({ limit: 5 }),
+    [],
   );
 
   useEffect(() => {
@@ -201,11 +195,11 @@ export default function DashboardPage() {
 
       <div className="stats-grid">
         <div className="stat" style={{ borderLeft: '4px solid #3B82F6' }}>
-          <div className="stat-value">{token ? tenantTotal ?? (tenants.loading ? '…' : '—') : '—'}</div>
+          <div className="stat-value">{tenantTotal ?? (tenants.loading ? '…' : '—')}</div>
           <div className="stat-label">Active Tenants</div>
         </div>
         <div className="stat" style={{ borderLeft: '4px solid #10B981' }}>
-          <div className="stat-value">{token ? productTotal ?? (products.loading ? '…' : '—') : '—'}</div>
+          <div className="stat-value">{productTotal ?? (products.loading ? '…' : '—')}</div>
           <div className="stat-label">SaaS Products</div>
         </div>
         <div className="stat" style={{ borderLeft: '4px solid #8B5CF6' }}>
@@ -289,11 +283,9 @@ export default function DashboardPage() {
             </Link>
           </div>
           {products.error && <ErrorBanner error={products.error} />}
-          {products.loading && token && !products.data && <LoadingBlock />}
-          {(!token || (products.data && products.data.data.length === 0)) && (
-            <Empty>
-              {!token ? 'Sign in above to view registered products.' : 'No products found.'}
-            </Empty>
+          {products.loading && !products.data && <LoadingBlock />}
+          {products.data && products.data.data.length === 0 && (
+            <Empty>No products found.</Empty>
           )}
           {products.data && products.data.data.length > 0 && (
             <div className="table-wrap">
@@ -334,11 +326,9 @@ export default function DashboardPage() {
             </Link>
           </div>
           {tenants.error && <ErrorBanner error={tenants.error} />}
-          {tenants.loading && token && !tenants.data && <LoadingBlock />}
-          {(!token || (tenants.data && tenants.data.data.length === 0)) && (
-            <Empty>
-              {!token ? 'Sign in above to view provisioned tenants.' : 'No tenants found.'}
-            </Empty>
+          {tenants.loading && !tenants.data && <LoadingBlock />}
+          {tenants.data && tenants.data.data.length === 0 && (
+            <Empty>No tenants found.</Empty>
           )}
           {tenants.data && tenants.data.data.length > 0 && (
             <div className="table-wrap">
