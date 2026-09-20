@@ -953,7 +953,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
       }
 
       if (searchParams.get('redirect') === 'true') {
-        return NextResponse.redirect(launchUrl);
+        return NextResponse.redirect(new URL(launchUrl));
       }
 
       return json({
