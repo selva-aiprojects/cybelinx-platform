@@ -41,6 +41,7 @@ export default function TenantDetailPage() {
 
   const [attachOpen, setAttachOpen] = useState(false);
   const [resourceOpen, setResourceOpen] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const notify = useCallback((kind: 'success' | 'error', text: string) => {
     setFeedback({ kind, text });
@@ -52,7 +53,6 @@ export default function TenantDetailPage() {
   if (!detail.data) return null;
 
   const { tenant, products, resources, provisioningJobs, memberships } = detail.data;
-  const [sendingEmail, setSendingEmail] = useState(false);
 
   async function sendWelcomeEmailAction() {
     setSendingEmail(true);
