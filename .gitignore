@@ -31,6 +31,7 @@ Thumbs.db
 
 # Docker / infra scratch
 infra/docker/tmp/
+scratch/
 
 # Java / Maven build output
 target/
