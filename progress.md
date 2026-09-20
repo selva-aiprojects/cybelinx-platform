@@ -477,6 +477,21 @@ This phase tracks the standardized onboarding, database isolation, and SSO integ
 - [x] **Live Production Verification**:
   - Verified live endpoint `https://cybelinx-platform-admin-portal.vercel.app/api/v1/auth/sso/token?tenantCode=NEWAGE&productCode=STOREAI` returns status `200 OK` with launchUrl `https://newage.storeai.cybelinx.com/?token=...`.
   - Verified StoreAI API `https://storeai-api.vercel.app/api/v1/auth/me` with minted StoreAI token returns status `200 OK` and activeTenant `Newage Electronics Inc` (`24647a23-d6ef-4865-a4d5-40cf425e5636`).
-
-
+#### 9. StoreAI Supabase SSO Integration & Seamless Dashboard Launch — `[x] COMPLETE (LIVE)`
+- [x] **StoreAI Login Page Upgraded with Supabase SSO**:
+  - Implemented prominent **"⚡ Continue with Supabase SSO"** button at the top of the login form in `D:\Training\working\Cognivectra\Store-AI\main\client\src\pages\Login.tsx`, matching the Jioplix styling (`Sparkles` pulse icon, sky/indigo/purple gradient, clear divider `or sign in with credentials`).
+  - Added `handleSupabaseSso`: dynamically detects tenant slug from hostname (`newage.storeai.cybelinx.com` $\rightarrow$ `newage`), fetches SSO token from Central API (`https://cybelinx-platform-admin-portal.vercel.app/api/v1/auth/sso/token`), stores `store_ai_token` in `localStorage`, loads user profile via `getMe()`, and transitions straight to the dashboard.
+  - Added quick demo login shortcut for `Newage Electronics` (tenant: `newage`).
+- [x] **StoreAI Client & Server API Host Alignment**:
+  - Identified and eliminated stale `https://store-ai-server-1kvq.onrender.com/api/v1` fallback in `D:\Training\working\Cognivectra\Store-AI\main\client\src\services\api.ts`.
+  - Configured client `API_URL` to route dynamically to active production server `https://storeai-backend.vercel.app/api/v1`.
+  - Updated backend Express CORS configuration in `D:\Training\working\Cognivectra\Store-AI\main\server\src\index.ts` to allow cross-origin requests from `https://(tenant).storeai.cybelinx.com` and `https://*.cybelinx.com`.
+  - Deployed backend server to Vercel production (`storeai-backend.vercel.app`); verified HTTP preflight `OPTIONS /api/v1/auth/me` returns `204 No Content` with `Access-Control-Allow-Origin: https://newage.storeai.cybelinx.com`.
+- [x] **Smooth Workspace Launcher UX**:
+  - Added `authChecking` state in `D:\Training\working\Cognivectra\Store-AI\main\client\src\App.tsx` with animated workspace launcher spinner to eliminate any momentary flash of the unauthenticated landing page during initial SSO token validation.
+  - Built and deployed client to Vercel production (`https://*.storeai.cybelinx.com`).
+- [x] **Live End-to-End Browser Verification**:
+  - Ran automated headless Chrome Puppeteer verification on `https://newage.storeai.cybelinx.com/login`.
+  - Captured Screenshot 1 (`newage_login_page.png`): Confirmed login form renders with "⚡ Continue with Supabase SSO" button.
+  - Captured Screenshot 2 (`newage_dashboard_after_sso.png`): Confirmed clicking "⚡ Continue with Supabase SSO" seamlessly executes the token exchange, initializes session, and renders the live `Newage Electronics Inc Executive Dashboard` without requiring password entry.
 
