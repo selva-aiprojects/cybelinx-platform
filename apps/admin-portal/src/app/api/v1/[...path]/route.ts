@@ -952,6 +952,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
         launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
       }
 
+      if (searchParams.get('redirect') === 'true') {
+        return NextResponse.redirect(launchUrl);
+      }
+
       return json({
         ssoToken,
         storeAiToken: storeAiToken || undefined,
