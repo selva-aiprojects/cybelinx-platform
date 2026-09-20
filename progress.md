@@ -458,4 +458,25 @@ This phase tracks the standardized onboarding, database isolation, and SSO integ
 - [x] Cleaned up UI placeholders, defaults, and fallback labels in [page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/product-repository/page.tsx) and [[productId]/page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/product-repository/%5BproductId%5D/page.tsx).
 - [x] Successfully built and deployed to production Vercel; verified live API endpoints return decoupled target database names for all customers and products.
 
+#### 8. Domain Architecture Alignment & Vanity Subdomains — `[x] COMPLETE (LIVE)`
+- [x] **Platform Domain Architecture Rule**:
+  - **Jioplix (`JIOPLIX` / `JIOPLIX_SMART`)**: Operates on its dedicated standalone apex domain: `https://{tenant}.jioplix.com`.
+  - **All Other Cybelinx Products (`STOREAI`, `SYNTHALYST`, `LIMS`, `CYBEHEALTH`, etc.)**: Operate strictly as subdomains of `cybelinx.com`: `https://{tenant}.{product}.cybelinx.com` (e.g. `https://newage.storeai.cybelinx.com`).
+- [x] **Central Control Plane Database Alignment**:
+  - `public.products` updated on Aiven DB: `STOREAI` (`*.storeai.cybelinx.com`), `SYNTHALYST` (`*.synthalyst.cybelinx.com`), `LIMS` (`*.lims.cybelinx.com`), `CYBEHEALTH` (`*.cybehealth.cybelinx.com`).
+  - `public.tenant_products` updated: `NEWAGE` mapped to `https://newage.storeai.cybelinx.com`, `ABCCORP` to `https://abccorp.storeai.cybelinx.com`, `TEXTRONIC` to `https://textronic.storeai.cybelinx.com`.
+  - `public.product_repository_customers` updated: `newage` mapped to `storeai_newage` on `Neon Serverless PostgreSQL (storeai-db)`.
+- [x] **StoreAI Neon DB Tenant Provisioning**:
+  - Tenant `newage` provisioned in Neon DB (`id: 24647a23-d6ef-4865-a4d5-40cf425e5636`, `slug: 'newage'`, `name: 'Newage Electronics Inc'`, plan `ENTERPRISE`, status `ACTIVE`).
+  - Superadmin `b.selvakumar@cognivectra.com` and `admin@newage.com` linked as `SUPER_ADMIN`.
+- [x] **Automatic Domain Generation & Normalization in Admin Portal**:
+  - Central API `resolveTenantAppUrl` helper implemented in [route.ts](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/api/v1/%5B...path%5D/route.ts) for `POST /onboarding/execute`, `POST /tenants/:id/products`, `POST /subscriptions`, `POST /tenants/:id/welcome-email`, `GET /auth/sso/token`, and `POST /auth/sso/token`. Automatically normalizes legacy or misconfigured `.com` domains to `.cybelinx.com`.
+  - Onboarding wizard in [page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/onboarding/page.tsx) automatically generates and synchronizes `https://{tenant}.{product}.cybelinx.com` as the tenant code is typed.
+  - Product repository UI in [page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/product-repository/page.tsx) and [[productId]/page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/product-repository/%5BproductId%5D/page.tsx) sets default domain and vanity routing patterns to `*.{product}.cybelinx.com`.
+  - "SSO Dashboard ↗" button in [page.tsx](file:///d:/Training/working/Cybelinx-platform/apps/admin-portal/src/app/tenants/%5BtenantId%5D/page.tsx) dynamically falls back to `{tenant}.{product}.cybelinx.com`.
+- [x] **Live Production Verification**:
+  - Verified live endpoint `https://cybelinx-platform-admin-portal.vercel.app/api/v1/auth/sso/token?tenantCode=NEWAGE&productCode=STOREAI` returns status `200 OK` with launchUrl `https://newage.storeai.cybelinx.com/?token=...`.
+  - Verified StoreAI API `https://storeai-api.vercel.app/api/v1/auth/me` with minted StoreAI token returns status `200 OK` and activeTenant `Newage Electronics Inc` (`24647a23-d6ef-4865-a4d5-40cf425e5636`).
+
+
 
