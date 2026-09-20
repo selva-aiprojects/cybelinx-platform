@@ -410,13 +410,17 @@ This phase tracks the standardized onboarding, database isolation, and SSO integ
 - [x] "⚡ Continue with Supabase SSO" one-click button on login form
 - [x] Live E2E verification on Vercel with Puppeteer screenshots (`wellness_sso_dashboard.png`, `nixon_sso_dashboard.png`)
 
-#### 2. StoreAI Composable Commerce (`selva-aiprojects/storeai`) — `[~] IN PROGRESS (90%)`
-- [x] Decoupled schema DDL (`/product-schemas/storeai_tenant_schema.sql`)
-- [x] Integration guide & `@cybelinx/sdk` middleware specification (`docs/STOREAI-INTEGRATION-GUIDE.md`)
-- [x] Product catalog entry (`STOREAI`) and plans (`STOREAI_COMMERCE_BASIC`, `STOREAI_COMMERCE_PRO`, `STOREAI_COMMERCE_ENTERPRISE`)
-- [ ] Implement `POST /api/auth/sso/exchange` in StoreAI Express backend
-- [ ] Connect production merchant store launch URL (`https://${merchant}.storeai.com`) to Cybelinx SSO launch token
-- [ ] End-to-end verification of merchant onboarding and checkout flow
+#### 2. StoreAI Composable Commerce (`selva-aiprojects/storeai`) — `[x] COMPLETE (LIVE)`
+- [x] Subdomain pattern and domain updated to `*.storeai.cybelinx.com` in Central Control Plane DB (`public.products`).
+- [x] ABC Corp (`ABCCORP`) aligned to `https://abccorp.storeai.cybelinx.com` in `public.tenant_products` and `public.product_repository_customers` (`storeai_abccorp`, `Neon Serverless PostgreSQL (storeai-db)`).
+- [x] Tenant `abccorp` and SuperAdmin `b.selvakumar@cognivectra.com` provisioned in StoreAI dedicated Neon DB (`ep-blue-water-ahyij9xn-pooler.c-3.us-east-1.aws.neon.tech/neondb`).
+- [x] Backend SSO exchange route (`POST /api/v1/auth/sso/exchange`) implemented in StoreAI Express backend.
+- [x] Direct launch token bypass implemented in StoreAI React frontend (`App.tsx` and `Login.tsx`): URL parameters `token` / `sso_token` automatically save to `localStorage` and bypass login.
+- [x] Cybelinx Control Plane SSO Generator (`apps/admin-portal/src/app/api/v1/[...path]/route.ts`) updated with `generateStoreAiToken` helper; `GET /auth/sso/token` and `POST /auth/sso/token` mint StoreAI JWTs and return launch URLs pointing to `${tenant}.storeai.cybelinx.com/?token=...`.
+- [x] Tenant `TEXTRONIC` (Textronic Ltd) provisioned and aligned for StoreAI across Central DB (`f6e8294d-3625-4fcb-a2bc-523879d75429`), Neon DB (`ab4f2d99-58ef-4d1f-80b4-6b29301d0e3e`), and URL `https://textronic.storeai.cybelinx.com`.
+- [x] Admin Portal `TenantCreateModal` upgraded with dynamic product & plan dropdowns, preventing manual product code typo errors like `PRODUCT_NOT_FOUND`.
+- [x] Refined `ErrorBanner` in `ui.tsx` so business logic 404s no longer trigger misleading API host reset prompts.
+- [x] StoreAI client & server repositories pushed to GitHub `origin/main` (`82b6ac6`) and live on Vercel.
 
 #### 3. SynthalystHRM (`D:\Training\working\Cybelinx\HRMS - Cybelinx`) — `[~] NEXT IN LINE (25%)`
 - [x] Existing codebase inspected: FastAPI backend, Vite/React frontend, PostgreSQL `tenant_schema.sql`, Flutter mobile app
