@@ -883,7 +883,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
 
       if (!resolvedProductId && resolvedProductCode) {
         const prod = await queryOne<{ id: string; product_code: string; app_url: string | null }>(`
-          SELECT id, product_code, app_url FROM public.products
+          SELECT id, product_code, base_url AS "app_url" FROM public.products
           WHERE product_code = $1 OR id::text = $1
           LIMIT 1
         `, [resolvedProductCode.toUpperCase()]);
@@ -894,7 +894,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         }
       } else if (resolvedProductId && !resolvedProductCode) {
         const prod = await queryOne<{ id: string; product_code: string; app_url: string | null }>(`
-          SELECT id, product_code, app_url FROM public.products
+          SELECT id, product_code, base_url AS "app_url" FROM public.products
           WHERE id::text = $1 LIMIT 1
         `, [resolvedProductId]);
         if (prod) {
