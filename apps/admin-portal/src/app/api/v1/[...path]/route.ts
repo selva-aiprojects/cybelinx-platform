@@ -685,7 +685,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
                tp.status, tp.activated_at AS "activatedAt", tp.app_url AS "appUrl",
                COALESCE(prc.tenant_schema, tr.schema_name, t.tenant_code) AS "tenantSchema",
                tr.isolation_mode AS "isolationMode",
-               COALESCE(prc.database_name, 'cybelinx-platform') AS "databaseName",
+               COALESCE(
+                 prc.database_name,
+                 CASE
+                   WHEN p.database_provider = 'SUPABASE' THEN 'Supabase PostgreSQL (aws-1-ap-southeast-1)'
+                   WHEN p.database_provider = 'NEON' THEN 'Neon Serverless PostgreSQL (storeai-db)'
+                   WHEN p.database_provider = 'AIVEN' THEN 'Aiven Cloud PostgreSQL'
+                   WHEN p.database_provider IS NOT NULL THEN p.database_provider
+                   WHEN p.db_url_production IS NOT NULL THEN p.db_url_production
+                   ELSE 'Dedicated Product DB'
+                 END
+               ) AS "databaseName",
                prc.contact_person AS "contactPerson",
                prc.contact_email AS "contactEmail"
         FROM public.tenant_products tp

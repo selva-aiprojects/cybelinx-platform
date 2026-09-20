@@ -242,7 +242,7 @@ export default function ProductRepositoryPage() {
                               {dbBadge.label}
                             </span>
                           ) : (
-                            <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>Default DB</span>
+                            <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>Dedicated DB</span>
                           )}
                           <div className="mono" style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '4px', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.dbUrlProduction || row.databaseConnectionString || '—'}>
                             {row.dbUrlProduction || row.databaseConnectionString || '—'}
@@ -379,8 +379,8 @@ function CreateProductModal({ onClose, onCreated }: { onClose: () => void; onCre
   const [healthEndpoint, setHealthEndpoint] = useState('/api/v1/health');
 
   // Database Topology
-  const [databaseProvider, setDatabaseProvider] = useState('AIVEN');
-  const [dbUrlDevelopment, setDbUrlDevelopment] = useState('jdbc:postgresql://localhost:5432/cybelinx_platform');
+  const [databaseProvider, setDatabaseProvider] = useState('SUPABASE');
+  const [dbUrlDevelopment, setDbUrlDevelopment] = useState('');
   const [dbUrlStaging, setDbUrlStaging] = useState('');
   const [dbUrlProduction, setDbUrlProduction] = useState('');
   const [dbCredentialsReference, setDbCredentialsReference] = useState('');
@@ -685,7 +685,7 @@ function CreateProductModal({ onClose, onCreated }: { onClose: () => void; onCre
               <input
                 id="prod-db-dev"
                 className="input mono"
-                placeholder="jdbc:postgresql://localhost:5432/cybelinx_platform"
+                placeholder="jdbc:postgresql://localhost:5432/product_dev_db"
                 value={dbUrlDevelopment}
                 onChange={(e) => setDbUrlDevelopment(e.target.value)}
               />

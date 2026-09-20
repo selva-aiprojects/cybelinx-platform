@@ -159,7 +159,7 @@ export default function ProductRepositoryDetailPage() {
                 border: `1px solid ${dbColor}30`,
               }}
             >
-              {repo.databaseProvider || 'AIVEN'}
+              {repo.databaseProvider || 'Dedicated DB'}
             </span>
           </div>
 
@@ -284,7 +284,9 @@ export default function ProductRepositoryDetailPage() {
                       </Link>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
-                      <span className="mono" style={{ fontSize: '0.8rem', color: '#475569' }}>{cust.databaseName || repo.databaseProvider || '—'}</span>
+                      <span className="mono" style={{ fontSize: '0.8rem', color: '#475569' }}>
+                        {cust.databaseName || (repo.databaseProvider ? `${repo.databaseProvider} DB` : 'Dedicated Product DB')}
+                      </span>
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <code className="mono" style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0284c7', background: '#f0f9ff', padding: '2px 6px', borderRadius: '4px' }}>
@@ -367,7 +369,7 @@ function EditRepositoryModal({
   const [deploymentUrl, setDeploymentUrl] = useState(repo.deploymentUrl || '');
   const [healthEndpoint, setHealthEndpoint] = useState(repo.healthEndpoint || '/api/v1/health');
 
-  const [databaseProvider, setDatabaseProvider] = useState(repo.databaseProvider || 'AIVEN');
+  const [databaseProvider, setDatabaseProvider] = useState(repo.databaseProvider || 'SUPABASE');
   const [dbUrlProduction, setDbUrlProduction] = useState(repo.dbUrlProduction || repo.databaseConnectionString || '');
   const [dbUrlDevelopment, setDbUrlDevelopment] = useState(repo.dbUrlDevelopment || '');
   const [dbUrlStaging, setDbUrlStaging] = useState(repo.dbUrlStaging || '');
@@ -624,7 +626,7 @@ function CustomerEditModal({
             className="input mono"
             value={databaseName}
             onChange={(e) => setDatabaseName(e.target.value)}
-            placeholder="cybelinx_platform or aiven_cluster"
+            placeholder="e.g. Supabase PostgreSQL (aws-1-ap-southeast-1) or Neon Cluster"
           />
         </div>
         <div className="field">
