@@ -62,12 +62,18 @@ PRODUCT_DB_PASSWORD_JIOPLIX=<secure_password>
 For rapid local testing and Vercel preview environments, target database connection strings are specified via `.env` or Vercel Environment Variables:
 
 1. **Local Development (`.env`)**:
-   Add product target database URLs to `.env`:
+   Add dedicated product target database URLs to `.env` (pointing to the respective product database, NEVER the central control plane DB):
    ```env
-   PRODUCT_DB_URL_STOREAI_PRODUCTION=jdbc:postgresql://localhost:5432/cybelinx_platform
-   PRODUCT_DB_URL_STOREAI_DEMO=jdbc:postgresql://localhost:5432/cybelinx_platform
-   PRODUCT_DB_USER_STOREAI=cybelinx
-   PRODUCT_DB_PASSWORD_STOREAI=cybelinx_dev_password
+   # StoreAI Product Database
+   PRODUCT_DB_URL_STOREAI_PRODUCTION=jdbc:postgresql://localhost:5433/storeai_prod
+   PRODUCT_DB_URL_STOREAI_DEMO=jdbc:postgresql://localhost:5433/storeai_demo
+   PRODUCT_DB_USER_STOREAI=storeai_user
+   PRODUCT_DB_PASSWORD_STOREAI=storeai_dev_password
+
+   # Jioplix Product Database (Supabase)
+   PRODUCT_DB_URL_JIOPLIX_PRODUCTION=jdbc:postgresql://aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres
+   PRODUCT_DB_USER_JIOPLIX=postgres.qnrypqwgxpmrlxanvbwq
+   PRODUCT_DB_PASSWORD_JIOPLIX=<supabase_password>
    ```
 
 2. **Vercel Environment Variables**:

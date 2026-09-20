@@ -355,3 +355,95 @@ repositories — the docs alone were not trusted.
 ### Notes
 - The dev DB is shared with the integration-test suite, which wipes users/tables by design; the `UserMappingServiceIT` `@AfterEach` restore now keeps `dev.admin@cybelinx.test` presidential across runs (verified user=1, ACME membership=1, platform-admin grant=1 after the full suite).
 - External-ID removal takes the mapping UUID (`externalIdentifierId`), not the external id itself.
+
+## Phase: Universal Single Sign-On (SSO) & Architectural Database Decoupling
+
+### Architectural Milestone: Database Decoupling & Central Cleanup
+- [x] **Zero Operational Schemas in Central Control Plane**: Dropped all legacy tenant schemas (`jioplix_wellness_01`, `jioplix_omega_healthcare_01`, `storeai_wellness`, `jioplix_nixon`) from the central Aiven PostgreSQL database (`cybelinx-platform`). Central DB strictly contains `public` platform metadata only.
+- [x] **Removal of DDL Mutations from Central Routes**: Cleaned up `apps/admin-portal/src/app/api/v1/[...path]/route.ts` to eliminate all physical `CREATE SCHEMA IF NOT EXISTS` execution. The central control plane strictly manages tenant and subscription metadata.
+- [x] **Decoupled Product Database Standard**: Product operational tables (OPD, IPD, lab, pharmacy, retail stores, employees) live strictly within their respective dedicated product databases (e.g. Jioplix Supabase PostgreSQL, StoreAI Database, Synthalyst DB).
+- [x] **Metadata-Driven Resource Registration**: `tenant_resources` records schema pointers, hostnames, and isolation modes as control-plane metadata without polluting the central database.
+
+### Universal Single Sign-On (SSO) & Login Auto-Bypass
+- [x] **Universal HMAC-SHA256 Token Minting**: Added `GET` & `POST /api/v1/auth/sso/token` on the central control plane generating standard JWT launch tokens with 24-hour expiration containing user identity, tenant code, and role.
+- [x] **One-Click Launch from Admin Portal**: Hooked up the "SSO Dashboard ↗" button in `apps/admin-portal/src/app/tenants/[tenantId]/page.tsx` to dynamically fetch an SSO launch token and open the product workspace in a new tab.
+- [x] **Welcome Email SSO Magic Links**: Automated welcome emails via Resend (`apps/admin-portal/src/lib/email.ts`) embedding the SSO magic link directly on the call-to-action button, bypassing manual password entry from the inbox.
+- [x] **Jioplix SSO Exchange & Login Bypass**:
+  - Implemented `POST /api/auth/sso/exchange` in `selva-aiprojects/jioplix` (`backend/src/modules/auth/index.js`).
+  - Added Just-In-Time (JIT) user provisioning supporting both `password` and `password_hash` column schemas with full 44 enterprise RBAC menu assignment.
+  - Added dynamic tenant auto-registration in `nexus.tenants` and automated base schema cloning on the fly.
+  - Updated `client/src/modules/auth/LoginPage.tsx` to detect `?sso_token=` on mount, authenticate seamlessly, and route directly to `/tenant/dashboard`.
+  - Added "⚡ Continue with Supabase SSO" one-click button on login form.
+- [x] **Live Production E2E Verification**:
+  - Verified `https://wellness.jioplix.com/login?sso_token=...` auto-bypasses login into `/tenant/dashboard` (Screenshot verified).
+  - Verified `https://nixon.jioplix.com/login` one-click SSO triggers dynamic tenant registration, schema cloning, and navigation to `/tenant/dashboard` (Screenshot verified).
+  - Production deployments pushed and live on Vercel: `cybelinx-platform` (`0ff4e70`), `jioplix` (`2337c39`).
+
+---
+
+## Phase: Multi-Product Integration Ecosystem
+
+This phase tracks the standardized onboarding, database isolation, and SSO integration across the entire Cybelinx SaaS suite.
+
+### Cross-Product Integration Tracking Matrix
+
+| # | Product Code | Product Name & Domain | Local Repository / Remote Repo | Database Architecture | SSO & Auth Protocol | Integration Status | Target / Next Action |
+| :- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | **`JIOPLIX`** | Jioplix HMS (Hospital Management) | `D:\Training\working\Cybelinx\Jioplix`<br>`selva-aiprojects/jioplix` | Supabase PostgreSQL<br>(`aws-1-ap-southeast-1`)<br>Schema-per-tenant (`wellness`, `nixon`) | Universal SSO Token (`POST /api/auth/sso/exchange`) + JIT Provisioning | `[x] 100% Production Live` | Production monitoring & multi-facility scaling |
+| 2 | **`STOREAI`** | StoreAI Composable Commerce | `selva-aiprojects/storeai` | Dedicated PostgreSQL (`storeai-db`)<br>Schema-per-merchant (`nike`, `adidas`) | `@cybelinx/sdk` Express Middleware + Launch Token | `[~] 90% Staging Ready` | Wire `/api/auth/sso/exchange` into Express server & test live checkout |
+| 3 | **`SYNTHALYST`**| SynthalystHRM (HRMS, Payroll, TDS) | `D:\Training\working\Cybelinx\HRMS - Cybelinx`<br>`selva-aiprojects/synthalyst-hrm` | Dedicated PostgreSQL / Supabase<br>Schema-per-tenant (`tenant_schema.sql`) | HMAC JWT SSO Exchange + JIT Employee Provisioning | `[~] 25% Architecture Prepared` | Implement FastAPI `/api/auth/sso/exchange` & connect "SSO Dashboard ↗" |
+| 4 | **`LIMS`** | Laboratory Information System | `D:\Training\working\LIMS`<br>`selva-aiprojects/lims` | Dedicated PostgreSQL / Supabase<br>Diagnostic specimen schema | HMAC JWT SSO Exchange + Clinical RBAC (Pathologist/Tech) | `[ ] 15% Architectural Spec Ready` | Add SSO route in Vite/Express server & wire test order outbox sync |
+| 5 | **`CAREDATA`** | Health Interoperability Hub (ABDM/FHIR) | `D:\Training\working\Caredata`<br>`selva-aiprojects/caredata` | Decoupled Integration DB<br>Audit & consent repository | OAuth2 / Client Credentials + ABDM Gateway Token | `[ ] 10% Queued` | ABDM M1, M2, M3 compliance gateway integration |
+| 6 | **`EXAMPAD`** | Assessment & Certification Engine | `D:\Training\working\ExamPad`<br>`selva-aiprojects/exampad` | Dedicated Assessment DB<br>Candidate & examination schema | Candidate & Proctor SSO + Automated Scoring Webhooks | `[ ] 10% Queued` | Assessment scheduler & Cybelinx usage metering hook |
+
+---
+
+### Detailed Product Integration Checklists
+
+#### 1. Jioplix HMS (`selva-aiprojects/jioplix`) — `[x] COMPLETE (LIVE)`
+- [x] Shard schema isolation in Supabase DB (`"wellness"`, `"nixon"`, `"omega"`)
+- [x] Backend SSO exchange route (`POST /api/auth/sso/exchange`) in `backend/src/modules/auth/index.js`
+- [x] Resilient Just-In-Time (JIT) user provisioning supporting both `password` and `password_hash` column schemas
+- [x] Dynamic tenant auto-registration in `nexus.tenants` on incoming subdomain
+- [x] Dynamic schema cloning from `"wellness"` (73 clinical tables, 44 enterprise RBAC menus)
+- [x] Frontend login auto-bypass via `?sso_token=` parameter in `client/src/modules/auth/LoginPage.tsx`
+- [x] "⚡ Continue with Supabase SSO" one-click button on login form
+- [x] Live E2E verification on Vercel with Puppeteer screenshots (`wellness_sso_dashboard.png`, `nixon_sso_dashboard.png`)
+
+#### 2. StoreAI Composable Commerce (`selva-aiprojects/storeai`) — `[~] IN PROGRESS (90%)`
+- [x] Decoupled schema DDL (`/product-schemas/storeai_tenant_schema.sql`)
+- [x] Integration guide & `@cybelinx/sdk` middleware specification (`docs/STOREAI-INTEGRATION-GUIDE.md`)
+- [x] Product catalog entry (`STOREAI`) and plans (`STOREAI_COMMERCE_BASIC`, `STOREAI_COMMERCE_PRO`, `STOREAI_COMMERCE_ENTERPRISE`)
+- [ ] Implement `POST /api/auth/sso/exchange` in StoreAI Express backend
+- [ ] Connect production merchant store launch URL (`https://${merchant}.storeai.com`) to Cybelinx SSO launch token
+- [ ] End-to-end verification of merchant onboarding and checkout flow
+
+#### 3. SynthalystHRM (`D:\Training\working\Cybelinx\HRMS - Cybelinx`) — `[~] NEXT IN LINE (25%)`
+- [x] Existing codebase inspected: FastAPI backend, Vite/React frontend, PostgreSQL `tenant_schema.sql`, Flutter mobile app
+- [ ] Register product catalog definition and plans (`SYNTHALYST`: `HRM_BASIC`, `HRM_GROWTH`, `HRM_ENTERPRISE`) in central DB
+- [ ] Implement `POST /api/auth/sso/exchange` endpoint in FastAPI backend (`backend/routes/auth.py`)
+- [ ] Add JIT employee & HR admin user provisioning in tenant HRMS schema
+- [ ] Connect "SSO Dashboard ↗" button in Admin Portal to launch `https://${tenant_code}.synthalyst.com?sso_token=...`
+- [ ] Configure Indian statutory compliance baseline (PF, ESI, TDS, PT) automatic tenant seeding
+- [ ] E2E browser verification of tenant HRMS launch and employee dashboard access
+
+#### 4. LIMS Suite (`D:\Training\working\LIMS`) — `[ ] READY FOR EXECUTION (15%)`
+- [x] Existing codebase inspected: Vite + React + TypeScript + Express backend in `src/server`
+- [ ] Register product catalog definition and plans (`LIMS`: `LIMS_ESSENTIALS`, `LIMS_DIAGNOSTIC_NETWORK`)
+- [ ] Configure decoupled LIMS database and automated tenant schema provisioning
+- [ ] Implement `POST /api/auth/sso/exchange` in LIMS Express backend
+- [ ] Role-based access provisioning for Pathologists, Lab Technicians, and Accessioning Staff
+- [ ] Bi-directional diagnostic result synchronization between LIMS and Jioplix HMS via transactional outbox events (`DIAGNOSTIC_TEST_ORDERED`, `DIAGNOSTIC_RESULT_PUBLISHED`)
+
+#### 5. Caredata (`D:\Training\working\Caredata`) — `[ ] QUEUED (10%)`
+- [ ] Product catalog registration (`CAREDATA`)
+- [ ] ABDM (Ayushman Bharat Digital Mission) gateway token sharing
+- [ ] HL7 / FHIR R4 clinical data bridge integration
+- [ ] Audit and consent artifact storage isolation
+
+#### 6. ExamPad (`D:\Training\working\ExamPad`) — `[ ] QUEUED (10%)`
+- [ ] Product catalog registration (`EXAMPAD`)
+- [ ] Candidate & proctor SSO authentication gateway
+- [ ] Assessment result webhook ingestion into Cybelinx usage metering (`platform_usage_records`)
+
+
