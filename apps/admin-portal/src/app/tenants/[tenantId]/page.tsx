@@ -214,7 +214,7 @@ export default function TenantDetailPage() {
                       <td className="cell-actions">
                         {product.appUrl && (
                           <a
-                            href={`${product.appUrl}/dashboard`}
+                            href={product.appUrl.includes('jioplix') ? `${product.appUrl}/tenant/dashboard` : `${product.appUrl}/dashboard`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn btn-sm"

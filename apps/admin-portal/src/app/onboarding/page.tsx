@@ -652,7 +652,7 @@ export default function UnifiedOnboardingPage() {
                   )}
                   {provisionResponse.appUrl && (
                     <a
-                      href={`${provisionResponse.appUrl}/dashboard`}
+                      href={provisionResponse.appUrl.includes('jioplix') ? `${provisionResponse.appUrl}/tenant/dashboard` : `${provisionResponse.appUrl}/dashboard`}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{ padding: '8px 16px', background: '#7c3aed', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
