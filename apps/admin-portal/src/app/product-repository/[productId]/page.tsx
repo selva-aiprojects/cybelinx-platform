@@ -385,14 +385,28 @@ function EditRepositoryModal({
     setSubmitting(true);
     setError(null);
 
+    const isJioplix = repo.productCode === 'JIOPLIX' || repo.productCode === 'JIOPLIX_SMART';
+    let cleanDomain = domain.trim() || null;
+    let cleanSubdomainPattern = subdomainPattern.trim() || null;
+
+    if (!isJioplix) {
+      const prodLower = repo.productCode.toLowerCase();
+      if (cleanDomain && (cleanDomain.endsWith(`.${prodLower}.com`) || cleanDomain === `https://${prodLower}.com` || cleanDomain === `http://${prodLower}.com`)) {
+        cleanDomain = `https://${prodLower}.cybelinx.com`;
+      }
+      if (cleanSubdomainPattern && cleanSubdomainPattern.endsWith(`.${prodLower}.com`)) {
+        cleanSubdomainPattern = `https://{tenant}.${prodLower}.cybelinx.com`;
+      }
+    }
+
     const payload: UpdateProductRepositoryRequest = {
       name: name.trim() || null,
       description: description.trim() || null,
       productCategory,
       status,
       hostingProvider: hostingProvider || null,
-      domain: domain.trim() || null,
-      subdomainPattern: subdomainPattern.trim() || null,
+      domain: cleanDomain,
+      subdomainPattern: cleanSubdomainPattern,
       deploymentUrl: deploymentUrl.trim() || null,
       healthEndpoint: healthEndpoint.trim() || null,
       databaseProvider: databaseProvider || null,

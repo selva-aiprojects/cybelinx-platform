@@ -141,6 +141,7 @@ export function generateSsoToken(params: {
 const STOREAI_KNOWN_TENANTS: Record<string, string> = {
   abccorp: '743beaf2-e038-4942-bf1b-62a4f1b17d00',
   textronic: 'ab4f2d99-58ef-4d1f-80b4-6b29301d0e3e',
+  newage: '24647a23-d6ef-4865-a4d5-40cf425e5636',
   wellness: 'ee6336aa-a5b6-4584-b13f-4035d99d5ca5',
 };
 
@@ -192,6 +193,65 @@ export function generateStoreAiToken(params: {
   return `${unsigned}.${signature}`;
 }
 
+// ─── Universal Tenant Domain & Application URL Resolver ──────────────────────
+// Architecture Rule:
+// - Jioplix (JIOPLIX, JIOPLIX_SMART) operates on its dedicated apex domain: https://{tenant}.jioplix.com
+// - All other Cybelinx Platform products (STOREAI, SYNTHALYST, LIMS, CYBEHEALTH, etc.)
+//   strictly operate as subdomains of cybelinx.com: https://{tenant}.{product}.cybelinx.com
+export function resolveTenantAppUrl(tenantCode: string, productCode: string, rawUrl?: string | null): string {
+  const code = (productCode || 'JIOPLIX').toUpperCase();
+  const slug = tenantCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const isJioplix = code === 'JIOPLIX' || code === 'JIOPLIX_SMART';
+
+  if (!rawUrl || !rawUrl.trim()) {
+    return isJioplix
+      ? `https://${slug}.jioplix.com`
+      : `https://${slug}.${code.toLowerCase()}.cybelinx.com`;
+  }
+
+  let clean = rawUrl.trim().replace(/\/+$/, '');
+
+  // Replace {tenant} placeholder if present
+  if (clean.includes('{tenant}')) {
+    clean = clean.replace(/\{tenant\}/g, slug);
+  }
+
+  if (isJioplix) {
+    if (clean === 'https://jioplix.com' || clean === 'http://jioplix.com') {
+      return `https://${slug}.jioplix.com`;
+    }
+    return clean;
+  } else {
+    // Non-Jioplix product: Must be a subdomain of cybelinx.com
+    const prodLower = code.toLowerCase();
+
+    // If it mistakenly has jioplix domain
+    if (clean.includes('jioplix.com')) {
+      return `https://${slug}.${prodLower}.cybelinx.com`;
+    }
+
+    // If it is just the base product url without tenant slug
+    if (
+      clean === `https://${prodLower}.cybelinx.com` ||
+      clean === `http://${prodLower}.cybelinx.com` ||
+      clean === `https://${prodLower}.com` ||
+      clean === `http://${prodLower}.com`
+    ) {
+      return `https://${slug}.${prodLower}.cybelinx.com`;
+    }
+
+    // If it was formed as https://{tenant}.{product}.com (missing cybelinx.com)
+    // E.g. https://newage.storeai.com -> https://newage.storeai.cybelinx.com
+    if (clean.endsWith(`.${prodLower}.com`)) {
+      clean = clean.replace(new RegExp(`\\.${prodLower}\\.com$`), `.${prodLower}.cybelinx.com`);
+    } else if (clean.includes(`.${prodLower}.com/`)) {
+      clean = clean.replace(new RegExp(`\\.${prodLower}\\.com(\\/.*)$`), `.${prodLower}.cybelinx.com$1`);
+    }
+
+    return clean;
+  }
+}
+
 // ─── Universal Generic Onboarding Definitions Builder (Metadata-Driven for 12+ Products) ──
 function buildProductDefinition(p: {
   productCode: string;
@@ -206,7 +266,10 @@ function buildProductDefinition(p: {
     : ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
   const defaultPlanCode = availablePlans[0];
   const schemaPrefix = `${code.toLowerCase()}_`;
-  const defaultDomain = p.baseUrl || `https://{tenant}.${code.toLowerCase()}.com`;
+  const isJioplix = code === 'JIOPLIX' || code === 'JIOPLIX_SMART';
+  const defaultDomain = isJioplix
+    ? `https://{tenant}.jioplix.com`
+    : `https://{tenant}.${code.toLowerCase()}.cybelinx.com`;
 
   return {
     productCode: code,
@@ -235,8 +298,8 @@ function buildProductDefinition(p: {
         label: 'Tenant Domain / Portal URL',
         type: 'url' as const,
         required: false,
-        placeholder: defaultDomain.includes('{tenant}') ? defaultDomain : `https://{tenant}.${code.toLowerCase()}.com`,
-        hint: 'Dedicated vanity subdomain or application URL for tenant access',
+        placeholder: defaultDomain,
+        hint: `Dedicated vanity subdomain on ${isJioplix ? 'jioplix.com' : 'cybelinx.com'} for tenant access`,
       },
       {
         key: 'contactEmail',
@@ -871,18 +934,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
         (tp?.product_code || '').toUpperCase() === 'STOREAI' ||
         (tp?.app_url || '').includes('storeai');
 
-      let rawAppUrl = tp?.app_url || '';
-      if (!rawAppUrl) {
-        if (isStoreAi) {
-          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
-        } else {
-          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
-        }
-      } else if (isStoreAi && rawAppUrl.includes('jioplix.com')) {
-        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
-      } else if (!isStoreAi && (rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com')) {
-        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
-      }
+      const resolvedCode = (productCode || tp?.product_code || (isStoreAi ? 'STOREAI' : 'JIOPLIX')).toUpperCase();
+      const rawAppUrl = resolveTenantAppUrl(tenant.tenant_code, resolvedCode, tp?.app_url);
 
       const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
       let launchUrl = '';
@@ -985,18 +1038,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         (tp?.product_code || '').toUpperCase() === 'STOREAI' ||
         (tp?.app_url || '').includes('storeai');
 
-      let rawAppUrl = tp?.app_url || '';
-      if (!rawAppUrl) {
-        if (isStoreAi) {
-          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
-        } else {
-          rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
-        }
-      } else if (isStoreAi && rawAppUrl.includes('jioplix.com')) {
-        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.storeai.cybelinx.com`;
-      } else if (!isStoreAi && (rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com')) {
-        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
-      }
+      const resolvedCode = (productCode || tp?.product_code || (isStoreAi ? 'STOREAI' : 'JIOPLIX')).toUpperCase();
+      const rawAppUrl = resolveTenantAppUrl(tenant.tenant_code, resolvedCode, tp?.app_url);
 
       const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
       let launchUrl = '';
@@ -1301,11 +1344,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         resolvedPlanCode = defaultPlan?.plan_code || 'DEFAULT';
       }
 
-      // 4. Resolve App URL dynamically if not specified
-      if (!resolvedAppUrl) {
-        const slug = tenant.tenant_code.toLowerCase().replace(/[^a-z0-9]/g, '');
-        resolvedAppUrl = `https://${slug}.${resolvedProductCode?.toLowerCase() || 'cloud'}.jioplix.com`;
-      }
+      // 4. Resolve App URL dynamically using platform domain architecture
+      resolvedAppUrl = resolveTenantAppUrl(tenant.tenant_code, resolvedProductCode || '', resolvedAppUrl);
 
       // 5. Atomic Upsert Tenant Product
       const tpResult = await queryOne<{ id: string }>(`
@@ -1373,9 +1413,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
           tenantName: tenant.name,
           role: 'admin',
         });
-        const rawAppUrl = resolvedAppUrl || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+        const rawAppUrl = resolveTenantAppUrl(tenant.tenant_code, resolvedProductCode || '', resolvedAppUrl);
         const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
-        const emailLaunchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+        const isStoreAi = (resolvedProductCode || '').toUpperCase() === 'STOREAI';
+        let emailLaunchUrl = '';
+        if (isStoreAi) {
+          const storeAiToken = generateStoreAiToken({
+            email: emailRecipient,
+            tenantCode: tenant.tenant_code,
+            tenantName: tenant.name,
+          });
+          emailLaunchUrl = `${baseClean}/?token=${storeAiToken}&sso_token=${ssoToken}`;
+        } else {
+          emailLaunchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
+        }
 
         sendWelcomeEmail({
           to: emailRecipient,
@@ -1432,7 +1483,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
 
       const resolvedProductCode = sub?.productCode || productCode || 'JIOPLIX';
       const resolvedPlanCode = sub?.planCode || 'ENTERPRISE';
-      const resolvedAppUrl = sub?.appUrl || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com/login`;
+      const resolvedAppUrl = resolveTenantAppUrl(tenant.tenant_code, resolvedProductCode, sub?.appUrl);
       const recipient = (to || `admin@${tenant.tenant_code.toLowerCase()}.com`).trim();
 
       const result = await sendWelcomeEmail({
@@ -1531,6 +1582,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         planId = p?.id || null;
       }
 
+      const tenant = await queryOne<{ tenant_code: string }>('SELECT tenant_code FROM public.tenants WHERE id::text = $1 LIMIT 1', [tenantId]);
+      const resolvedAppUrl = resolveTenantAppUrl(tenant?.tenant_code || '', productCode, appUrl);
+
       const tpId = crypto.randomUUID();
       const tpResult = await queryOne<{ id: string }>(`
         INSERT INTO public.tenant_products (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
@@ -1542,7 +1596,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
           app_url = COALESCE(EXCLUDED.app_url, tenant_products.app_url),
           updated_at = NOW()
         RETURNING id
-      `, [tpId, tenantId, product.productId, planId, appUrl || null]);
+      `, [tpId, tenantId, product.productId, planId, resolvedAppUrl]);
       return json({ subscription: { tenantProductId: tpResult?.id || tpId, status: 'ACTIVE' } }, 201);
     } catch (err) {
       return dbError(err);
@@ -1596,7 +1650,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
 
       const tenantId = crypto.randomUUID();
       const tenantProductId = crypto.randomUUID();
-      const targetDomain = domain || `https://${tenantCode.toLowerCase()}.${productCode.toLowerCase()}.com`;
+      const targetDomain = resolveTenantAppUrl(tenantCode, productCode, domain);
       const resolvedEmail = adminEmail || contactEmail || `admin@${tenantCode.toLowerCase()}.com`;
 
       await execute(`
@@ -1641,6 +1695,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
           (id, tenant_id, product_id, provider, external_id, created_at)
         VALUES ($1, $2, $3, $4, $5, NOW())
       `, [crypto.randomUUID(), tenantId, product.productId, `${productCode.toUpperCase()}_NEXUS`, externalId]);
+
+      // Register into product_repository_customers so topology & customer mapping is immediate
+      try {
+        const isStoreAi = productCode.toUpperCase() === 'STOREAI';
+        const defaultDbName = isStoreAi
+          ? 'Neon Serverless PostgreSQL (storeai-db)'
+          : `${product.productCode} Database`;
+        await execute(`
+          INSERT INTO public.product_repository_customers (
+            id, version, product_id, tenant_id, tenant_schema, database_name,
+            contact_person, contact_email, created_at, updated_at
+          ) VALUES (
+            gen_random_uuid(), 0, $1, $2, $3, $4, $5, $6, NOW(), NOW()
+          )
+          ON CONFLICT (product_id, tenant_id) DO UPDATE SET
+            tenant_schema = EXCLUDED.tenant_schema,
+            database_name = EXCLUDED.database_name,
+            contact_person = EXCLUDED.contact_person,
+            contact_email = EXCLUDED.contact_email,
+            updated_at = NOW(),
+            version = public.product_repository_customers.version + 1
+        `, [
+          product.productId,
+          tenantId,
+          schemaName,
+          defaultDbName,
+          tenantName,
+          resolvedEmail
+        ]);
+      } catch (prcErr) {
+        console.warn('[onboarding/execute] Customer mapping notice:', prcErr);
+      }
 
       // Emit platform audit trail event
       try {

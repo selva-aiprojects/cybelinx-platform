@@ -395,11 +395,12 @@ function CreateProductModal({ onClose, onCreated }: { onClose: () => void; onCre
   const handleCodeChange = (raw: string) => {
     const code = raw.toUpperCase().replace(/[^A-Z0-9_]/g, '');
     setProductCode(code);
+    const isJioplix = code === 'JIOPLIX' || code === 'JIOPLIX_SMART';
     if (!domain && code) {
-      setDomain(`https://${code.toLowerCase()}.com`);
+      setDomain(isJioplix ? 'https://jioplix.com' : `https://${code.toLowerCase()}.cybelinx.com`);
     }
     if (!subdomainPattern && code) {
-      setSubdomainPattern(`https://{tenant}.${code.toLowerCase()}.com`);
+      setSubdomainPattern(isJioplix ? 'https://{tenant}.jioplix.com' : `https://{tenant}.${code.toLowerCase()}.cybelinx.com`);
     }
     if (!schemaPrefix && code) {
       setSchemaPrefix(`${code.toLowerCase()}_`);
@@ -421,15 +422,30 @@ function CreateProductModal({ onClose, onCreated }: { onClose: () => void; onCre
     setSubmitting(true);
     setError(null);
 
+    const code = productCode.trim().toUpperCase();
+    const isJioplix = code === 'JIOPLIX' || code === 'JIOPLIX_SMART';
+    let cleanDomain = domain.trim() || undefined;
+    let cleanSubdomainPattern = subdomainPattern.trim() || undefined;
+
+    if (!isJioplix) {
+      const prodLower = code.toLowerCase();
+      if (cleanDomain && (cleanDomain.endsWith(`.${prodLower}.com`) || cleanDomain === `https://${prodLower}.com` || cleanDomain === `http://${prodLower}.com`)) {
+        cleanDomain = `https://${prodLower}.cybelinx.com`;
+      }
+      if (cleanSubdomainPattern && cleanSubdomainPattern.endsWith(`.${prodLower}.com`)) {
+        cleanSubdomainPattern = `https://{tenant}.${prodLower}.cybelinx.com`;
+      }
+    }
+
     const payload: CreateProductRepositoryRequest = {
-      productCode: productCode.trim().toUpperCase(),
+      productCode: code,
       name: name.trim(),
       description: description.trim() || undefined,
       productCategory,
       status,
       hostingProvider: hostingProvider || undefined,
-      domain: domain.trim() || undefined,
-      subdomainPattern: subdomainPattern.trim() || undefined,
+      domain: cleanDomain,
+      subdomainPattern: cleanSubdomainPattern,
       deploymentUrl: deploymentUrl.trim() || undefined,
       healthEndpoint: healthEndpoint.trim() || undefined,
       databaseProvider: databaseProvider || undefined,

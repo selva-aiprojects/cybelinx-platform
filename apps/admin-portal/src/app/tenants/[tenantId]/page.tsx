@@ -114,6 +114,20 @@ export default function TenantDetailPage() {
   }
 
   async function launchSso(product: TenantProductView) {
+    const code = (product.productCode || 'JIOPLIX').toUpperCase();
+    const isJioplix = code === 'JIOPLIX' || code === 'JIOPLIX_SMART';
+    const slug = tenant.tenantCode.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let fallback = product.appUrl || (isJioplix 
+      ? `https://${slug}.jioplix.com/login` 
+      : `https://${slug}.${code.toLowerCase()}.cybelinx.com`);
+
+    if (!isJioplix) {
+      const prodLower = code.toLowerCase();
+      if (fallback.endsWith(`.${prodLower}.com`)) {
+        fallback = fallback.replace(new RegExp(`\\.${prodLower}\\.com$`), `.${prodLower}.cybelinx.com`);
+      }
+    }
+
     try {
       const res = await fetch(`/api/v1/auth/sso/token?tenantId=${encodeURIComponent(tenantId)}&productCode=${encodeURIComponent(product.productCode)}&email=${encodeURIComponent(tenant.contactEmail || '')}`);
       const data = await res.json();
@@ -121,11 +135,9 @@ export default function TenantDetailPage() {
         window.open(data.launchUrl, '_blank', 'noopener,noreferrer');
         notify('success', 'SSO Dashboard launched in a new tab!');
       } else {
-        const fallback = product.appUrl || `https://${tenant.tenantCode.toLowerCase()}.jioplix.com/login`;
         window.open(fallback, '_blank', 'noopener,noreferrer');
       }
     } catch (err) {
-      const fallback = product.appUrl || `https://${tenant.tenantCode.toLowerCase()}.jioplix.com/login`;
       window.open(fallback, '_blank', 'noopener,noreferrer');
     }
   }

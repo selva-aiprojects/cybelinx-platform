@@ -66,13 +66,20 @@ export default function UnifiedOnboardingPage() {
     setPlanCode(def.subscription.defaultPlanCode);
     setIsolationMode(def.resource.defaultIsolationMode);
 
+    const initialTenantCode = `${code}_TENANT_01`;
     setExternalId(`${code}_CLIENT_01`);
-    setTenantCode(`${code}_TENANT_01`);
+    setTenantCode(initialTenantCode);
     setTenantName(`${def.displayName} Organization`);
     setSchemaName(`${def.resource.schemaPrefix || sanitizedCode + '_'}tenant_01`);
     
+    const isJioplix = code === 'JIOPLIX' || code === 'JIOPLIX_SMART';
+    const initialSlug = `${sanitizedCode}_tenant_01`;
+    const defaultDomain = isJioplix
+      ? `https://${initialSlug}.jioplix.com`
+      : `https://${initialSlug}.${sanitizedCode}.cybelinx.com`;
+
     const dynamicFields: Record<string, string> = {
-      domain: `https://tenant.${sanitizedCode}.com`,
+      domain: defaultDomain,
       contactEmail: `admin@${sanitizedCode}-client.com`,
       country: 'India',
       timezone: 'Asia/Kolkata',
@@ -91,6 +98,21 @@ export default function UnifiedOnboardingPage() {
     const prefix = activeDefinition?.resource?.schemaPrefix || `${selectedProductCode.toLowerCase()}_`;
     const cleanSuffix = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     setSchemaName(`${prefix}${cleanSuffix}`);
+
+    // Dynamically synchronize vanity domain as the tenant code changes
+    const isJioplix = selectedProductCode === 'JIOPLIX' || selectedProductCode === 'JIOPLIX_SMART';
+    const tenantSlug = cleanSuffix || 'tenant';
+    const expectedDomain = isJioplix
+      ? `https://${tenantSlug}.jioplix.com`
+      : `https://${tenantSlug}.${selectedProductCode.toLowerCase()}.cybelinx.com`;
+
+    setFieldValues((prev) => {
+      const current = prev['domain'] || '';
+      if (!current || current.includes('.cybelinx.com') || current.includes('.jioplix.com') || current.includes('.com')) {
+        return { ...prev, domain: expectedDomain };
+      }
+      return prev;
+    });
   };
 
   // Load live definitions from Central API on mount
@@ -137,6 +159,19 @@ export default function UnifiedOnboardingPage() {
     setErrorMessage(null);
     setProvisionResponse(null);
 
+    let targetDomain = (fieldValues.domain || '').trim();
+    if (targetDomain) {
+      const isJioplix = selectedProductCode === 'JIOPLIX' || selectedProductCode === 'JIOPLIX_SMART';
+      if (!isJioplix) {
+        const prod = selectedProductCode.toLowerCase();
+        if (targetDomain.endsWith(`.${prod}.com`)) {
+          targetDomain = targetDomain.replace(new RegExp(`\\.${prod}\\.com$`), `.${prod}.cybelinx.com`);
+        } else if (targetDomain.includes(`.${prod}.com/`)) {
+          targetDomain = targetDomain.replace(new RegExp(`\\.${prod}\\.com(\\/.*)$`), `.${prod}.cybelinx.com$1`);
+        }
+      }
+    }
+
     const payload: GenericOnboardRequest = {
       productCode: selectedProductCode,
       externalId: externalId.trim(),
@@ -148,7 +183,7 @@ export default function UnifiedOnboardingPage() {
       schemaName: schemaName.trim() || undefined,
       regionCode,
       adminEmail: fieldValues.contactEmail || fieldValues.merchantEmail || undefined,
-      domain: fieldValues.domain || undefined,
+      domain: targetDomain || undefined,
       adminUserId: fieldValues.adminUserId || undefined,
       customFields: fieldValues,
     };

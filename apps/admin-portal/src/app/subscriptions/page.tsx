@@ -266,7 +266,7 @@ function CreateSubscriptionModal({
             className="input mono"
             value={appUrl}
             onChange={(e) => setAppUrl(e.target.value)}
-            placeholder="https://acme.product.com (auto-generated if blank)"
+            placeholder="https://acme.{product}.cybelinx.com (auto-generated if blank)"
           />
         </div>
         <div className="form-actions">
