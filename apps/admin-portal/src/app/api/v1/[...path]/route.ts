@@ -934,30 +934,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         resolvedAppUrl = `https://${slug}.${resolvedProductCode?.toLowerCase() || 'cloud'}.jioplix.com`;
       }
 
-      // 5. Upsert Tenant Product
-      const existing = await queryOne<{ id: string }>(`
-        SELECT id FROM public.tenant_products
-        WHERE tenant_id::text = $1 AND product_id::text = $2
-        LIMIT 1
-      `, [tenant.id, resolvedProductId]);
+      // 5. Atomic Upsert Tenant Product
+      const tpResult = await queryOne<{ id: string }>(`
+        INSERT INTO public.tenant_products
+          (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
+        VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
+        ON CONFLICT (tenant_id, product_id)
+        DO UPDATE SET
+          status = 'ACTIVE',
+          plan_id = COALESCE(EXCLUDED.plan_id, tenant_products.plan_id),
+          app_url = COALESCE(EXCLUDED.app_url, tenant_products.app_url),
+          updated_at = NOW()
+        RETURNING id
+      `, [crypto.randomUUID(), tenant.id, resolvedProductId, resolvedPlanId, resolvedAppUrl]);
 
-      let tpId = existing?.id;
-      if (existing) {
-        await execute(`
-          UPDATE public.tenant_products
-          SET status = 'ACTIVE', plan_id = COALESCE($1, plan_id), app_url = COALESCE($2, app_url), updated_at = NOW()
-          WHERE id = $3
-        `, [resolvedPlanId, resolvedAppUrl, existing.id]);
-      } else {
-        tpId = crypto.randomUUID();
-        await execute(`
-          INSERT INTO public.tenant_products
-            (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
-          VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
-        `, [tpId, tenant.id, resolvedProductId, resolvedPlanId, resolvedAppUrl]);
-      }
+      const tpId = tpResult?.id || crypto.randomUUID();
 
-      // Ensure physical schema and tenant_resources record exist
+      // Ensure physical schema and tenant_resources record exist (atomic upsert)
       try {
         const schemaName = `${(resolvedProductCode || 'tenant').toLowerCase()}_${tenant.tenant_code.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
         const resource = await queryOne<{ id: string }>(`
@@ -965,19 +958,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         `);
         const region = await queryOne<{ id: string }>(`SELECT id FROM public.regions LIMIT 1`);
         if (resource && region) {
-          const resExists = await queryOne<{ id: string }>(`
-            SELECT id FROM public.tenant_resources WHERE tenant_id::text = $1 AND product_id::text = $2 LIMIT 1
-          `, [tenant.id, resolvedProductId]);
-          if (!resExists) {
-            await execute(`
-              INSERT INTO public.tenant_resources
-                (id, tenant_id, product_id, resource_id, isolation_mode, schema_name, region_id, environment, status, provisioning_state, migration_version, tenant_product_id, created_at, updated_at, version)
-              VALUES ($1, $2, $3, $4, 'SCHEMA_PER_TENANT', $5, $6, 'PRODUCTION', 'ACTIVE', 'SUCCEEDED', 1, $7, NOW(), NOW(), 1)
-            `, [crypto.randomUUID(), tenant.id, resolvedProductId, resource.id, schemaName, region.id, tpId]);
-            try {
-              await execute(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
-            } catch (sErr) {}
-          }
+          await execute(`
+            INSERT INTO public.tenant_resources
+              (id, tenant_id, product_id, resource_id, isolation_mode, schema_name, region_id, environment, status, provisioning_state, migration_version, tenant_product_id, created_at, updated_at, version)
+            VALUES ($1, $2, $3, $4, 'SCHEMA_PER_TENANT', $5, $6, 'PRODUCTION', 'ACTIVE', 'SUCCEEDED', 1, $7, NOW(), NOW(), 1)
+            ON CONFLICT (tenant_id, product_id, environment, resource_id)
+            DO UPDATE SET
+              status = 'ACTIVE',
+              provisioning_state = 'SUCCEEDED',
+              tenant_product_id = EXCLUDED.tenant_product_id,
+              updated_at = NOW()
+          `, [crypto.randomUUID(), tenant.id, resolvedProductId, resource.id, schemaName, region.id, tpId]);
+          try {
+            await execute(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
+          } catch (sErr) {}
         }
       } catch (rErr) {}
 
@@ -1090,11 +1084,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
       }
 
       const tpId = crypto.randomUUID();
-      await execute(`
+      const tpResult = await queryOne<{ id: string }>(`
         INSERT INTO public.tenant_products (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
         VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
+        ON CONFLICT (tenant_id, product_id)
+        DO UPDATE SET
+          status = 'ACTIVE',
+          plan_id = COALESCE(EXCLUDED.plan_id, tenant_products.plan_id),
+          app_url = COALESCE(EXCLUDED.app_url, tenant_products.app_url),
+          updated_at = NOW()
+        RETURNING id
       `, [tpId, tenantId, product.productId, planId, appUrl || null]);
-      return json({ subscription: { tenantProductId: tpId, status: 'ACTIVE' } }, 201);
+      return json({ subscription: { tenantProductId: tpResult?.id || tpId, status: 'ACTIVE' } }, 201);
     } catch (err) {
       return dbError(err);
     }
@@ -1159,6 +1160,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         INSERT INTO public.tenant_products
           (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
         VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
+        ON CONFLICT (tenant_id, product_id)
+        DO UPDATE SET
+          status = 'ACTIVE',
+          plan_id = COALESCE(EXCLUDED.plan_id, tenant_products.plan_id),
+          app_url = COALESCE(EXCLUDED.app_url, tenant_products.app_url),
+          updated_at = NOW()
       `, [tenantProductId, tenantId, product.productId, plan?.planId || null, targetDomain]);
 
       const schemaName = `${productCode.toLowerCase()}_${tenantCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
@@ -1169,6 +1176,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
              region_id, environment, status, provisioning_state, migration_version,
              tenant_product_id, created_at, updated_at, version)
           VALUES ($1,$2,$3,$4,'SCHEMA_PER_TENANT',$5,$6,'PRODUCTION','ACTIVE','SUCCEEDED',1,$7,NOW(),NOW(),1)
+          ON CONFLICT (tenant_id, product_id, environment, resource_id)
+          DO UPDATE SET
+            status = 'ACTIVE',
+            provisioning_state = 'SUCCEEDED',
+            tenant_product_id = EXCLUDED.tenant_product_id,
+            updated_at = NOW()
         `, [crypto.randomUUID(), tenantId, product.productId, resource.resourceId,
             schemaName, region.regionId, tenantProductId]);
 
