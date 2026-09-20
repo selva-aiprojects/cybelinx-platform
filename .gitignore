@@ -6,6 +6,7 @@ dist/
 build/
 .next/
 out/
+.vercel/
 
 # Tests
 coverage/
