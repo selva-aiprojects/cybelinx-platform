@@ -212,6 +212,18 @@ export default function TenantDetailPage() {
                       </td>
                       <td className="muted small">{formatDate(product.activatedAt)}</td>
                       <td className="cell-actions">
+                        {product.appUrl && (
+                          <a
+                            href={`${product.appUrl}/dashboard`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm"
+                            style={{ background: '#7c3aed', color: '#fff', textDecoration: 'none' }}
+                            title="Launch Tenant Dashboard (SSO Bypass)"
+                          >
+                            SSO Dashboard ↗
+                          </a>
+                        )}
                         {product.status !== 'ACTIVE' && (
                           <button
                             type="button"

@@ -95,101 +95,76 @@ function createDevToken(email: string, roles: string[]): string {
   return `${header}.${payload}.${signature}`;
 }
 
-// ─── Default Onboarding Definitions Builder ───────────────────────────────────
-function buildProductDefinition(p: { productCode: string; name: string; description: string | null; plans: { planCode: string }[] }) {
+// ─── Universal Generic Onboarding Definitions Builder (Metadata-Driven for 12+ Products) ──
+function buildProductDefinition(p: {
+  productCode: string;
+  name: string;
+  description: string | null;
+  baseUrl?: string | null;
+  plans: { planCode: string }[];
+}) {
   const code = p.productCode.toUpperCase();
-  const availablePlans = (p.plans && p.plans.length > 0) ? p.plans.map((pl) => pl.planCode) : ['STARTER', 'ENTERPRISE'];
+  const availablePlans = (p.plans && p.plans.length > 0)
+    ? p.plans.map((pl) => pl.planCode)
+    : ['STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
   const defaultPlanCode = availablePlans[0];
-
-  if (code === 'JIOPLIX' || code === 'JIOPLIX_SMART') {
-    return {
-      productCode: code,
-      version: '1.0.0',
-      displayName: p.name || 'Jioplix Hospital Management System',
-      description: p.description || 'Enterprise clinical EHR, inpatient/outpatient hospital operations, and multi-facility healthcare platform',
-      provider: `${code}_NEXUS`,
-      tenantIdentifier: {
-        key: 'externalId',
-        label: 'Hospital External ID',
-        placeholder: 'e.g. JIOPLIX_NEXUS, HOSP_APOLLO_01',
-        required: true,
-        hint: 'External primary key in upstream hospital database',
-      },
-      fields: [
-        { key: 'hospitalName', label: 'Hospital Name', type: 'text' as const, required: true, placeholder: 'e.g. Apollo Multispecialty Hospital', hint: 'Official healthcare institution name' },
-        { key: 'domain', label: 'Hospital Domain / Portal URL', type: 'url' as const, required: false, placeholder: 'https://apollo.jioplix.com', hint: 'Dedicated vanity or primary web domain' },
-        { key: 'contactEmail', label: 'Contact / Admin Email', type: 'email' as const, required: true, placeholder: 'admin@apollo.org', hint: 'Official email for platform administrative notices' },
-        { key: 'country', label: 'Country / Jurisdiction', type: 'text' as const, required: false, placeholder: 'India', hint: 'Legal operating jurisdiction for healthcare compliance' },
-        { key: 'timezone', label: 'Timezone', type: 'text' as const, required: false, placeholder: 'Asia/Kolkata', hint: 'Operating timezone for appointments and clinical logs' },
-      ],
-      subscription: {
-        required: true,
-        defaultPlanCode,
-        availablePlans,
-      },
-      resource: {
-        defaultResourceType: 'POSTGRES_SCHEMA',
-        supportedIsolationModes: ['SCHEMA_PER_TENANT', 'SHARED_POOL', 'DEDICATED_DATABASE'],
-        defaultIsolationMode: 'SCHEMA_PER_TENANT',
-        schemaPrefix: `${code.toLowerCase()}_`,
-      },
-      provisioningSteps: ['VALIDATE_TENANT', 'MAP_EXTERNAL_ID', 'ATTACH_SUBSCRIPTION', 'PROVISION_SCHEMA', 'EMIT_OUTBOX_EVENT'],
-      healthCheckEndpoint: '/api/v1/health',
-    };
-  }
-
-  if (code === 'STOREAI') {
-    return {
-      productCode: code,
-      version: '1.0.0',
-      displayName: p.name || 'StoreAI Composable Commerce',
-      description: p.description || 'Multi-brand autonomous retail engine, dynamic checkout, inventory management, and omnichannel commerce platform',
-      provider: 'STOREAI_NEXUS',
-      tenantIdentifier: {
-        key: 'externalId',
-        label: 'Store External ID',
-        placeholder: 'e.g. STOREAI_NEXUS, STORE_NIKE_01',
-        required: true,
-        hint: 'Merchant or store identifier in existing StoreAI retail database',
-      },
-      fields: [
-        { key: 'storeName', label: 'Store / Merchant Name', type: 'text' as const, required: true, placeholder: 'e.g. Nike Flagship Online', hint: 'Commercial name of the store or retail brand' },
-        { key: 'domain', label: 'Store Domain / Storefront URL', type: 'url' as const, required: false, placeholder: 'https://nike.storeai.com', hint: 'Custom or hosted storefront domain' },
-        { key: 'contactEmail', label: 'Merchant Contact Email', type: 'email' as const, required: true, placeholder: 'merchant@nike.com', hint: 'Primary merchant administrator email address' },
-        { key: 'adminUserId', label: 'Merchant Admin User ID', type: 'text' as const, required: false, placeholder: 'usr_nike_owner_01', hint: 'Existing StoreAI merchant user identifier' },
-      ],
-      subscription: {
-        required: true,
-        defaultPlanCode,
-        availablePlans,
-      },
-      resource: {
-        defaultResourceType: 'POSTGRES_SCHEMA',
-        supportedIsolationModes: ['SCHEMA_PER_TENANT', 'SHARED_POOL', 'DEDICATED_DATABASE'],
-        defaultIsolationMode: 'SCHEMA_PER_TENANT',
-        schemaPrefix: 'storeai_',
-      },
-      provisioningSteps: ['VALIDATE_TENANT', 'MAP_EXTERNAL_ID', 'ATTACH_SUBSCRIPTION', 'PROVISION_SCHEMA', 'EMIT_OUTBOX_EVENT'],
-      healthCheckEndpoint: '/api/v1/health',
-    };
-  }
+  const schemaPrefix = `${code.toLowerCase()}_`;
+  const defaultDomain = p.baseUrl || `https://{tenant}.${code.toLowerCase()}.com`;
 
   return {
     productCode: code,
     version: '1.0.0',
-    displayName: p.name,
-    description: p.description || `${p.name} SaaS Product`,
+    displayName: p.name || `${code} Platform`,
+    description: p.description || `Enterprise ${p.name} SaaS platform workload`,
     provider: `${code}_NEXUS`,
     tenantIdentifier: {
       key: 'externalId',
       label: `${p.name} External ID`,
-      placeholder: `e.g. ${code}_CLIENT_01`,
+      placeholder: `e.g. ${code}_TENANT_01`,
       required: true,
-      hint: `Unique identifier in upstream ${p.name} system`,
+      hint: `Unique upstream external identifier for this ${p.name} tenant`,
     },
     fields: [
-      { key: 'contactEmail', label: 'Admin Email', type: 'email' as const, required: true, placeholder: `admin@${code.toLowerCase()}.com`, hint: 'Primary contact email' },
-      { key: 'domain', label: 'Custom Domain', type: 'url' as const, required: false, placeholder: `https://${code.toLowerCase()}.cybelinx.com`, hint: 'Dedicated domain' },
+      {
+        key: 'tenantName',
+        label: 'Organization / Customer Legal Name',
+        type: 'text' as const,
+        required: true,
+        placeholder: `e.g. Acme ${p.name} Organization`,
+        hint: 'Full legal name of customer or commercial institution',
+      },
+      {
+        key: 'domain',
+        label: 'Tenant Domain / Portal URL',
+        type: 'url' as const,
+        required: false,
+        placeholder: defaultDomain.includes('{tenant}') ? defaultDomain : `https://{tenant}.${code.toLowerCase()}.com`,
+        hint: 'Dedicated vanity subdomain or application URL for tenant access',
+      },
+      {
+        key: 'contactEmail',
+        label: 'Primary Admin Email',
+        type: 'email' as const,
+        required: true,
+        placeholder: `admin@${code.toLowerCase()}-tenant.com`,
+        hint: 'Official administrative contact and SSO login email',
+      },
+      {
+        key: 'country',
+        label: 'Jurisdiction / Country',
+        type: 'text' as const,
+        required: false,
+        placeholder: 'India',
+        hint: 'Operating legal jurisdiction for regulatory data residency',
+      },
+      {
+        key: 'timezone',
+        label: 'Operational Timezone',
+        type: 'text' as const,
+        required: false,
+        placeholder: 'Asia/Kolkata',
+        hint: 'Primary timezone for appointments, telemetry, and operations',
+      },
     ],
     subscription: {
       required: true,
@@ -198,9 +173,9 @@ function buildProductDefinition(p: { productCode: string; name: string; descript
     },
     resource: {
       defaultResourceType: 'POSTGRES_SCHEMA',
-      supportedIsolationModes: ['SCHEMA_PER_TENANT', 'SHARED_POOL', 'DEDICATED_DATABASE'],
+      supportedIsolationModes: ['SCHEMA_PER_TENANT', 'SHARED_POOL', 'DEDICATED_DATABASE', 'DEDICATED_INFRASTRUCTURE'],
       defaultIsolationMode: 'SCHEMA_PER_TENANT',
-      schemaPrefix: `${code.toLowerCase()}_`,
+      schemaPrefix,
     },
     provisioningSteps: ['VALIDATE_TENANT', 'MAP_EXTERNAL_ID', 'ATTACH_SUBSCRIPTION', 'PROVISION_SCHEMA', 'EMIT_OUTBOX_EVENT'],
     healthCheckEndpoint: '/api/v1/health',
@@ -891,27 +866,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
   if (p0 === 'tenants' && p1 && p2 === 'products') {
     try {
       const body = await req.json().catch(() => ({}));
-      const { productCode, planCode } = body as Record<string, string>;
-      const tenant = await queryOne<{ id: string; tenantCode: string }>(`
-        SELECT id, tenant_code AS "tenantCode" FROM public.tenants WHERE id::text = $1 OR tenant_code = $1 LIMIT 1
-      `, [p1]);
-      if (!tenant) return apiError('Tenant not found', 404, 'TENANT_NOT_FOUND');
-
-      const product = await queryOne<{ productId: string; productCode: string }>(`
-        SELECT id AS "productId", product_code AS "productCode" FROM public.products WHERE product_code = $1 LIMIT 1
-      `, [productCode.toUpperCase()]);
-      if (!product) return apiError('Product not found', 404, 'PRODUCT_NOT_FOUND');
-
-      const plan = await queryOne<{ planId: string; planCode: string }>(`
-        SELECT id AS "planId", plan_code AS "planCode" FROM public.plans WHERE product_id::text = $1 LIMIT 1
-      `, [product.productId]);
+      const { productId, planId, appUrl } = body as Record<string, string>;
+      if (!productId) return apiError('productId is required', 400, 'MISSING_FIELDS');
 
       const tpId = crypto.randomUUID();
       await execute(`
-        INSERT INTO public.tenant_products (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
+        INSERT INTO public.tenant_products
+          (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
         VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
-      `, [tpId, tenant.id, product.productId, plan?.planId || null, `https://${tenant.tenantCode.toLowerCase()}.${productCode.toLowerCase()}.cybelinx.com`]);
-      return json({ tenantProductId: tpId, status: 'ACTIVE', productCode: product.productCode }, 201);
+      `, [tpId, p1, productId, planId || null, appUrl || null]);
+
+      return json({ subscription: { tenantProductId: tpId, status: 'ACTIVE' } }, 201);
     } catch (err) {
       return dbError(err);
     }
@@ -948,21 +913,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
     }
   }
 
-  // ── Onboard Tenant (POST /onboarding/execute, POST /tenants/onboard) ──────────
+  // ── Universal Multi-Product Onboard Tenant (POST /onboarding/execute, POST /tenants/onboard) ─
   if ((p0 === 'tenants' && p1 === 'onboard') || (p0 === 'onboarding' && p1 === 'execute')) {
     try {
       const body = await req.json().catch(() => ({}));
       const {
         productCode, tenantCode, tenantName, externalId,
-        planCode, domain,
+        planCode, domain, contactEmail, adminEmail, country, timezone,
       } = body as Record<string, string>;
 
       if (!productCode || !tenantCode || !tenantName || !externalId) {
         return apiError('productCode, tenantCode, tenantName, externalId are required', 400, 'MISSING_FIELDS');
       }
 
-      const product = await queryOne<{ productId: string; productCode: string }>(`
-        SELECT id AS "productId", product_code AS "productCode"
+      const product = await queryOne<{ productId: string; productCode: string; name: string }>(`
+        SELECT id AS "productId", product_code AS "productCode", name
         FROM public.products WHERE product_code = $1 LIMIT 1
       `, [productCode.toUpperCase()]);
       if (!product) return apiError(`Product '${productCode}' not found`, 404, 'PRODUCT_NOT_FOUND');
@@ -995,18 +960,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
 
       const tenantId = crypto.randomUUID();
       const tenantProductId = crypto.randomUUID();
+      const targetDomain = domain || `https://${tenantCode.toLowerCase()}.${productCode.toLowerCase()}.com`;
+      const resolvedEmail = adminEmail || contactEmail || `admin@${tenantCode.toLowerCase()}.com`;
 
       await execute(`
-        INSERT INTO public.tenants (id, tenant_code, name, status, created_at, updated_at, version)
-        VALUES ($1, $2, $3, 'ACTIVE', NOW(), NOW(), 1)
-      `, [tenantId, tenantCode.toUpperCase(), tenantName]);
+        INSERT INTO public.tenants (id, tenant_code, name, status, country, timezone, created_at, updated_at, version)
+        VALUES ($1, $2, $3, 'ACTIVE', $4, $5, NOW(), NOW(), 1)
+      `, [tenantId, tenantCode.toUpperCase(), tenantName, country || 'IN', timezone || 'Asia/Kolkata']);
 
       await execute(`
         INSERT INTO public.tenant_products
           (id, tenant_id, product_id, plan_id, status, activated_at, created_at, updated_at, version, app_url)
         VALUES ($1, $2, $3, $4, 'ACTIVE', NOW(), NOW(), NOW(), 1, $5)
-      `, [tenantProductId, tenantId, product.productId, plan?.planId || null,
-          domain || `https://${tenantCode.toLowerCase()}.${productCode.toLowerCase()}.com`]);
+      `, [tenantProductId, tenantId, product.productId, plan?.planId || null, targetDomain]);
 
       const schemaName = `${productCode.toLowerCase()}_${tenantCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
       if (region && resource) {
@@ -1018,6 +984,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
           VALUES ($1,$2,$3,$4,'SCHEMA_PER_TENANT',$5,$6,'PRODUCTION','ACTIVE','SUCCEEDED',1,$7,NOW(),NOW(),1)
         `, [crypto.randomUUID(), tenantId, product.productId, resource.resourceId,
             schemaName, region.regionId, tenantProductId]);
+
+        try {
+          await execute(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
+        } catch (schemaErr) {
+          console.warn('Physical schema creation notice:', schemaErr);
+        }
       }
 
       await execute(`
@@ -1025,6 +997,61 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
           (id, tenant_id, product_id, provider, external_id, created_at)
         VALUES ($1, $2, $3, $4, $5, NOW())
       `, [crypto.randomUUID(), tenantId, product.productId, `${productCode.toUpperCase()}_NEXUS`, externalId]);
+
+      // Emit platform audit trail event
+      try {
+        await execute(`
+          INSERT INTO public.audit_events (id, action, entity_type, entity_id, actor_type, metadata, occurred_at)
+          VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [
+          crypto.randomUUID(),
+          'tenant.provisioned',
+          'TENANT',
+          tenantId,
+          'SYSTEM',
+          JSON.stringify({
+            tenantCode: tenantCode.toUpperCase(),
+            tenantName,
+            productCode: product.productCode,
+            plan: plan?.planCode || resolvedPlanCode,
+            schema: schemaName,
+            domain: targetDomain,
+            adminEmail: resolvedEmail,
+          })
+        ]);
+      } catch (auditErr) {
+        console.warn('Audit trail notice:', auditErr);
+      }
+
+      // Emit transactional outbox event
+      try {
+        await execute(`
+          INSERT INTO public.platform_events (
+            id, event_type, schema_version, tenant_id, product_id,
+            entity_type, entity_id, status, source, payload,
+            occurred_at, created_at, updated_at
+          )
+          VALUES ($1, $2, '1.0', $3, $4, 'TENANT', $5, 'SUCCEEDED', 'CENTRAL_CONTROL_PLANE', $6, NOW(), NOW(), NOW())
+        `, [
+          crypto.randomUUID(),
+          'tenant.provisioned',
+          tenantId,
+          product.productId,
+          tenantId,
+          JSON.stringify({
+            tenantCode: tenantCode.toUpperCase(),
+            tenantName,
+            productCode: product.productCode,
+            plan: plan?.planCode || resolvedPlanCode,
+            schema: schemaName,
+            appUrl: targetDomain,
+            adminEmail: resolvedEmail,
+            provisionedAt: new Date().toISOString(),
+          })
+        ]);
+      } catch (outboxErr) {
+        console.warn('Outbox event notice:', outboxErr);
+      }
 
       return json({
         status: 'SUCCESS',
@@ -1039,7 +1066,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         planCode: plan?.planCode || resolvedPlanCode,
         externalId,
         provider: `${productCode.toUpperCase()}_NEXUS`,
-        appUrl: domain || `https://${tenantCode.toLowerCase()}.${productCode.toLowerCase()}.com`,
+        appUrl: targetDomain,
+        adminEmail: resolvedEmail,
         timestamp: new Date().toISOString(),
         executedSteps: ['VALIDATE_TENANT', 'MAP_EXTERNAL_ID', 'ATTACH_SUBSCRIPTION', 'PROVISION_SCHEMA', 'EMIT_OUTBOX_EVENT'],
       }, 201);

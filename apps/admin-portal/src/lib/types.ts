@@ -509,6 +509,8 @@ export interface GenericOnboardResponse {
   schemaName: string;
   message: string;
   timestamp: string;
+  appUrl?: string;
+  adminEmail?: string;
   executedSteps: string[];
 }
 

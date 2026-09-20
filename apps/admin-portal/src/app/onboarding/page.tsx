@@ -17,21 +17,20 @@ export default function UnifiedOnboardingPage() {
   const [selectedProductCode, setSelectedProductCode] = useState<string>('JIOPLIX');
   const [activeTab, setActiveTab] = useState<'wizard' | 'lookup' | 'definitions'>('wizard');
 
-  // Form State
-  const [externalId, setExternalId] = useState<string>('JIOPLIX_NEXUS');
-  const [tenantCode, setTenantCode] = useState<string>('JIOPLIX_APOLLO_01');
-  const [tenantName, setTenantName] = useState<string>('Apollo Multispecialty Hospital');
-  const [planCode, setPlanCode] = useState<string>('JIOPLIX_ENTERPRISE');
-  const [environment, setEnvironment] = useState<string>('DEVELOPMENT');
+  // Form State - 100% Generic across all 12+ products
+  const [externalId, setExternalId] = useState<string>('');
+  const [tenantCode, setTenantCode] = useState<string>('');
+  const [tenantName, setTenantName] = useState<string>('');
+  const [planCode, setPlanCode] = useState<string>('ENTERPRISE');
+  const [environment, setEnvironment] = useState<string>('PRODUCTION');
   const [isolationMode, setIsolationMode] = useState<string>('SCHEMA_PER_TENANT');
-  const [schemaName, setSchemaName] = useState<string>('jioplix_apollo_01');
-  const [regionCode] = useState<string>('us-east-1');
+  const [schemaName, setSchemaName] = useState<string>('');
+  const [regionCode] = useState<string>('ap-south-1');
   
   // Dynamic custom fields keyed by field.key
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({
-    hospitalName: 'Apollo Multispecialty Hospital',
-    domain: 'https://apollo.jioplix.com',
-    contactEmail: 'admin@apollo.org',
+    domain: '',
+    contactEmail: '',
     country: 'India',
     timezone: 'Asia/Kolkata',
   });
@@ -56,42 +55,42 @@ export default function UnifiedOnboardingPage() {
 
   // Status Lookup State
   const [lookupProductCode, setLookupProductCode] = useState<string>('JIOPLIX');
-  const [lookupExternalId, setLookupExternalId] = useState<string>('JIOPLIX_NEXUS');
+  const [lookupExternalId, setLookupExternalId] = useState<string>('');
   const [isLookingUp, setIsLookingUp] = useState<boolean>(false);
   const [lookupResult, setLookupResult] = useState<GenericOnboardStatusView | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
   const handleSelectProductForDef = (def: ProductOnboardingDefinition) => {
     const code = def.productCode;
+    const sanitizedCode = code.toLowerCase();
     setPlanCode(def.subscription.defaultPlanCode);
     setIsolationMode(def.resource.defaultIsolationMode);
 
-    if (code === 'JIOPLIX') {
-      setExternalId('JIOPLIX_NEXUS');
-      setTenantCode('JIOPLIX_APOLLO_01');
-      setTenantName('Apollo Multispecialty Hospital');
-      setSchemaName('jioplix_apollo_01');
-      setFieldValues({
-        hospitalName: 'Apollo Multispecialty Hospital',
-        domain: 'https://apollo.jioplix.com',
-        contactEmail: 'admin@apollo.org',
-        country: 'India',
-        timezone: 'Asia/Kolkata',
-      });
-    } else {
-      const sanitizedCode = code.toLowerCase();
-      setExternalId(`${code}_CLIENT_01`);
-      setTenantCode(`${code}_TENANT_01`);
-      setTenantName(`${def.displayName} Client Organization`);
-      setSchemaName(`${def.resource.schemaPrefix || sanitizedCode + '_'}client_01`);
-      const dynamicFields: Record<string, string> = {};
-      def.fields.forEach((f) => {
-        dynamicFields[f.key] = f.defaultValue || '';
-      });
-      setFieldValues(dynamicFields);
-    }
+    setExternalId(`${code}_CLIENT_01`);
+    setTenantCode(`${code}_TENANT_01`);
+    setTenantName(`${def.displayName} Organization`);
+    setSchemaName(`${def.resource.schemaPrefix || sanitizedCode + '_'}tenant_01`);
+    
+    const dynamicFields: Record<string, string> = {
+      domain: `https://tenant.${sanitizedCode}.com`,
+      contactEmail: `admin@${sanitizedCode}-client.com`,
+      country: 'India',
+      timezone: 'Asia/Kolkata',
+    };
+    def.fields.forEach((f) => {
+      dynamicFields[f.key] = f.defaultValue || dynamicFields[f.key] || '';
+    });
+    setFieldValues(dynamicFields);
     setProvisionResponse(null);
     setErrorMessage(null);
+  };
+
+  const handleTenantCodeChange = (val: string) => {
+    const raw = val.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    setTenantCode(raw);
+    const prefix = activeDefinition?.resource?.schemaPrefix || `${selectedProductCode.toLowerCase()}_`;
+    const cleanSuffix = raw.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    setSchemaName(`${prefix}${cleanSuffix}`);
   };
 
   // Load live definitions from Central API on mount
@@ -335,8 +334,14 @@ export default function UnifiedOnboardingPage() {
                   const isSelected = def.productCode === selectedProductCode;
                   const icons: Record<string, string> = {
                     JIOPLIX: '🏥',
+                    JIOPLIX_SMART: '🏥',
                     STOREAI: '🛍️',
                     LIMS: '🧪',
+                    SYNTHALYST: '💼',
+                    SYNTHALYST_HRM: '💼',
+                    CYBEHEALTH: '🩺',
+                    STAYSPHERE: '🏨',
+                    JIOCLIX: '⚡',
                   };
                   return (
                     <div
@@ -407,8 +412,8 @@ export default function UnifiedOnboardingPage() {
                       type="text"
                       required
                       value={tenantCode}
-                      onChange={(e) => setTenantCode(e.target.value)}
-                      placeholder="e.g. JIOPLIX_APOLLO_01"
+                      onChange={(e) => handleTenantCodeChange(e.target.value)}
+                      placeholder={`e.g. ${selectedProductCode}_TENANT_01`}
                       style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                     />
                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '4px' }}>
@@ -426,7 +431,7 @@ export default function UnifiedOnboardingPage() {
                     required
                     value={tenantName}
                     onChange={(e) => setTenantName(e.target.value)}
-                    placeholder="e.g. Apollo Healthcare Foundation"
+                    placeholder={`e.g. Acme ${activeDefinition.displayName} Client`}
                     style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                   />
                 </div>
@@ -626,7 +631,7 @@ export default function UnifiedOnboardingPage() {
                   </div>
                 </div>
 
-                <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
+                <div style={{ marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
                   {provisionResponse.tenantId && (
                     <Link
                       href={`/tenants/${provisionResponse.tenantId}`}
@@ -635,13 +640,25 @@ export default function UnifiedOnboardingPage() {
                       View in Tenant Directory →
                     </Link>
                   )}
-                  {provisionResponse.productCode === 'STOREAI' && (
-                    <Link
-                      href={`/storeai/merchant?tenant=${provisionResponse.tenantCode.toLowerCase()}`}
-                      style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 }}
+                  {provisionResponse.appUrl && (
+                    <a
+                      href={provisionResponse.appUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                     >
-                      Open Merchant Dashboard →
-                    </Link>
+                      🚀 Launch Tenant Portal ({provisionResponse.appUrl}) ↗
+                    </a>
+                  )}
+                  {provisionResponse.appUrl && (
+                    <a
+                      href={`${provisionResponse.appUrl}/dashboard`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ padding: '8px 16px', background: '#7c3aed', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      ⚡ Direct Dashboard (SSO Bypass) ↗
+                    </a>
                   )}
                 </div>
               </div>
@@ -724,7 +741,7 @@ export default function UnifiedOnboardingPage() {
               required
               value={lookupExternalId}
               onChange={(e) => setLookupExternalId(e.target.value)}
-              placeholder="e.g. JIOPLIX_NEXUS or STOREAI_NEXUS"
+              placeholder="e.g. OMEGA_01 or NIKE_01"
               style={{ flex: 1, minWidth: '220px', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
             />
 
