@@ -339,10 +339,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
   if (p0 === 'audit') {
     try {
       const rows = await query(`
-        SELECT ae.id AS "auditId", ae.action, ae.resource_type AS "resource",
-               ae.actor_id AS "actorId", ae.created_at AS "timestamp"
+        SELECT ae.id AS "auditId", ae.action, ae.entity_type AS "resource",
+               ae.user_id AS "actorId", ae.occurred_at AS "timestamp"
         FROM public.audit_events ae
-        ORDER BY ae.created_at DESC LIMIT 50
+        ORDER BY ae.occurred_at DESC LIMIT 50
       `);
       return json(paginate(rows));
     } catch (err) {
@@ -355,9 +355,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
     try {
       const rows = await query(`
         SELECT pe.id AS "eventId", pe.event_type AS "eventType",
-               pe.payload, pe.created_at AS "timestamp"
+               pe.payload, pe.occurred_at AS "timestamp"
         FROM public.platform_events pe
-        ORDER BY pe.created_at DESC LIMIT 50
+        ORDER BY pe.occurred_at DESC LIMIT 50
       `);
       return json(paginate(rows));
     } catch (err) {
