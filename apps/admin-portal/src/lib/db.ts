@@ -105,15 +105,19 @@ export function parseDatabaseConfig(raw?: string): { config: PoolConfig; envVar:
     host = hostPort || 'localhost';
   }
 
-  // Self-heal Aiven hostname if found anywhere in the string
-  const aivenMatch = rawStr.match(/([a-zA-Z0-9_.-]+(?:\.|\/)aivencloud\.com)(?::(\d+))?/i);
-  if (aivenMatch) {
-    host = aivenMatch[1].replace('/', '.');
-    if (aivenMatch[2]) port = parseInt(aivenMatch[2], 10);
-  }
-
-  if (rawStr.includes('cybelinx-platform')) {
+  // Self-heal Aiven configuration if aivencloud.com is referenced
+  if (rawStr.includes('aivencloud.com')) {
+    const fullMatch = rawStr.match(/([a-zA-Z0-9_.-]+\.aivencloud\.com)(?::(\d+))?/i);
+    if (fullMatch) {
+      host = fullMatch[1];
+      if (fullMatch[2]) port = parseInt(fullMatch[2], 10);
+      else port = 19168;
+    } else {
+      host = 'pg-jioclinic-aiservices-selva.f.aivencloud.com';
+      port = 19168;
+    }
     database = 'cybelinx-platform';
+    if (!user || user === 'cybelinx') user = 'avnadmin';
   }
 
   try {
