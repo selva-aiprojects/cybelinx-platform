@@ -757,7 +757,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 
       const tenant = await queryOne<{ id: string; tenant_code: string; name: string }>(`
         SELECT id, tenant_code, name FROM public.tenants
-        WHERE id::text = $1 OR tenant_code = $1
+        WHERE id::text = $1 OR UPPER(tenant_code) = UPPER($1)
         LIMIT 1
       `, [tenantParam]);
       if (!tenant) return apiError(`Tenant '${tenantParam}' not found`, 404, 'TENANT_NOT_FOUND');
@@ -777,7 +777,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
         role: 'admin',
       });
 
-      const rawAppUrl = tp?.app_url || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+      let rawAppUrl = tp?.app_url || '';
+      if (!rawAppUrl || rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com') {
+        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+      }
       const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
       const launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
 
@@ -842,7 +845,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
 
       const tenant = await queryOne<{ id: string; tenant_code: string; name: string }>(`
         SELECT id, tenant_code, name FROM public.tenants
-        WHERE id::text = $1 OR tenant_code = $1
+        WHERE id::text = $1 OR UPPER(tenant_code) = UPPER($1)
         LIMIT 1
       `, [tenantParam]);
       if (!tenant) return apiError(`Tenant '${tenantParam}' not found`, 404, 'TENANT_NOT_FOUND');
@@ -862,7 +865,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
         role: 'admin',
       });
 
-      const rawAppUrl = tp?.app_url || `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+      let rawAppUrl = tp?.app_url || '';
+      if (!rawAppUrl || rawAppUrl === 'https://jioplix.com' || rawAppUrl === 'http://jioplix.com') {
+        rawAppUrl = `https://${tenant.tenant_code.toLowerCase()}.jioplix.com`;
+      }
       const baseClean = rawAppUrl.replace(/\/+$/, '').replace(/\/login$/, '');
       const launchUrl = `${baseClean}/login?sso_token=${ssoToken}&redirect=/tenant/dashboard`;
 
