@@ -1,0 +1,13 @@
+{
+  "domain": "hrms",
+  "version": "1.0.0",
+  "language": "en",
+  "terms": [
+    "HRMS", "KPI", "KRA", "OKR", "CTC", "LWD", "DOJ", "PF", "EPFO", "ESI", "ESIC",
+    "TDS", "Form16", "Form12BB", "Gratuity", "VariablePay", "FixedPay", "GrossPay",
+    "NetPay", "Payroll", "Appraisal", "PIP", "Onboarding", "Offboarding", "Probation",
+    "Confirmation", "Attrition", "Retention", "Timesheet", "Overtime", "Reimbursement",
+    "Leaves", "CasualLeave", "SickLeave", "PrivilegeLeave", "MaternityLeave", "PaternityLeave",
+    "Grievance", "Townhall", "Hiring", "Recruitment", "Sourcing", "Headcount", "Workforce"
+  ]
+}

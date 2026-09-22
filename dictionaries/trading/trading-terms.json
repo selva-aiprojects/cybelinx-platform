@@ -1,0 +1,17 @@
+{
+  "domain": "trading",
+  "version": "1.0.0",
+  "language": "en",
+  "description": "Trading platform vocabulary: equities, derivatives, order routing, algorithms, and market microstructure",
+  "terms": [
+    "Bid", "Ask", "Spread", "Slippage", "OrderBook", "MarketOrder", "LimitOrder",
+    "StopLoss", "StopLimit", "TakeProfit", "TrailingStop", "GoodTillCancelled", "GTC",
+    "ImmediateOrCancel", "IOC", "FillOrKill", "FOK", "VWAP", "TWAP", "MarginCall",
+    "Leverage", "Liquidity", "ShortSelling", "LongPosition", "OptionGreeks", "Delta",
+    "Gamma", "Theta", "Vega", "ImpliedVolatility", "InTheMoney", "ITM", "OutOfTheMoney",
+    "OTM", "AtTheMoney", "ATM", "ClearingHouse", "Demat", "Depository", "SettlementCycle",
+    "TPlusOne", "AlgoTrading", "HighFrequencyTrading", "Arbitrage", "Candlestick",
+    "Bullish", "Bearish", "Consolidation", "Breakout", "Resistance", "SupportLevel",
+    "MarkToMarket", "MTM", "RealizedPnL", "UnrealizedPnL", "Collateral", "Haircut"
+  ]
+}

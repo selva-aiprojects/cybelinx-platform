@@ -1,0 +1,17 @@
+{
+  "domain": "supplychain",
+  "version": "1.0.0",
+  "language": "en",
+  "description": "Supply Chain Management (SCM), logistics, warehouse management, and freight operations",
+  "terms": [
+    "Procurement", "PurchaseOrder", "PurchaseRequisition", "InboundLogistics", "OutboundLogistics",
+    "3PL", "4PL", "WarehouseManagement", "WMS", "TransportationManagement", "TMS",
+    "CrossDocking", "BillOfLading", "BOL", "AdvanceShippingNotice", "ASN", "LeadTime",
+    "SafetyStock", "ReorderPoint", "EconomicOrderQuantity", "EOQ", "InventoryTurnover",
+    "StockkeepingUnit", "FreightForwarder", "Demurrage", "DetentionCharge", "LastMileDelivery",
+    "RFID", "BarcodeScanner", "Palletization", "Consignment", "DistributionCenter", "HubAndSpoke",
+    "ContainerDepot", "CustomsClearance", "Incoterms", "FOB", "CIF", "EXW", "DDP",
+    "VendorManagedInventory", "VMI", "JustInTime", "JIT", "DemandPlanning", "SupplyForecasting",
+    "ReverseLogistics", "ProofOfDelivery", "POD", "Waybill", "Manifest", "ColdChainLogistics"
+  ]
+}

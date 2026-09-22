@@ -1,0 +1,16 @@
+{
+  "domain": "pharma",
+  "version": "1.0.0",
+  "language": "en",
+  "description": "Pharmaceutical formulation, manufacturing, regulatory compliance, and clinical trials",
+  "terms": [
+    "API", "Excipient", "ActivePharmaceuticalIngredient", "Pharmacokinetics", "Pharmacodynamics",
+    "CDMO", "CRO", "cGMP", "USFDA", "EMA", "ScheduleH", "ScheduleX", "BatchManufacturingRecord",
+    "BMR", "BatchPackagingRecord", "BPR", "Dissolution", "StabilityTesting", "Bioavailability",
+    "Bioequivalence", "Pharmacovigilance", "AdverseEvent", "Serialization", "TrackAndTrace",
+    "ColdChain", "Lyophilization", "Granulation", "Compression", "Sterilization", "Cleanroom",
+    "HVAC", "ParticulateCount", "MicrobialLimit", "PyrogenTesting", "Endotoxin", "USP",
+    "PhEur", "IP", "Pharmacopeia", "InvestigationalNewDrug", "IND", "NewDrugApplication",
+    "NDA", "AbbreviatedNewDrugApplication", "ANDA", "MasterFormulaRecord", "InProcessControl"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@cybelinx/language",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cybelinx language intelligence: Trie spell checker, 4-tier dictionary resolver, and grammar client",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@cybelinx/core": "*"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.10",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.12",
+    "typescript": "~5.9.3"
+  }
+}

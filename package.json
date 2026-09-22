@@ -6,13 +6,16 @@
   "workspaces": [
     "apps/admin-portal",
     "packages/shared",
-    "packages/sdk"
+    "packages/sdk",
+    "packages/core",
+    "packages/language",
+    "packages/ui"
   ],
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
-    "build:packages": "npm run build --workspace @cybelinx/shared && npm run build --workspace @cybelinx/sdk",
+    "build:packages": "npm run build --workspace @cybelinx/shared && npm run build --workspace @cybelinx/sdk && npm run build --workspace @cybelinx/core && npm run build --workspace @cybelinx/language && npm run build --workspace @cybelinx/ui",
     "build:apps": "npm run build --workspace @cybelinx/admin-portal",
     "build": "npm run build:packages && npm run build:apps",
     "lint": "npm run lint --workspaces --if-present",

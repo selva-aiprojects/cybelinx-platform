@@ -1,0 +1,16 @@
+{
+  "domain": "realestate",
+  "version": "1.0.0",
+  "language": "en",
+  "description": "Real-Estate and property management vocabulary",
+  "terms": [
+    "RERA", "SquareFootage", "SuperBuiltUp", "CarpetArea", "BuiltUpArea",
+    "TitleDeed", "Encumbrance", "Escrow", "Leasehold", "Freehold", "Tenancy",
+    "Lessee", "Lessor", "Sublease", "HOA", "MaintenanceCharge", "SinkingFund",
+    "StampDuty", "RegistrationFee", "ConveyanceDeed", "SaleAgreement", "AllotmentLetter",
+    "PossessionDate", "ReadyToMove", "UnderConstruction", "AppraisalValue", "CapitalGains",
+    "Depreciation", "CapRate", "NOI", "GrossYield", "NetYield", "TenantScreening",
+    "SecurityDeposit", "RentRoll", "EvictionNotice", "PropertyTax", "ZoningCode",
+    "CommercialRealEstate", "ResidentialProperty", "PlotListing", "SiteVisit", "Brokerage"
+  ]
+}

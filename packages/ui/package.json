@@ -1,0 +1,36 @@
+{
+  "name": "@cybelinx/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cybelinx platform shared UI component library: SmartTextEditor, inputs, popovers, and overlays",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./src/styles/tokens.css"
+  },
+  "files": ["dist", "src/styles"],
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "dependencies": {
+    "@cybelinx/core": "*",
+    "@cybelinx/language": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "~5.9.3"
+  }
+}

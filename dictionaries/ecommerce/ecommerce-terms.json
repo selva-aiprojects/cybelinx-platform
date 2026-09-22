@@ -1,0 +1,16 @@
+{
+  "domain": "ecommerce",
+  "version": "1.0.0",
+  "language": "en",
+  "description": "eCommerce platform, marketplace merchandising, conversions, and storefront operations",
+  "terms": [
+    "SKU", "Catalog", "ShoppingBag", "CartAbandonment", "CheckoutFlow", "ConversionRate",
+    "AverageOrderValue", "AOV", "CustomerLifetimeValue", "CLTV", "PaymentGateway",
+    "CashOnDelivery", "COD", "Storefront", "Dropshipping", "OrderFulfillment",
+    "ReturnMerchandiseAuthorization", "RMA", "Chargeback", "RefundPolicy", "GrossMerchandiseValue",
+    "GMV", "Marketplace", "VendorPortal", "ProductListing", "CrossSelling", "UpSelling",
+    "Wishlist", "DiscountCoupon", "PromoCode", "FlashSale", "InventorySync", "Backorder",
+    "PreOrder", "CategoryTaxonomy", "ProductVariant", "ShippingTier", "FreeShippingThreshold",
+    "AddressVerification", "Omnichannel", "Cartlinx", "ClickThroughRate", "ImpressionShare"
+  ]
+}

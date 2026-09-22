@@ -1,0 +1,18 @@
+{
+  "domain": "finance",
+  "version": "1.1.0",
+  "language": "en",
+  "description": "Accounting & Finance vocabulary for Smartbooks and Cybelinx financial suites",
+  "terms": [
+    "GSTIN", "CGST", "SGST", "IGST", "UTGST", "HSN", "SAC", "EWayBill", "TDS", "TCS",
+    "PAN", "TAN", "CIN", "LLPIN", "EBITDA", "EBIT", "P&L", "BalanceSheet", "CashFlow",
+    "GeneralLedger", "SubLedger", "Debtor", "Creditor", "AccountsReceivable", "AccountsPayable",
+    "Amortization", "Depreciation", "BankReconciliation", "Invoice", "DebitNote", "CreditNote",
+    "Voucher", "JournalEntry", "TrialBalance", "AuditTrail", "TaxableAmount", "ExemptedSupply",
+    "ReverseCharge", "InputTaxCredit", "ITC", "NetProfit", "GrossProfit", "OperatingMargin",
+    "Accrual", "CostOfGoodsSold", "COGS", "FixedAsset", "CurrentAsset", "CurrentLiability",
+    "LongTermDebt", "WorkingCapital", "CashEquivalents", "PettyCash", "ChartOfAccounts",
+    "FiscalYear", "QuarterlyFiling", "WithholdingTax", "AuditReport", "StatutoryCompliance",
+    "Smartbooks", "AgingAnalysis", "BadDebt", "Provisioning", "SundryDebtors", "SundryCreditors"
+  ]
+}

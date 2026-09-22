@@ -1,0 +1,14 @@
+{
+  "domain": "lims",
+  "version": "1.0.0",
+  "language": "en",
+  "terms": [
+    "LIMS", "CAPA", "COA", "QC", "QA", "OOS", "OOT", "SOP", "GLP", "GMP", "NABL",
+    "ISO17025", "HPLC", "UHPLC", "GCMS", "LCMS", "ELISA", "PCR", "qPCR", "RT-PCR",
+    "Spectrophotometry", "Chromatography", "Electrophoresis", "Titration", "Centrifugation",
+    "LOD", "LOQ", "Calibration", "Sample", "Specimen", "Aliquot", "Supernatant",
+    "Analyte", "Assay", "Reagent", "Dilution", "Concentration", "Absorbance",
+    "Transmittance", "Incubation", "Autoclave", "Pipette", "Meniscus", "ControlSample",
+    "BlankSample", "ChainOfCustody", "Barcoding", "Centrifuge", "Incubator"
+  ]
+}

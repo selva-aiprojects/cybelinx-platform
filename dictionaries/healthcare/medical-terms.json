@@ -1,0 +1,17 @@
+{
+  "domain": "healthcare",
+  "version": "1.0.0",
+  "language": "en",
+  "terms": [
+    "ABHA", "ABDM", "MRN", "UHID", "OPD", "IPD", "TPA", "MLC", "DAMA", "LAMA",
+    "HbA1c", "HTN", "CAD", "COPD", "T2DM", "T1DM", "ECG", "EKG", "ECHO", "MRI",
+    "CT", "PET", "USG", "CBC", "LFT", "KFT", "RFT", "ABG", "ESR", "CRP",
+    "Dyspnea", "Tachycardia", "Bradycardia", "Auscultation", "Hypertension", "Hypotension",
+    "Diabetes", "Cardiology", "Oncology", "Radiology", "Neurology", "Nephrology",
+    "Orthopedics", "Pediatrics", "Gynecology", "Dermatology", "Gastroenterology",
+    "Metformin", "Paracetamol", "Amoxicillin", "Atorvastatin", "Azithromycin",
+    "Ciprofloxacin", "Omeprazole", "Pantoprazole", "Insulin", "Salbutamol",
+    "Sphygmomanometer", "Stethoscope", "Catheter", "Cannula", "Ventilator",
+    "SNOMED", "SNOMED-CT", "ICD", "ICD-10", "CPT", "LOINC"
+  ]
+}

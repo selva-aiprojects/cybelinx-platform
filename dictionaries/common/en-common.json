@@ -1,0 +1,15 @@
+{
+  "domain": "common",
+  "version": "1.0.0",
+  "language": "en",
+  "terms": [
+    "patient", "doctor", "hospital", "clinic", "employee", "manager", "department",
+    "laboratory", "sample", "specimen", "invoice", "payment", "customer", "account",
+    "report", "calendar", "appointment", "schedule", "registration", "admission",
+    "discharge", "transfer", "prescription", "medication", "inventory", "vendor",
+    "supplier", "purchase", "order", "status", "pending", "approved", "rejected",
+    "cancelled", "completed", "active", "inactive", "created", "updated", "deleted",
+    "verified", "submitted", "reviewed", "authorized", "confirmed", "observation",
+    "assessment", "evaluation", "summary", "notes", "remarks", "documentation"
+  ]
+}

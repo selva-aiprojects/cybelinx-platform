@@ -1,0 +1,16 @@
+{
+  "domain": "hospitality",
+  "version": "1.0.0",
+  "language": "en",
+  "description": "Hospitality management vocabulary for StaySphere and hotel operations",
+  "terms": [
+    "ADR", "RevPAR", "GOPPAR", "Occupancy", "Folio", "PMS", "GDS", "OTA",
+    "CRS", "ChannelManager", "NightAudit", "Housekeeping", "Concierge", "Valet",
+    "CheckIn", "CheckOut", "NoShow", "WalkIn", "Overbooking", "RackRate",
+    "RoomType", "Suite", "Deluxe", "Tariff", "Complimentary", "Minibar",
+    "RoomService", "Turndown", "Banquet", "Catering", "Keycard", "GuestHistory",
+    "StaySphere", "LoyaltyProgram", "LateCheckOut", "EarlyCheckIn", "Deposit",
+    "IncidentalCharges", "DirectBooking", "YieldManagement", "DynamicPricing",
+    "BedAndBreakfast", "HalfBoard", "FullBoard", "AllInclusive", "MealPlan"
+  ]
+}
