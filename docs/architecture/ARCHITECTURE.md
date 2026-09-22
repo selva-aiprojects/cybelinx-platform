@@ -4,6 +4,7 @@
 > [PRD](../Cybelinx%20Central%20SaaS%20Platform%20%E2%80%94%20Phase%201%20PRD.md) and
 > [TRD](../Cybelinx_Phase1_TRD_v1.2_Java_Spring_Updated.md). This document captures the
 > *implemented* architecture and the boundaries it enforces.
+> For the master reference guide covering all platform invariants, 13+ product domain routing archetypes, and code change guardrails, see [`docs/REFERENCE.md`](../REFERENCE.md).
 
 ## Authoritative backend statement
 
@@ -76,13 +77,30 @@ Cybelinx Control Plane          <- this repository
 | `backend/event-worker` | Event Worker — separate Spring Boot process (port 3002) |
 | `apps/admin-portal` | Admin console — Next.js App Router |
 | `packages/shared` | Constants, error model, small utilities (`@cybelinx/shared`) |
+| `packages/sdk` | Multi-tenant SaaS integration SDK for Node.js/Next.js (`@cybelinx/sdk`) |
+| `packages/core` | Shared formatters, national ID validators, async utilities (`@cybelinx/core`) |
+| `packages/language` | Client-side Trie spell checker & 4-tier dictionary resolver (`@cybelinx/language`) |
+| `packages/ui` | Shared UI components & SmartTextEditor marquee component (`@cybelinx/ui`) |
+| `dictionaries/` | Curated domain dictionaries (Healthcare, HRMS, LIMS, Finance, Hospitality, etc.) |
 | `infra/` | Docker Compose, Dockerfiles, Postgres init, scripts |
-| `docs/` | PRD / TRD / architecture / API / ADRs |
+| `docs/` | PRD / TRD / architecture / API / ADRs / Developer Tutorial |
 | `retired/` | Pre-cutover TypeScript backend — **reference only, not built** |
 
 Modules inside `central-api` are Spring packages (tenants, security, persistence,
 health, common), not microservices. The event worker is a separate *process*,
 not a separate business domain. Phase 1 remains a **modular monolith + event worker**.
+
+## Product Integration Model & Autonomous Control Plane
+
+**The Cybelinx Platform is an independent Control Plane — downstream products are consumers, not internal submodules.**
+
+The platform does not manage or write downstream product code (whether in Python/FastAPI, Express, Go, or Ruby). Instead, the platform provides self-service registration, universal SSO tokens, and client packages:
+
+1. **Self-Service Registration:** Products register in the Admin Portal with their code, plans, and vanity domain pattern.
+2. **Standard Consumption:** Products consume `@cybelinx/sdk` or the Universal SSO Launch Token (`POST /api/auth/sso/exchange`) as documented in [`docs/DEVELOPER-TUTORIAL.md`](../DEVELOPER-TUTORIAL.md).
+3. **The Two Validated Domain Archetypes:**
+   - **Archetype A (Dedicated Standalone Apex Domain):** `https://{tenant}.jioplix.com` — Proven and production-live with Jioplix.
+   - **Archetype B (Cybelinx Subdomain Network):** `https://{tenant}.{product}.cybelinx.com` — Proven and production-live with StoreAI (`*.storeai.cybelinx.com`), standard for all remaining 12+ Cybelinx SaaS products (`*.synthalyst.cybelinx.com`, `*.lims.cybelinx.com`, `*.smartbooks.cybelinx.com`, `*.staysphere.cybelinx.com`, `*.tradinx.cybelinx.com`, `*.cartlinx.cybelinx.com`, etc.).
 
 ## Isolation model
 

@@ -495,3 +495,56 @@ This phase tracks the standardized onboarding, database isolation, and SSO integ
   - Captured Screenshot 1 (`newage_login_page.png`): Confirmed login form renders with "⚡ Continue with Supabase SSO" button.
   - Captured Screenshot 2 (`newage_dashboard_after_sso.png`): Confirmed clicking "⚡ Continue with Supabase SSO" seamlessly executes the token exchange, initializes session, and renders the live `Newage Electronics Inc Executive Dashboard` without requiring password entry.
 
+---
+
+## Phase: Platform Autonomy, Subdomain Architecture & Shared Utilities / Language Intelligence Sub-Platform
+
+### Architectural Baseline: Autonomous Control Plane & Product Independence
+- [x] **Platform Autonomy Principle**: The Cybelinx Platform is strictly an independent, generic SaaS control plane. It does **not** embed, manage, or maintain downstream product codebases (whether in Python/FastAPI, Express, Go, or Ruby). Downstream products consume the platform as clients/tenants.
+- [x] **Separation of Backlogs**: Downstream internal product code (e.g. inside `selva-aiprojects/synthalyst-hrm` or `selva-aiprojects/lims`) belongs strictly to individual product repositories. The Cybelinx Platform backlog tracks only control plane capabilities, APIs, and shared packages.
+- [x] **Two Validated Domain Archetypes (100% Proven in Production)**:
+  - **Archetype A (Dedicated Standalone Apex Domain)**: `https://{tenant}.jioplix.com` — Proven and production-live with Jioplix.
+  - **Archetype B (Cybelinx Subdomain Network)**: `https://{tenant}.{product}.cybelinx.com` — Proven and production-live with StoreAI (`newage.storeai.cybelinx.com`), setting the architectural standard for all remaining 12+ Cybelinx products (`*.synthalyst.cybelinx.com`, `*.lims.cybelinx.com`, `*.smartbooks.cybelinx.com`, `*.staysphere.cybelinx.com`, `*.tradinx.cybelinx.com`, `*.cartlinx.cybelinx.com`, etc.).
+- [x] **Developer Integration Guide**: Authored and published [`docs/DEVELOPER-TUTORIAL.md`](docs/DEVELOPER-TUTORIAL.md) enabling self-service onboarding for any downstream engineering team across all 10 product verticals.
+
+### Sub-Platform Deliverables: Shared UI, Core Utilities & Language Intelligence
+- [x] **Official Requirements Documentation**:
+  - Sub-Platform PRD: [`docs/Cybelinx Platform — Shared Utilities & Language Intelligence PRD.md`](docs/Cybelinx%20Platform%20%E2%80%94%20Shared%20Utilities%20&%20Language%20Intelligence%20PRD.md)
+  - Sub-Platform TRD: [`docs/Cybelinx Platform — Shared Utilities & Language Intelligence TRD.md`](docs/Cybelinx%20Platform%20%E2%80%94%20Shared%20Utilities%20&%20Language%20Intelligence%20TRD.md)
+  - Registry updated in [`docs/README.md`](docs/README.md)
+- [x] **10 Curated Domain Dictionaries (`dictionaries/`)**:
+  - `healthcare`, `hrms`, `lims`, `finance` (Accounting & Finance), `hospitality` (StaySphere), `realestate`, `trading` (Tradinx), `pharma`, `ecommerce` (Cartlinx), `supplychain` (SCM), and `common`.
+- [x] **`@cybelinx/core` (`packages/core`)**:
+  - Multi-currency formatters (`formatCurrency` for INR/USD/EUR/GBP), date/time formatters, relative time, and file size humanizer.
+  - National ID validators (`validatePAN`, `validateGSTIN`, `validateABHA`, `validateAadhaar`) and common validators (`validateEmail`, `validatePhone`, `validateUrl`, file size/mime).
+  - Async utilities (`debounce`, `throttle`, `sleep`, `deepMerge`, `generateId`).
+  - Unit tests: 11/11 tests passing.
+- [x] **`@cybelinx/language` (`packages/language`)**:
+  - Prefix Trie in-memory spell engine with Levenshtein distance suggestion generator ($\le 2$) providing sub-300ms verification.
+  - 4-Tier Dictionary Resolver (`Common` $\rightarrow$ `Domain` $\rightarrow$ `Tenant` $\rightarrow$ `User`) with polynomial checksum validation.
+  - Asynchronous grammar client with sliding-window circuit breaker and non-blocking fail-open resilience.
+  - Unit tests: 8/8 tests passing.
+- [x] **`@cybelinx/ui` (`packages/ui`)**:
+  - Marquee drop-in component `<SmartTextEditor />` supporting domain selection across all 10 verticals, suggestion popovers, ignore actions, add-to-dictionary actions, and offline degraded mode indicators.
+  - Common form controls: `<Input mask="currency" />`, `<TextArea />`, `<SearchInput />`, `<SuggestionPopover />`, `<Tooltip />`, `<NotificationToast />`, `<ConfirmationModal />`.
+  - Design tokens, CSS variables, and animated wavy error underlines (`.cblx-spell-error`, `.cblx-grammar-error`).
+- [x] **Monorepo Root Wiring & Verification**:
+  - Updated `package.json` workspaces: added `packages/core`, `packages/language`, `packages/ui`.
+  - Updated `build:packages` script; all 5 packages compile cleanly to `dist/`.
+  - Full typecheck passed with 0 errors across all 6 workspaces.
+  - Test suite: 26/26 tests passing.
+
+### Canonical Reference Documentation Baseline & Multi-Product Alignment
+- [x] **Master Reference Guide ([`docs/REFERENCE.md`](docs/REFERENCE.md))**:
+  - Authored canonical master reference document establishing the single source of truth for all platform invariants, boundaries, domain routing conventions, and code change guardrails.
+  - Documents the Autonomous Control Plane Invariant (Control plane owns metadata only; zero business PHI or tables in control plane DB; downstream products are independent consumers).
+  - Codifies the two validated domain routing archetypes: **Archetype A** (Dedicated Apex Domain: `*.jioplix.com`) and **Archetype B** (Cybelinx Subdomain Network: `*.{product}.cybelinx.com` for all other 12+ products).
+  - Documents the Universal SSO token lifecycle (`POST /api/v1/auth/sso/token` $\rightarrow$ `POST /api/auth/sso/exchange`), JIT tenant self-healing, and user auto-provisioning.
+  - Documents sub-platform packages (`@cybelinx/core`, `@cybelinx/language`, `@cybelinx/ui`, `@cybelinx/sdk`, `@cybelinx/shared`) and the 10 domain dictionaries.
+- [x] **Playbook & Documentation Matrix Alignment**:
+  - Updated [`docs/MULTI-PRODUCT-INTEGRATION-PLAYBOOK.md`](docs/MULTI-PRODUCT-INTEGRATION-PLAYBOOK.md): Aligned StoreAI to 100% production live (`newage.storeai.cybelinx.com`), added the Platform Autonomy Rule, and updated the 13-product tracking table with exact subdomain templates.
+  - Updated [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md): Linked master reference guide and solidified autonomous control plane boundaries.
+  - Updated [`docs/README.md`](docs/README.md) and root [`README.md`](README.md): Indexed all reference guides and quick-start links.
+
+
+

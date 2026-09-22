@@ -6,22 +6,27 @@
 > The previous NestJS/Prisma implementation under `retired/` is reference-only —
 > it is not built, tested, deployed or extended.
 
-The Cybelinx platform is the single control plane for all Cyclinx products
-(Jioplix, Jioplix Smart). It owns tenant, identity, RBAC, entitlement, tenant
-resource, provisioning and event plumbing. Product business data (`patients`,
-`doctors`, `appointments`, `lab samples`, ...) stays inside the products and is
-**never** touched by this repository.
+The Cybelinx platform is the autonomous, independent multi-tenant SaaS control plane for all 13+ Cybelinx software products (Jioplix, StoreAI, Synthalyst, LIMS, Smartbooks, StaySphere, Tradinx, Cartlinx, etc.). It centralizes SaaS plumbing: tenant registration, user identity, RBAC, subscription billing, resource resolution, provisioning, outbox events, and shared intelligence libraries. Product business data (`patients`, `clinical_encounters`, `store_orders`, `employees`, `payroll`, `hotel_bookings`, `trades`) stays inside decoupled product databases and is **never** touched by this repository.
+
+### Product Integration Model & Domain Routing Archetypes
+
+1. **Autonomous Control Plane**: Downstream products are independent external consumers, not internal code submodules. Product backends (FastAPI, Express, Go, etc.) live strictly in their respective repositories.
+2. **Two Validated Domain Routing Archetypes**:
+   - **Archetype A (Dedicated Standalone Apex Domain)**: `https://{tenant}.jioplix.com` — Proven & live with Jioplix HMS (`wellness.jioplix.com`, `nixon.jioplix.com`).
+   - **Archetype B (Cybelinx Subdomain Network)**: `https://{tenant}.{product}.cybelinx.com` — Proven & live with StoreAI (`newage.storeai.cybelinx.com`), standard for all 12+ other Cybelinx products (`*.synthalyst.cybelinx.com`, `*.lims.cybelinx.com`, `*.smartbooks.cybelinx.com`, `*.staysphere.cybelinx.com`, `*.tradinx.cybelinx.com`, `*.cartlinx.cybelinx.com`, etc.).
+3. **Master Reference Guide**: See [`docs/REFERENCE.md`](docs/REFERENCE.md) for the canonical architecture baseline and code change guardrails.
 
 ## Architecture in one paragraph
 
 - **Control Plane API** (`backend/central-api`) — Spring Boot **modular monolith** (Java 21), REST under `/api/v1`, port `3001`.
 - **Event Worker** (`backend/event-worker`) — separate deployable Spring Boot process (port `3002`).
 - **Admin Portal** (`apps/admin-portal`) — Next.js App Router admin console.
-- **Shared package** (`packages/shared`) — constants, error model, helpers (TypeScript).
+- **Shared Packages** (`packages/`) — `@cybelinx/shared`, `@cybelinx/sdk`, `@cybelinx/core`, `@cybelinx/language`, `@cybelinx/ui`.
+- **Domain Dictionaries** (`dictionaries/`) — 10 curated terminology dictionaries (healthcare, hrms, lims, finance, hospitality, realestate, trading, pharma, ecommerce, supplychain).
 - **PostgreSQL 17** locally via Docker Compose; **Spring Data JPA/Hibernate** + **Flyway** migrations; PostgreSQL **transactional outbox** events.
 - No Kafka/RabbitMQ/Redis/Databricks/Snowflake in Phase 1.
 
-See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for the full
+See [`docs/REFERENCE.md`](docs/REFERENCE.md) and [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for the full
 picture and boundary rules.
 
 ## Repo layout
@@ -31,9 +36,14 @@ backend/cybelinx-shared  Shared Java library (security, errors, health model)
 backend/central-api      Control Plane API (Spring Boot, Maven module)
 backend/event-worker     Event Worker (Spring Boot, Maven module)
 apps/admin-portal        Admin console (Next.js)
-packages/shared          Constants, error model, helpers (TypeScript)
+packages/shared          Constants, error model, helpers (@cybelinx/shared)
+packages/sdk             Multi-tenant SaaS integration SDK (@cybelinx/sdk)
+packages/core            Formatters, national ID validators, async helpers (@cybelinx/core)
+packages/language        Trie spell checker, 4-tier dictionary resolver (@cybelinx/language)
+packages/ui              SmartTextEditor, input controls, design tokens (@cybelinx/ui)
+dictionaries/            10 domain dictionaries (healthcare, hrms, lims, finance, etc.)
 infra/                   Docker Compose, Dockerfiles, Postgres init, scripts
-docs/                    PRD / TRD / architecture / API / ADRs
+docs/                    PRDs / TRDs / architecture / API / Developer Tutorial
 retired/                 Pre-cutover TypeScript backend (reference only, not built)
 ```
 
@@ -149,7 +159,8 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on push/PR with two jo
 
 ## Documentation
 
-- [`docs/`](docs/) — index of all docs
-- PRD: [`Cybelinx Central SaaS Platform — Phase 1 PRD`](docs/Cybelinx%20Central%20SaaS%20Platform%20%E2%80%94%20Phase%201%20PRD.md)
-- TRD: [`Cybelinx_Phase1_TRD_v1.1_Updated`](docs/Cybelinx_Phase1_TRD_v1.1_Updated.md)
-- Progress: [`progress.md`](progress.md)
+- **Master Reference**: [`docs/REFERENCE.md`](docs/REFERENCE.md) — Canonical platform invariants & code change guardrails
+- **Developer Guide**: [`docs/DEVELOPER-TUTORIAL.md`](docs/DEVELOPER-TUTORIAL.md) — Step-by-step developer tutorial across 6 products
+- **Integration Playbook**: [`docs/MULTI-PRODUCT-INTEGRATION-PLAYBOOK.md`](docs/MULTI-PRODUCT-INTEGRATION-PLAYBOOK.md) — Product tracking & SSO integration
+- **Full Docs Index**: [`docs/`](docs/) — Complete documentation catalog
+- **Progress Tracker**: [`progress.md`](progress.md) — Live milestone and delivery log

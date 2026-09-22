@@ -24,37 +24,46 @@ The Cybelinx SaaS Platform enforces strict separation of concerns between the **
                                         v                             v
            +----------------------------------------+   +----------------------------------------+
            |       Jioplix Healthcare HMS           |   |       StoreAI Composable Commerce      |
-           |     (https://wellness.jioplix.com)     |   |     (https://nike.storeai.com)         |
+           |     (https://wellness.jioplix.com)     |   |   (https://newage.storeai.cybelinx.com)|
            |                                        |   |                                        |
-           | - Subdomain Tenant Sharding            |   | - Subdomain Merchant Sharding          |
-           | - POST /api/auth/sso/exchange          |   | - @cybelinx/sdk Express Middleware     |
+           | - Archetype A: Dedicated Apex Domain   |   | - Archetype B: Cybelinx Subdomain Net  |
+           | - POST /api/auth/sso/exchange          |   | - @cybelinx/sdk Express / Supabase SSO |
            | - JIT User Provisioning (ADMIN, Doctor)|   | - Headless Commerce & AI Recommendation|
-           | - Product DB: Supabase ("wellness")    |   | - Product DB: StoreAI DB ("nike_store")|
+           | - Product DB: Supabase ("wellness")    |   | - Product DB: Neon / StoreAI DB        |
            +----------------------------------------+   +----------------------------------------+
                                         |                             |
                                         +--------------+--------------+
                                                        |
                                         v              v              v
                               +------------------+ +------------------+ +------------------+
-                              |  SynthalystHRM   | |    LIMS Suite    | | Caredata / Exampad|
-                              |  (HR & Payroll)  | |  (Diagnostics)   | |  (Interoperability|
+                              |  SynthalystHRM   | |    LIMS Suite    | |   StaySphere /   |
+                              |  (HR & Payroll)  | |  (Diagnostics)   | | Smartbooks/Tradinx|
+                              |*.synthalyst.     | |  *.lims.         | | *.staysphere.     |
+                              | cybelinx.com     | |  cybelinx.com    | |  cybelinx.com     |
                               +------------------+ +------------------+ +------------------+
 ```
 
 ### Core Architecture Rules:
 1. **Zero Operational Schemas in Control Plane**:
    - The central PostgreSQL database (`cybelinx-platform` on Aiven) contains **only** `public` metadata tables (`tenants`, `products`, `plans`, `tenant_products`, `tenant_resources`, `platform_events`, `audit_events`).
-   - Operational business tables (patients, clinical encounters, lab tests, retail orders, payroll, employee records) must **never** be created in the central control plane database.
-2. **Centralized Provisioning & Multi-Tenant Registry**:
+   - Operational business tables (patients, clinical encounters, lab tests, retail orders, payroll, employee records, hotel bookings, trades) must **never** be created in the central control plane database.
+2. **Platform Autonomy & Product Decoupling**:
+   - The Cybelinx Platform is strictly an independent, generic SaaS control plane. It does **not** embed, manage, or maintain downstream product codebases (whether in Python/FastAPI, Express, Go, or Ruby).
+   - Product-specific business logic belongs in downstream product repositories.
+   - Products integrate with Cybelinx via self-service registration, `@cybelinx/sdk`, `@cybelinx/core`, `@cybelinx/language`, `@cybelinx/ui`, domain dictionaries, and the SSO exchange protocol.
+3. **The Two Validated Domain Routing Archetypes**:
+   - **Archetype A (Dedicated Standalone Apex Domain)**: `https://{tenant}.jioplix.com` — Proven and production-live with Jioplix (`wellness.jioplix.com`, `nixon.jioplix.com`).
+   - **Archetype B (Cybelinx Subdomain Network)**: `https://{tenant}.{product}.cybelinx.com` — Proven and production-live with StoreAI (`newage.storeai.cybelinx.com`), standard for all remaining 12+ Cybelinx SaaS products (`*.synthalyst.cybelinx.com`, `*.lims.cybelinx.com`, `*.smartbooks.cybelinx.com`, `*.staysphere.cybelinx.com`, `*.tradinx.cybelinx.com`, `*.cartlinx.cybelinx.com`, `*.pharma.cybelinx.com`, `*.realestate.cybelinx.com`, `*.supplychain.cybelinx.com`, `*.caredata.cybelinx.com`, `*.exampad.cybelinx.com`).
+4. **Centralized Provisioning & Multi-Tenant Registry**:
    - Central control plane acts as the single source of truth for tenant identity, active subscriptions, and resource connection strings.
    - Resource records (`tenant_resources`) store remote schema pointers, database hostnames, and isolation modes (`SCHEMA_PER_TENANT`, `DEDICATED_DATABASE`).
-3. **Universal Single Sign-On (SSO)**:
+5. **Universal Single Sign-On (SSO)**:
    - Central control plane mints signed HMAC-SHA256 JWT launch tokens valid for 24 hours.
    - Product work suites expose a standardized exchange endpoint (`POST /api/auth/sso/exchange`) to validate the token, establish a product-native session, and issue role-based permissions.
-4. **Frictionless Login Screen Auto-Bypass**:
+6. **Frictionless Login Screen Auto-Bypass**:
    - When users click "SSO Dashboard ↗" in the Admin Portal or open a magic link from their welcome email, the product login screen intercepts `?sso_token=...` on mount and navigates directly to `/tenant/dashboard`.
    - A manual "⚡ Continue with Supabase SSO" button is also provided on product login screens as a zero-password alternative.
-5. **Self-Healing Just-In-Time (JIT) Provisioning**:
+7. **Self-Healing Just-In-Time (JIT) Provisioning**:
    - Incoming users from verified SSO tokens are automatically provisioned in the tenant's database schema if they do not already exist.
    - Unregistered tenants are automatically added to the product's registry (`nexus.tenants`), and their operational schemas are automatically cloned from the product's base template on first access.
 
@@ -111,7 +120,9 @@ Every product joining the Cybelinx platform must adhere to the following 5 integ
 ### Step 1: Central Product Catalog & Plan Registration
 Add the product and its subscription plans to the central control plane:
 - **Product Code**: Unique uppercase slug (e.g. `JIOPLIX`, `STOREAI`, `SYNTHALYST`, `LIMS`, `CAREDATA`, `EXAMPAD`).
-- **Base Launch URL**: Domain template (e.g. `https://${tenant_code}.jioplix.com`, `https://${tenant_code}.synthalyst.com`).
+- **Base Launch URL**: Domain template following either:
+  - **Archetype A (Dedicated Apex Domain)**: `https://${tenant_code}.jioplix.com` (for Jioplix).
+  - **Archetype B (Cybelinx Subdomain Network)**: `https://${tenant_code}.${product_slug}.cybelinx.com` (for all 12+ other products: `https://${tenant_code}.storeai.cybelinx.com`, `https://${tenant_code}.synthalyst.cybelinx.com`, `https://${tenant_code}.lims.cybelinx.com`, etc.).
 - **Plan Tiers**: Tier definitions (e.g. `BASIC`, `STANDARD`, `ENTERPRISE`) with defined entitlement limits.
 
 ### Step 2: Database Decoupling & Remote Schema Architecture
@@ -272,14 +283,12 @@ useEffect(() => {
 ---
 
 ### 5.2 StoreAI Composable Commerce (`selva-aiprojects/storeai`)
-- **Status**: `[~] 90% Staging Ready`
-- **Target Database**: Dedicated StoreAI PostgreSQL (`storeai-db`)
-- **Isolation**: `SCHEMA_PER_TENANT` (`"storeai_nike"`, `"storeai_adidas"`)
-- **Schema DDL**: `Cybelinx-platform/product-schemas/storeai_tenant_schema.sql` (15 tables: `store_configs`, `categories`, `products`, `orders`, `order_items`, `customers`, `cart_items`, `inventory_levels`, `coupons`, `promotions`, `ai_recommendation_events`, `audit_logs`).
-- **Next Action Items**:
-  1. Wire `POST /api/auth/sso/exchange` into StoreAI Express application server.
-  2. Implement merchant dashboard auto-bypass on `https://${merchant}.storeai.com/login?sso_token=...`.
-  3. Validate automated outbox event publishing (`STOREAI_ORDER_COMPLETED`) into Cybelinx usage metering.
+- **Status**: `[x] 100% Production Live & Verified`
+- **Target Database**: Neon / Dedicated StoreAI PostgreSQL (`storeai-db`)
+- **Isolation**: `SCHEMA_PER_TENANT` (`"tenant_newage_storeai"`, `"tenant_nike_storeai"`)
+- **Launch Subdomain**: `https://${tenant_code}.storeai.cybelinx.com` (Archetype B: Cybelinx Subdomain Network)
+- **Live Verification**: Production verified on `https://newage.storeai.cybelinx.com` (Newage Electronics Inc) with automated Supabase SSO token exchange, session hydration, and dynamic role-based merchant navigation.
+- **Architectural Reference**: Uses `@cybelinx/sdk` for tenant context resolution and `getSearchPathSql()`.
 
 ---
 
@@ -288,6 +297,7 @@ useEffect(() => {
 - **Repository Location**: `D:\Training\working\Cybelinx\HRMS - Cybelinx`
 - **Stack**: FastAPI (Python 3.11) + Vite/React (TypeScript/Tailwind) + PostgreSQL (`tenant_schema.sql`) + Flutter Mobile.
 - **Target Database**: Dedicated Synthalyst PostgreSQL DB (`synthalyst-db`).
+- **Launch Subdomain**: `https://${tenant_code}.synthalyst.cybelinx.com` (Archetype B)
 - **Integration Plan**:
   1. **FastAPI SSO Exchange Endpoint**:
      Add `POST /api/v1/auth/sso/exchange` in `backend/routes/auth.py`:
@@ -313,6 +323,7 @@ useEffect(() => {
 - **Status**: `[ ] 15% Architectural Specification Ready`
 - **Repository Location**: `D:\Training\working\LIMS`
 - **Stack**: Node.js + Express (`src/server`) + React 18 + Vite + TypeScript.
+- **Launch Subdomain**: `https://${tenant_code}.lims.cybelinx.com` (Archetype B)
 - **Target Database**: Dedicated LIMS PostgreSQL DB (`lims-db`).
 - **Integration Plan**:
   1. **Schema Sharding**:
@@ -329,6 +340,7 @@ useEffect(() => {
 - **Repository Location**: `D:\Training\working\Caredata`
 - **Stack**: Java Spring Boot / Node.js Microservices.
 - **Role**: ABDM (Ayushman Bharat Digital Mission) Health Information Exchange & Consent Manager (HIEC) + FHIR R4 Clinical Repository.
+- **Launch Subdomain**: `https://${tenant_code}.caredata.cybelinx.com` (Archetype B)
 - **Integration Plan**:
   1. Act as the national digital health bridge for Jioplix HMS and LIMS.
   2. Secure ABDM gateway token sharing and link ABHA (Ayushman Bharat Health Account) IDs to patient EHR records.
@@ -339,22 +351,39 @@ useEffect(() => {
 - **Status**: `[ ] 10% Queued`
 - **Repository Location**: `D:\Training\working\ExamPad`
 - **Stack**: React + WebRTC Proctoring + Assessment Evaluation Engine.
+- **Launch Subdomain**: `https://${tenant_code}.exampad.cybelinx.com` (Archetype B)
 - **Integration Plan**:
   1. Single Sign-On for candidates and proctors via Cybelinx Launch Tokens.
   2. Emit `ASSESSMENT_SUBMITTED` events into Cybelinx usage metering (`platform_usage_records`) for per-candidate billing.
 
 ---
 
+### 5.7 Shared Sub-Platform Libraries & Curated Dictionaries
+All 13+ Cybelinx products consume the centralized sub-platform libraries (detailed in [`docs/DEVELOPER-TUTORIAL.md`](DEVELOPER-TUTORIAL.md)):
+- **`@cybelinx/core`**: Indian national ID validation (PAN, GSTIN, ABHA, Aadhaar), multi-currency formatting (`INR`, `USD`, `EUR`), date/time standardizers.
+- **`@cybelinx/language`**: Sub-300ms in-memory prefix Trie spell-checking, Levenshtein distance ($\le 2$), 4-tier dictionary resolver (`Common` $\rightarrow$ `Domain` $\rightarrow$ `Tenant` $\rightarrow$ `User`), non-blocking fail-open grammar client.
+- **`@cybelinx/ui`**: Drop-in `<SmartTextEditor />`, input/form controls, toasts, modals, and design tokens.
+- **Curated Dictionaries (`dictionaries/`)**: 10 domain dictionaries (`healthcare`, `hrms`, `lims`, `finance`, `hospitality`, `realestate`, `trading`, `pharma`, `ecommerce`, `supplychain`, `common`).
+
+---
+
 ## 6. Comprehensive Multi-Product Tracking Matrix
 
-| Product Code | Product Name & Domain | Local Repository | Remote Repository | Framework / Tech Stack | Target DB Host | SSO Protocol | Subdomain Routing | Readiness | Owner / Next Milestone |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`JIOPLIX`** | Jioplix Healthcare Information System (HMS) | `D:\Training\working\Cybelinx\Jioplix` | `selva-aiprojects/jioplix` | Node.js Express + React 18 (TypeScript) | Supabase PostgreSQL (`aws-1-ap-southeast-1`) | HMAC JWT / `/api/auth/sso/exchange` + JIT | `*.jioplix.com` | **100% Production Live** | Complete (Verified with `wellness` & `nixon`) |
-| **`STOREAI`** | StoreAI Composable Commerce & Merchandising | — | `selva-aiprojects/storeai` | Node.js Express + React 18 + AI Recommenders | Dedicated PostgreSQL (`storeai-db`) | `@cybelinx/sdk` Express Middleware | `*.storeai.com` | **90% Staging Ready** | Wire `/sso/exchange` into Express server |
-| **`SYNTHALYST`**| SynthalystHRM (HRMS, Payroll, TDS Compliance) | `D:\Training\working\Cybelinx\HRMS - Cybelinx` | `selva-aiprojects/synthalyst-hrm` | Python FastAPI + React (Vite) + Flutter Mobile | Dedicated PostgreSQL (`synthalyst-db`) | HMAC JWT / `/api/v1/auth/sso/exchange` | `*.synthalyst.com` | **25% Architecture Prepared** | Implement FastAPI SSO exchange & JIT provisioning |
-| **`LIMS`** | Laboratory Information Management System | `D:\Training\working\LIMS` | `selva-aiprojects/lims` | Node.js Express + React 18 (Vite) | Dedicated PostgreSQL (`lims-db`) | HMAC JWT / Clinical RBAC | `*.lims-suite.com` | **15% Spec Ready** | Add SSO route & Jioplix lab test event bridge |
-| **`CAREDATA`** | Health Interoperability Hub (ABDM & FHIR R4) | `D:\Training\working\Caredata` | `selva-aiprojects/caredata` | Java Spring Boot / Node.js | Decoupled Integration DB | OAuth2 / Client Credentials | `*.caredata.io` | **10% Queued** | ABDM M1/M2/M3 compliance gateway setup |
-| **`EXAMPAD`** | Online Assessment & Remote Proctoring Engine | `D:\Training\working\ExamPad` | `selva-aiprojects/exampad` | React + WebRTC Proctoring | Dedicated Assessment DB | Candidate & Proctor SSO | `*.exampad.com` | **10% Queued** | Connect assessment usage metering hooks |
+| Product Code | Product Name & Domain | Framework / Stack | Target DB Host | SSO Protocol | Subdomain Routing (Archetype) | Readiness | Owner / Next Milestone |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`JIOPLIX`** | Jioplix Healthcare Information System (HMS) | Express + React 18 (TS) | Supabase PostgreSQL (`aws-1-ap-southeast-1`) | HMAC JWT / `/api/auth/sso/exchange` + JIT | `*.jioplix.com` (Archetype A: Dedicated Apex) | **100% Production Live** | Complete (Verified with `wellness` & `nixon`) |
+| **`STOREAI`** | StoreAI Composable Commerce & Merchandising | Express + React 18 + AI | Neon / Dedicated PostgreSQL (`storeai-db`) | `@cybelinx/sdk` Express Middleware / Supabase SSO | `*.storeai.cybelinx.com` (Archetype B: Subdomain) | **100% Production Live** | Complete (Verified with `newage.storeai.cybelinx.com`) |
+| **`SYNTHALYST`**| SynthalystHRM (HRMS, Payroll, Statutory Tax) | Python FastAPI + React (Vite) | Dedicated PostgreSQL (`synthalyst-db`) | HMAC JWT / `/api/v1/auth/sso/exchange` | `*.synthalyst.cybelinx.com` (Archetype B) | **25% Architecture Prepared** | Implement FastAPI SSO exchange & JIT provisioning |
+| **`LIMS`** | Laboratory Information Management System | Express + React 18 (Vite) | Dedicated PostgreSQL (`lims-db`) | HMAC JWT / Clinical RBAC | `*.lims.cybelinx.com` (Archetype B) | **15% Spec Ready** | Add SSO route & Jioplix lab test event bridge |
+| **`SMARTBOOKS`**| Smartbooks Cloud Accounting & Finance | React / Node.js | Dedicated PostgreSQL (`smartbooks-db`) | HMAC JWT / Financial RBAC | `*.smartbooks.cybelinx.com` (Archetype B) | Spec Ready | GSTIN/PAN validations via `@cybelinx/core` |
+| **`STAYSPHERE`**| StaySphere Hospitality & Property PMS | React / Node.js | Dedicated PostgreSQL (`staysphere-db`) | HMAC JWT / Hotel Staff RBAC | `*.staysphere.cybelinx.com` (Archetype B) | Spec Ready | Consume hospitality domain dictionary |
+| **`TRADINX`** | Tradinx Trading Platform & Portfolio Analytics | React / Python | Low-Latency DB Cluster | HMAC JWT / Trader RBAC | `*.tradinx.cybelinx.com` (Archetype B) | Spec Ready | Consume trading domain dictionary |
+| **`CARTLINX`** | Cartlinx E-Commerce & Marketplace Platform | Node.js / React | Dedicated Commerce DB | HMAC JWT / Merchant RBAC | `*.cartlinx.cybelinx.com` (Archetype B) | Spec Ready | Multi-tenant store catalog isolation |
+| **`PHARMA`** | PharmaTrack Serialization & Batch Traceability | Java Spring Boot | Dedicated Pharma DB | HMAC JWT / Pharma Compliance | `*.pharma.cybelinx.com` (Archetype B) | Queued | Pharma terminology dictionary integration |
+| **`REALESTATE`**| Real-Estate & Asset Management Platform | Node.js / React | Dedicated Property DB | HMAC JWT / Broker RBAC | `*.realestate.cybelinx.com` (Archetype B) | Queued | PAN/GSTIN verification for property sales |
+| **`SUPPLYCHAIN`**| Supply Chain Management (SCM) & Logistics | Java Spring Boot | Dedicated Logistics DB | HMAC JWT / Logistics RBAC | `*.supplychain.cybelinx.com` (Archetype B) | Queued | Waybill & inventory tracking hooks |
+| **`CAREDATA`** | Health Interoperability Hub (ABDM & FHIR R4) | Java Spring / Node.js | Decoupled Integration DB | OAuth2 / Client Credentials | `*.caredata.cybelinx.com` (Archetype B) | **10% Queued** | ABDM M1/M2/M3 compliance gateway setup |
+| **`EXAMPAD`** | Online Assessment & Remote Proctoring Engine | React + WebRTC | Dedicated Assessment DB | Candidate & Proctor SSO | `*.exampad.cybelinx.com` (Archetype B) | **10% Queued** | Connect assessment usage metering hooks |
 
 ---
 
